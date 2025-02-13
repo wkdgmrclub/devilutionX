@@ -34,6 +34,7 @@
 #include "levels/tile_properties.hpp"
 #include "levels/town.h"
 #include "lighting.h"
+#include "lua/modules/items.hpp"
 #include "minitext.h"
 #include "missiles.h"
 #include "options.h"
@@ -1298,6 +1299,7 @@ void GetStaffSpell(const Player &player, Item &item, int lvl, bool onlygood)
 
 void GetOilType(Item &item, int maxLvl)
 {
+	Lua_OnOilGenerate(item, maxLvl);
 	int cnt = 2;
 	int8_t rnd[32] = { 5, 6 };
 

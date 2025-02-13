@@ -1,6 +1,7 @@
 #pragma once
 
 #include "items.h"
+#include <sol/sol.hpp>
 
 namespace devilution {
 
