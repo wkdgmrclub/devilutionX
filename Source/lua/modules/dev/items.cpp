@@ -20,6 +20,8 @@ namespace devilution {
 
 namespace {
 
+sol::state_view *LuaState = nullptr;
+
 std::string DebugCmdItemInfo()
 {
 	Player &myPlayer = *MyPlayer;
@@ -195,13 +197,60 @@ std::string DebugSpawnUniqueItem(std::string itemName)
 
 } // namespace
 
+void Lua_OnOilGenerate(Item &item, int maxLvl)
+{
+	if (LuaState == nullptr)
+		return;
+
+	sol::optional<sol::function> callback = (*LuaState)["devilutionx"]["items"]["OnOilGenerate"];
+
+	if (callback) {
+		callback.value()(item, maxLvl);
+	}
+}
+
 sol::table LuaDevItemsModule(sol::state_view &lua)
 {
-	sol::table table = lua.create_table();
-	SetDocumented(table, "info", "()", "Show info of currently selected item.", &DebugCmdItemInfo);
-	SetDocumented(table, "spawn", "(name: string)", "Attempt to generate an item.", &DebugSpawnItem);
-	SetDocumented(table, "spawnUnique", "(name: string)", "Attempt to generate a unique item.", &DebugSpawnUniqueItem);
-	return table;
+	LuaState = &lua;
+
+	// Retrieve or create the 'devilutionx' table
+	sol::table devilutionx = lua["devilutionx"].get_or(lua.create_table());
+
+	// Create a separate 'devItems' table for development item functions
+	sol::table devItems = lua.create_table();
+
+	// Register development item functions
+	SetDocumented(devItems, "info", "()", "Show info of currently selected item.", &DebugCmdItemInfo);
+	SetDocumented(devItems, "spawn", "(name: string)", "Attempt to generate an item.", &DebugSpawnItem);
+	SetDocumented(devItems, "spawnUnique", "(name: string)", "Attempt to generate a unique item.", &DebugSpawnUniqueItem);
+
+	// Assign the 'devItems' table to the 'devilutionx' table under the 'devItems' key
+	devilutionx["devItems"] = devItems;
+
+	return devItems;
+}
+
+// Function to register general item functions
+sol::table LuaItemsModule(sol::state_view &lua)
+{
+	LuaState = &lua;
+
+	// Retrieve or create the 'devilutionx' table
+	sol::table devilutionx = lua["devilutionx"].get_or(lua.create_table());
+
+	// Create a separate 'items' table for general item functions
+	sol::table items = lua.create_table();
+
+	// Register general item functions
+	items.set_function("generateOil", &Lua_OnOilGenerate);
+	items.set_function("setItemFlag", [](Item &item, uint32_t flag) { item.dwBuff |= flag; });
+	items.set_function("clearItemFlag", [](Item &item, uint32_t flag) { item.dwBuff &= ~flag; });
+	items.set_function("hasItemFlag", [](Item &item, uint32_t flag) -> bool { return (item.dwBuff & flag) != 0; });
+
+	// Assign the 'items' table to the 'devilutionx' table under the 'items' key
+	devilutionx["items"] = items;
+
+	return items;
 }
 
 } // namespace devilution

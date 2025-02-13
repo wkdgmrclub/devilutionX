@@ -34,7 +34,7 @@
 #include "levels/tile_properties.hpp"
 #include "levels/town.h"
 #include "lighting.h"
-#include "lua/modules/items.hpp"
+#include "lua/modules/dev/items.hpp"
 #include "minitext.h"
 #include "missiles.h"
 #include "options.h"
