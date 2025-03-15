@@ -104,5 +104,6 @@ void TakePlrsMoney(int cost);
 void StoreEnter();
 void CheckStoreBtn();
 void ReleaseStoreBtn();
+bool IsPlayerInStore();
 
 } // namespace devilution

@@ -2703,12 +2703,12 @@ void CheckStoreBtn()
 
 	if (!IsTextFullSize) {
 		if (!windowRect.contains(MousePosition)) {
-			while (ActiveStore != TalkID::None)
+			while (IsPlayerInStore())
 				StoreESC();
 		}
 	} else {
 		if (!windowRectFull.contains(MousePosition)) {
-			while (ActiveStore != TalkID::None)
+			while (IsPlayerInStore())
 				StoreESC();
 		}
 	}
@@ -2773,6 +2773,11 @@ void ReleaseStoreBtn()
 {
 	CountdownScrollUp = -1;
 	CountdownScrollDown = -1;
+}
+
+bool IsPlayerInStore()
+{
+	return ActiveStore != TalkID::None;
 }
 
 } // namespace devilution
