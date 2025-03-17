@@ -1528,7 +1528,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
 		TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 		SetupItem(item);
-	} while (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	} while ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -1932,7 +1932,7 @@ bool PremiumItemOk(const Player &player, const ItemData &item)
 		return false;
 	if (!gbIsHellfire && item.itype == ItemType::Staff)
 		return false;
-	if (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch)
+	if ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch)
 		return false;
 
 	if (gbIsMultiplayer) {
@@ -2045,7 +2045,7 @@ bool WitchItemOk(const Player &player, const ItemData &item)
 		return false;
 	if (item.iSpell == SpellID::HealOther && !gbIsMultiplayer)
 		return false;
-	if (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch)
+	if ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch)
 		return false;
 
 	return true;
@@ -3476,7 +3476,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
 		TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 		SetupItem(item);
-	} while (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	} while ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
