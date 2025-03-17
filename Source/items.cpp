@@ -2051,7 +2051,7 @@ bool WitchItemOk(const Player &player, const ItemData &item)
 	if (item.iSpell == SpellID::HealOther && !gbIsMultiplayer)
 		return false;
 	if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
-        return false;
+		return false;
 
 	return true;
 }
