@@ -1384,6 +1384,8 @@ _item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_r
 			continue;
 		if (!isItemOkay(item))
 			continue;
+		if (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch)
+			continue;
 		cumulativeWeight += considerDropRate ? item.dropRate : 1;
 		ril.push_back({ static_cast<_item_indexes>(i), cumulativeWeight });
 	}
@@ -1525,17 +1527,6 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
-
-	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
-	if (*GetOptions().Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search) {
-		uint8_t reroll = 0;
-		do {
-			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
-			TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
-			SetupItem(item);
-			reroll++;
-		} while (reroll < 255 && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search);
-	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -3480,18 +3471,6 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 	SetupItem(item);
-
-	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
-	if (*GetOptions().Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search) {
-		uint8_t reroll = 0;
-		do {
-			idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
-			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-			TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
-			SetupItem(item);
-			reroll++;
-		} while (reroll < 255 && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search);
-	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
