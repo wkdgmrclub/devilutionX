@@ -3485,6 +3485,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	if (*GetOptions().Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search) {
 		uint8_t reroll = 0;
 		do {
+			idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 			TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 			SetupItem(item);
