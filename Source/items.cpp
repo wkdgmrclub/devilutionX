@@ -1528,7 +1528,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
 		TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 		SetupItem(item);
-	} while ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -3473,10 +3473,10 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 		mLevel -= 15;
 
 	do {
-		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
-		TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
+		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
+		TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 		SetupItem(item);
-	} while ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
