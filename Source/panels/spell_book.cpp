@@ -96,18 +96,23 @@ SpellType GetSBookTrans(SpellID ii, bool townok)
 	}
 
 	SpellType st = SpellType::Spell;
-	if ((player._pISpells & GetSpellBitmask(ii)) != 0)
+	if ((player._pISpells & GetSpellBitmask(ii)) != 0) {
 		st = SpellType::Charges;
-	if ((player._pAblSpells & GetSpellBitmask(ii)) != 0)
-		st = SpellType::Skill;
-	if (st == SpellType::Spell) {
-		if (CheckSpell(*InspectPlayer, ii, st, true) != SpellCheckResult::Success)
-			st = SpellType::Invalid;
-		if (player.GetSpellLevel(ii) == 0)
-			st = SpellType::Invalid;
 	}
-	if (townok && leveltype == DTYPE_TOWN && st != SpellType::Invalid && !GetSpellData(ii).isAllowedInTown())
+	if ((player._pAblSpells & GetSpellBitmask(ii)) != 0) {
+		st = SpellType::Skill;
+	}
+	if (st == SpellType::Spell) {
+		if (CheckSpell(*InspectPlayer, ii, st, true) != SpellCheckResult::Success) {
+			st = SpellType::Invalid;
+		}
+		if (player.GetSpellLevel(ii) == 0) {
+			st = SpellType::Invalid;
+		}
+	}
+	if (townok && leveltype == DTYPE_TOWN && st != SpellType::Invalid && !GetSpellData(ii).isAllowedInTown()) {
 		st = SpellType::Invalid;
+	}
 
 	return st;
 }
