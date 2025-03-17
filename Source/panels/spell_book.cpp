@@ -91,14 +91,8 @@ SpellType GetSBookTrans(SpellID ii, bool townok)
 {
 	Player &player = *InspectPlayer;
 
-	if (player._pClass == HeroClass::Monk) {
-		if (*GetOptions().Gameplay.disableSearch) {
-			if (ii == SpellID::Infravision)
-				return SpellType::Skill;
-		} else {
-			if (ii == SpellID::Search)
-				return SpellType::Skill;
-		}
+	if (player._pClass == HeroClass::Monk && ((ii == SpellID::Infravision && *GetOptions().Gameplay.disableSearch) || (ii == SpellID::Search && !*GetOptions().Gameplay.disableSearch))) {
+		return SpellType::Skill;
 	}
 
 	SpellType st = SpellType::Spell;

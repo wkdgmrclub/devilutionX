@@ -54,14 +54,10 @@ bool GetSpellListSelection(SpellID &pSpell, SpellType &pSplType)
 	Player &myPlayer = *MyPlayer;
 
 	for (auto &spellListItem : GetSpellListItems()) {
-		if (spellListItem.isSelected) {
-			pSpell = spellListItem.id;
-			pSplType = spellListItem.type;
-			if (myPlayer._pClass == HeroClass::Monk && spellListItem.id == SpellID::Search && !*GetOptions().Gameplay.disableSearch)
+		if (myPlayer._pClass == HeroClass::Monk) {
+			if ((spellListItem.id == SpellID::Search && !*GetOptions().Gameplay.disableSearch) || (spellListItem.id == SpellID::Infravision && *GetOptions().Gameplay.disableSearch)) {
 				pSplType = SpellType::Skill;
-			if (myPlayer._pClass == HeroClass::Monk && spellListItem.id == SpellID::Infravision && *GetOptions().Gameplay.disableSearch)
-				pSplType = SpellType::Skill;
-			return true;
+			}
 		}
 	}
 
