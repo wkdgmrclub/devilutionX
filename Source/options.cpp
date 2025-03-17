@@ -790,6 +790,7 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&enemyHealthBar,
 		&showMonsterType,
 		&showItemLabels,
+		&disableSearch,
 		&enableFloatingNumbers,
 		&autoRefillBelt,
 		&autoEquipWeapons,
