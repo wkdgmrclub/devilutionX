@@ -17,6 +17,7 @@
 #include "engine/render/text_render.hpp"
 #include "game_mode.hpp"
 #include "missiles.h"
+#include "options.h"
 #include "panels/spell_icons.hpp"
 #include "panels/ui_panels.hpp"
 #include "player.h"
@@ -64,7 +65,7 @@ SpellID GetSpellFromSpellPage(size_t page, size_t entry)
 		case HeroClass::Sorcerer:
 			return SpellID::StaffRecharge;
 		case HeroClass::Monk:
-			return GetOptions()->Gameplay.disableSearch ? SpellID::Infravision : SpellID::Search;
+			return *GetOptions().Gameplay.disableSearch ? SpellID::Infravision : SpellID::Search;
 		case HeroClass::Bard:
 			return SpellID::Identify;
 		case HeroClass::Barbarian:
@@ -91,7 +92,7 @@ SpellType GetSBookTrans(SpellID ii, bool townok)
 	Player &player = *InspectPlayer;
 
 	if (player._pClass == HeroClass::Monk) {
-		if (GetOptions().Gameplay.disableSearch) {
+		if (*GetOptions().Gameplay.disableSearch) {
 			if (ii == SpellID::Infravision)
 				return SpellType::Skill;
 		} else {

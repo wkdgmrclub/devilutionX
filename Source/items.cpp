@@ -1527,7 +1527,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	SetupItem(item);
 
 	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
-	if (GetOptions()->Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search) {
+	if (*GetOptions().Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search) {
 		uint8_t reroll = 0;
 		do {
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
@@ -2050,7 +2050,7 @@ bool WitchItemOk(const Player &player, const ItemData &item)
 		return false;
 	if (item.iSpell == SpellID::HealOther && !gbIsMultiplayer)
 		return false;
-	if (GetOptions()->Gameplay.disableSearch && item.iSpell == SpellID::Search)
+	if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
         return false;
 
 	return true;
@@ -3482,7 +3482,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	SetupItem(item);
 
 	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
-	if (GetOptions()->Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search) {
+	if (*GetOptions().Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search) {
 		uint8_t reroll = 0;
 		do {
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);

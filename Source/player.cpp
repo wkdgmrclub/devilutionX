@@ -2462,7 +2462,7 @@ void InitPlayer(Player &player, bool firstTime)
 	player._pAblSpells = GetSpellBitmask(GetPlayerStartingLoadoutForClass(player._pClass).skill);
 
     // Override for Monk: if disableSearch is enabled, use Infravision instead of Search.
-    if (player._pClass == HeroClass::Monk && GetOptions()->Gameplay.disableSearch)
+    if (player._pClass == HeroClass::Monk && *GetOptions().Gameplay.disableSearch)
         player._pAblSpells = GetSpellBitmask(SpellID::Infravision);
 
 	player._pInvincible = false;
