@@ -64,7 +64,7 @@ SpellID GetSpellFromSpellPage(size_t page, size_t entry)
 		case HeroClass::Sorcerer:
 			return SpellID::StaffRecharge;
 		case HeroClass::Monk:
-			return SpellID::Search;
+			return GetOptions()->Gameplay.disableSearch ? SpellID::Infravision : SpellID::Search;
 		case HeroClass::Bard:
 			return SpellID::Identify;
 		case HeroClass::Barbarian:
@@ -89,26 +89,30 @@ void PrintSBookStr(const Surface &out, Point position, std::string_view text, Ui
 SpellType GetSBookTrans(SpellID ii, bool townok)
 {
 	Player &player = *InspectPlayer;
-	if ((player._pClass == HeroClass::Monk) && (ii == SpellID::Search))
-		return SpellType::Skill;
+
+	if (player._pClass == HeroClass::Monk) {
+		if (GetOptions().Gameplay.disableSearch) {
+			if (ii == SpellID::Infravision)
+				return SpellType::Skill;
+		} else {
+			if (ii == SpellID::Search)
+				return SpellType::Skill;
+		}
+	}
+
 	SpellType st = SpellType::Spell;
-	if ((player._pISpells & GetSpellBitmask(ii)) != 0) {
+	if ((player._pISpells & GetSpellBitmask(ii)) != 0)
 		st = SpellType::Charges;
-	}
-	if ((player._pAblSpells & GetSpellBitmask(ii)) != 0) {
+	if ((player._pAblSpells & GetSpellBitmask(ii)) != 0)
 		st = SpellType::Skill;
-	}
 	if (st == SpellType::Spell) {
-		if (CheckSpell(*InspectPlayer, ii, st, true) != SpellCheckResult::Success) {
+		if (CheckSpell(*InspectPlayer, ii, st, true) != SpellCheckResult::Success)
 			st = SpellType::Invalid;
-		}
-		if (player.GetSpellLevel(ii) == 0) {
+		if (player.GetSpellLevel(ii) == 0)
 			st = SpellType::Invalid;
-		}
 	}
-	if (townok && leveltype == DTYPE_TOWN && st != SpellType::Invalid && !GetSpellData(ii).isAllowedInTown()) {
+	if (townok && leveltype == DTYPE_TOWN && st != SpellType::Invalid && !GetSpellData(ii).isAllowedInTown())
 		st = SpellType::Invalid;
-	}
 
 	return st;
 }

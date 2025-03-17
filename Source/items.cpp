@@ -1526,6 +1526,17 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
 
+	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
+	if (GetOptions()->Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search) {
+		uint8_t reroll = 0;
+		do {
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+			TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
+			SetupItem(item);
+			reroll++;
+		} while (reroll < 255 && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || (item._itype == ItemType::Staff)) && item._iSpell == SpellID::Search);
+	}
+
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
 	if (delta)
@@ -2039,6 +2050,8 @@ bool WitchItemOk(const Player &player, const ItemData &item)
 		return false;
 	if (item.iSpell == SpellID::HealOther && !gbIsMultiplayer)
 		return false;
+	if (GetOptions()->Gameplay.disableSearch && item.iSpell == SpellID::Search)
+        return false;
 
 	return true;
 }
@@ -3467,6 +3480,17 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 	SetupItem(item);
+
+	// If disableSearch is enabled, reroll item generation for scrolls, boooks and staves if the item generated has the Search Spell ID.
+	if (GetOptions()->Gameplay.disableSearch && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search) {
+		uint8_t reroll = 0;
+		do {
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
+			TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
+			SetupItem(item);
+			reroll++;
+		} while (reroll < 255 && (IsAnyOf(item._iMiscId, IMISC_BOOK, IMISC_SCROLL) || item._itype == ItemType::Staff) && item._iSpell == SpellID::Search);
+	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);

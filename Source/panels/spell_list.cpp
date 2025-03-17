@@ -55,10 +55,16 @@ bool GetSpellListSelection(SpellID &pSpell, SpellType &pSplType)
 
 	for (auto &spellListItem : GetSpellListItems()) {
 		if (spellListItem.isSelected) {
-			pSpell = spellListItem.id;
-			pSplType = spellListItem.type;
-			if (myPlayer._pClass == HeroClass::Monk && spellListItem.id == SpellID::Search)
+			// If the player is a Monk, the selected spell is Search, and disableSearch is enabled, then substitute Infravision
+			if (myPlayer._pClass == HeroClass::Monk && spellListItem.id == SpellID::Search && GetOptions()->Gameplay.disableSearch) {
+				pSpell = SpellID::Infravision;
 				pSplType = SpellType::Skill;
+			} else {
+				pSpell = spellListItem.id;
+				pSplType = spellListItem.type;
+				if (myPlayer._pClass == HeroClass::Monk && spellListItem.id == SpellID::Search)
+					pSplType = SpellType::Skill;
+			}
 			return true;
 		}
 	}

@@ -608,6 +608,8 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean showMonsterType;
 	/** @brief Displays item labels for items on the ground.  */
 	OptionEntryBoolean showItemLabels;
+	/** @brief Search spell will not appear on Scrolls, Books, or Staves.  Set Monk class skill to Infravision.  */
+	OptionEntryBoolean disableSearch;
 	/** @brief Refill belt from inventory, or rather, use potions/scrolls from inventory first when belt item is consumed.  */
 	OptionEntryBoolean autoRefillBelt;
 	/** @brief Locally disable clicking on shrines which permanently cripple character. */
