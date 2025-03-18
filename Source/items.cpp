@@ -3486,7 +3486,9 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 
 	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
 		uint8_t reroll = 0;
+		Point originalPos = position;
 		do {
+			item = {};
 			if (monster.isUnique() || dropsSpecialTreasure) {
 				idx = RndUItem(&monster);
 			} else {
@@ -3494,6 +3496,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 			}
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 			SetupItem(item);
+			GetSuperItemSpace(originalPos, ii);
 			reroll++;
 			if (reroll >= 255) {
 				return;
