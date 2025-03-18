@@ -1522,11 +1522,21 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	GetSuperItemSpace(position, ii);
 	int curlv = ItemsGetCurrlevel();
 
-	do {
-		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
-		TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
-		SetupItem(item);
-	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
+	SetupItem(item);
+
+	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
+		do {
+			if (item._iMiscId == IMISC_SCROLL) {
+				idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
+			} else if (item._iMiscId == IMISC_BOOK) {
+				idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
+			}
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+			SetupItem(item);
+		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -3470,11 +3480,26 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	if (!gbIsHellfire && monster.type().type == MT_DIABLO)
 		mLevel -= 15;
 
-	do {
-		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-		TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
-		SetupItem(item);
-	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
+	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
+	SetupItem(item);
+
+	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
+		uint8_t reroll = 0;
+		do {
+			if (monster.isUnique() || dropsSpecialTreasure) {
+				idx = RndUItem(&monster);
+			} else {
+				idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
+			}
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
+			SetupItem(item);
+			reroll++;
+			if (reroll >= 255) {
+				return;
+			}
+		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
