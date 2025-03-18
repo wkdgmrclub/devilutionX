@@ -1384,8 +1384,6 @@ _item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_r
 			continue;
 		if (!isItemOkay(item))
 			continue;
-		if (IsAnyOf(item.iSpell, SpellID::Search) && *GetOptions().Gameplay.disableSearch)
-			continue;
 		cumulativeWeight += considerDropRate ? item.dropRate : 1;
 		ril.push_back({ static_cast<_item_indexes>(i), cumulativeWeight });
 	}
