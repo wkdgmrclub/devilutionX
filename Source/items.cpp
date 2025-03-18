@@ -1526,17 +1526,15 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
 
-	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
-		do {
-			if (item._iMiscId == IMISC_SCROLL) {
-				idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
-			} else if (item._iMiscId == IMISC_BOOK) {
-				idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
-			}
-			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
-			SetupItem(item);
-		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
-	}
+	do {
+		if (item._iMiscId == IMISC_SCROLL) {
+			idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
+		} else if (item._iMiscId == IMISC_BOOK) {
+			idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
+		}
+		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+		SetupItem(item);
+	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -3486,7 +3484,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 
 	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
 		uint8_t reroll = 0;
-		Point originalPos = position;
+		Point originalPos = item.position;
 		do {
 			item = {};
 			if (monster.isUnique() || dropsSpecialTreasure) {
@@ -3495,13 +3493,15 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 				idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
 			}
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-			SetupItem(item);
-			GetSuperItemSpace(originalPos, ii);
 			reroll++;
 			if (reroll >= 255) {
+				DeleteItem(ii);
 				return;
 			}
 		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+		item.position = originalPos;
+		TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
+		SetupItem(item);
 	}
 
 	if (sendmsg)
