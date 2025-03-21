@@ -1526,15 +1526,27 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
 
-	do {
-		if (item._iMiscId == IMISC_SCROLL) {
-			idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
-		} else if (item._iMiscId == IMISC_BOOK) {
-			idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
-		}
-		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
+		uint8_t reroll = 0;
+		Point originalPos = item.position;
+		do {
+			if (item._iMiscId == IMISC_SCROLL) {
+				item = {};
+				idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
+			} else if (item._iMiscId == IMISC_BOOK) {
+				item = {};
+				idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
+			}
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+			reroll++;
+			if (reroll >= 255) {
+				DeleteItem(ii);
+				return;
+			}
+		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+		item.position = originalPos;
 		SetupItem(item);
-	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	}
 
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
@@ -1938,8 +1950,6 @@ bool PremiumItemOk(const Player &player, const ItemData &item)
 		return false;
 	if (!gbIsHellfire && item.itype == ItemType::Staff)
 		return false;
-	if ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch)
-		return false;
 
 	if (gbIsMultiplayer) {
 		if (item.iMiscId == IMISC_OILOF)
@@ -2021,7 +2031,8 @@ void SpawnOnePremium(Item &premiumItem, int plvl, const Player &player)
 			    && premiumItem._iMinStr <= strength
 			    && premiumItem._iMinMag <= magic
 			    && premiumItem._iMinDex <= dexterity
-			    && premiumItem._iIvalue >= itemValue) {
+			    && premiumItem._iIvalue >= itemValue
+			    && (!*GetOptions().Gameplay.disableSearch || premiumItem._iSpell != SpellID::Search)) {
 				break;
 			}
 		}
@@ -2050,8 +2061,6 @@ bool WitchItemOk(const Player &player, const ItemData &item)
 	if (item.iSpell == SpellID::Resurrect && !gbIsMultiplayer)
 		return false;
 	if (item.iSpell == SpellID::HealOther && !gbIsMultiplayer)
-		return false;
-	if ((item.iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch)
 		return false;
 
 	return true;
@@ -2205,7 +2214,7 @@ void CreateMagicItem(Point position, int lvl, ItemType itemType, int imid, int i
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * lvl, 1, true, delta);
 		TryRandomUniqueItem(item, idx, 2 * lvl, 1, true, delta);
 		SetupItem(item);
-		if (item._iCurs == icurs)
+		if (item._iCurs == icurs && (!*GetOptions().Gameplay.disableSearch || item._iSpell != SpellID::Search))
 			break;
 
 		idx = RndTypeItems(itemType, imid, lvl);
@@ -4545,7 +4554,7 @@ void SpawnWitch(int lvl)
 				maxlvl = 2 * lvl;
 			if (maxlvl != -1)
 				GetItemBonus(*MyPlayer, item, maxlvl / 2, maxlvl, true, true);
-		} while (item._iIvalue > maxValue);
+		} while (item._iIvalue > maxValue || item._iSpell == SpellID::Search && *GetOptions().Gameplay.disableSearch);
 
 		item._iCreateInfo = lvl | CF_WITCH;
 		item._iIdentified = true;
@@ -4661,7 +4670,8 @@ void SpawnBoy(int lvl)
 	            || BoyItem._iMinStr > strength
 	            || BoyItem._iMinMag > magic
 	            || BoyItem._iMinDex > dexterity
-	            || BoyItem._iIvalue < ivalue)
+	            || BoyItem._iIvalue < ivalue
+	            || (BoyItem._iSpell == SpellID::Search && *GetOptions().Gameplay.disableSearch))
 	        && count < 250));
 	BoyItem._iCreateInfo = lvl | CF_BOY;
 	BoyItem._iIdentified = true;
