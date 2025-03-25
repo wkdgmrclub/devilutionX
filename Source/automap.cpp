@@ -15,6 +15,7 @@
 #include "engine/render/automap_render.hpp"
 #include "levels/gendung.h"
 #include "levels/setmaps.h"
+#include "options.h"
 #include "player.h"
 #include "utils/language.h"
 #include "utils/stdcompat/algorithm.hpp"
@@ -981,7 +982,7 @@ void DrawAutomap(const Surface &out)
 	}
 
 	myPlayerOffset.deltaY -= TILE_HEIGHT / 2;
-	if (AutoMapShowItems)
+	if (AutoMapShowItems || *sgOptions.Enhanced.AutoMapShowItems)
 		SearchAutomapItem(out, myPlayerOffset, 8, [](Point position) { return dItem[position.x][position.y] != 0; });
 #ifdef _DEBUG
 	if (IsDebugAutomapHighlightNeeded())

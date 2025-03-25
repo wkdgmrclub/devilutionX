@@ -1579,6 +1579,27 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, false, delta);
 
+	if ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch) {
+		uint8_t reroll = 0;
+		Point originalPos = item.position;
+		do {
+			if (item._iMiscId == IMISC_SCROLL) {
+				item = {};
+				idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
+			} else if (item._iMiscId == IMISC_BOOK) {
+				item = {};
+				idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
+			}
+			item.position = originalPos;
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, false, delta);
+			reroll++;
+			if (reroll >= 255 && ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch)) {
+				DeleteItem(ii);
+				return;
+			}
+		} while ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch);
+	}
+
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
 	if (delta)
@@ -2053,7 +2074,8 @@ void SpawnOnePremium(Item &premiumItem, int plvl, const Player &player)
 			    && premiumItem._iMinStr <= strength
 			    && premiumItem._iMinMag <= magic
 			    && premiumItem._iMinDex <= dexterity
-			    && premiumItem._iIvalue >= itemValue) {
+			    && premiumItem._iIvalue >= itemValue
+				&& (!*sgOptions.Enhanced.disableSearch || premiumItem._iSpell != SpellID::Search)) {
 				break;
 			}
 		}
@@ -2233,7 +2255,7 @@ void CreateMagicItem(Point position, int lvl, ItemType itemType, int imid, int i
 	while (true) {
 		item = {};
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * lvl, 1, true, false, delta);
-		if (item._iCurs == icurs)
+		if (item._iCurs == icurs && (!*sgOptions.Enhanced.disableSearch || item._iSpell != SpellID::Search))
 			break;
 
 		idx = RndTypeItems(itemType, imid, lvl);
@@ -3317,6 +3339,26 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 
+	if ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch) {
+		uint8_t reroll = 0;
+		Point originalPos = item.position;
+		do {
+			item = {};
+			if (monster.isUnique() || dropsSpecialTreasure) {
+				idx = RndUItem(&monster);
+			} else {
+				idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
+			}
+			item.position = originalPos;
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
+			reroll++;
+			if (reroll >= 255 && ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch)) {
+				DeleteItem(ii);
+				return;
+			}
+		} while ((item._iSpell == SpellID::Search) && *sgOptions.Enhanced.disableSearch);
+	}
+
 	if (sendmsg)
 		NetSendCmdPItem(false, CMD_DROPITEM, item.position, item);
 	if (spawn)
@@ -4317,6 +4359,9 @@ void SpawnWitch(int lvl)
 					SetRndSeed(item._iSeed);
 					DiscardRandomValues(1);
 					GetItemAttrs(item, bookType, lvl);
+					if (*sgOptions.Enhanced.disableSearch && item._iSpell == SpellID::Search) {
+						continue;
+					}
 					item._iCreateInfo = lvl | CF_WITCH;
 					item._iIdentified = true;
 					bookCount++;
@@ -4343,7 +4388,7 @@ void SpawnWitch(int lvl)
 				maxlvl = 2 * lvl;
 			if (maxlvl != -1)
 				GetItemBonus(*MyPlayer, item, maxlvl / 2, maxlvl, true, true);
-		} while (item._iIvalue > maxValue);
+		} while (item._iIvalue > maxValue || item._iSpell == SpellID::Search && *sgOptions.Enhanced.disableSearch);
 
 		item._iCreateInfo = lvl | CF_WITCH;
 		item._iIdentified = true;
@@ -4459,7 +4504,8 @@ void SpawnBoy(int lvl)
 	            || boyitem._iMinStr > strength
 	            || boyitem._iMinMag > magic
 	            || boyitem._iMinDex > dexterity
-	            || boyitem._iIvalue < ivalue)
+	            || boyitem._iIvalue < ivalue
+				|| (boyitem._iSpell == SpellID::Search && *sgOptions.Enhanced.disableSearch))
 	        && count < 250));
 	boyitem._iCreateInfo = lvl | CF_BOY;
 	boyitem._iIdentified = true;

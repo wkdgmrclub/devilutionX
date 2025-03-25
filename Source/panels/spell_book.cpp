@@ -14,6 +14,7 @@
 #include "engine/render/text_render.hpp"
 #include "init.h"
 #include "missiles.h"
+#include "options.h"
 #include "panels/spell_icons.hpp"
 #include "panels/ui_panels.hpp"
 #include "player.h"
@@ -53,7 +54,7 @@ SpellID GetSpellFromSpellPage(size_t page, size_t entry)
 		case HeroClass::Sorcerer:
 			return SpellID::StaffRecharge;
 		case HeroClass::Monk:
-			return SpellID::Search;
+		return *sgOptions.Enhanced.disableSearch ? SpellID::Infravision : SpellID::Search;
 		case HeroClass::Bard:
 			return SpellID::Identify;
 		case HeroClass::Barbarian:
@@ -78,7 +79,7 @@ void PrintSBookStr(const Surface &out, Point position, string_view text, UiFlags
 SpellType GetSBookTrans(SpellID ii, bool townok)
 {
 	Player &player = *InspectPlayer;
-	if ((player._pClass == HeroClass::Monk) && (ii == SpellID::Search))
+	if (player._pClass == HeroClass::Monk && ((ii == SpellID::Infravision && *sgOptions.Enhanced.disableSearch) || (ii == SpellID::Search && !*sgOptions.Enhanced.disableSearch))) {
 		return SpellType::Skill;
 	SpellType st = SpellType::Spell;
 	if ((player._pISpells & GetSpellBitmask(ii)) != 0) {
