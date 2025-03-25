@@ -81,6 +81,7 @@ SpellType GetSBookTrans(SpellID ii, bool townok)
 	Player &player = *InspectPlayer;
 	if (player._pClass == HeroClass::Monk && ((ii == SpellID::Infravision && *sgOptions.Enhanced.disableSearch) || (ii == SpellID::Search && !*sgOptions.Enhanced.disableSearch))) {
 		return SpellType::Skill;
+	}
 	SpellType st = SpellType::Spell;
 	if ((player._pISpells & GetSpellBitmask(ii)) != 0) {
 		st = SpellType::Charges;
