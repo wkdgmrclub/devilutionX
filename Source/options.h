@@ -610,6 +610,25 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryEnum<FloatingNumbers> enableFloatingNumbers;
 };
 
+struct EnhancedOptions : OptionCategoryBase {
+	EnhancedOptions();
+	std::vector<OptionEntryBase *> GetEntries() override;
+
+	/** @brief Gameplay ticks per second. */
+	OptionEntryInt<int> EnhancedOption1;
+	/** @brief Enable double walk speed when in town. */
+	OptionEntryBoolean EnhancedOption2;
+	/** @brief Enable double walk speed when in town. */
+	OptionEntryBoolean EnhancedOption3;
+	/** @brief Enable double walk speed when in town. */
+	OptionEntryBoolean EnhancedOption4;
+	/** @brief Enable double walk speed when in town. */
+	OptionEntryBoolean EnhancedOption5;
+	/** @brief Enable double walk speed when in town. */
+	OptionEntryBoolean EnhancedOption6;
+	/** @brief LAST LINE for reference delete later OptionEntryEnum<FloatingNumbers> enableFloatingNumbers; */
+};
+
 struct ControllerOptions : OptionCategoryBase {
 	ControllerOptions();
 	std::vector<OptionEntryBase *> GetEntries() override;
@@ -806,6 +825,7 @@ struct Options {
 	HellfireOptions Hellfire;
 	AudioOptions Audio;
 	GameplayOptions Gameplay;
+	EnhancedOptions Enhanced;
 	GraphicsOptions Graphics;
 	ControllerOptions Controller;
 	NetworkOptions Network;
@@ -817,6 +837,7 @@ struct Options {
 	[[nodiscard]] std::vector<OptionCategoryBase *> GetCategories()
 	{
 		return {
+			&Enhanced,
 			&Language,
 			&GameMode,
 			&StartUp,

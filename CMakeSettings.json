@@ -11,6 +11,11 @@
       "enableClangTidyCodeAnalysis": true,
       "variables": [
         {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
+        {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
           "type": "BOOL"
@@ -27,6 +32,11 @@
       "intelliSenseMode": "windows-msvc-x64",
       "enableClangTidyCodeAnalysis": true,
       "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
         {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
@@ -51,6 +61,11 @@
       "enableClangTidyCodeAnalysis": true,
       "variables": [
         {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
+        {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
           "type": "BOOL"
@@ -68,6 +83,11 @@
       "intelliSenseMode": "windows-msvc-x64",
       "enableClangTidyCodeAnalysis": true,
       "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
         {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
@@ -87,6 +107,11 @@
       "enableClangTidyCodeAnalysis": true,
       "variables": [
         {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
+        {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
           "type": "BOOL"
@@ -103,6 +128,11 @@
       "intelliSenseMode": "windows-msvc-x86",
       "enableClangTidyCodeAnalysis": true,
       "variables": [
+        {
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
         {
           "name": "DISCORD_INTEGRATION",
           "value": "True",
@@ -122,25 +152,10 @@
       "enableClangTidyCodeAnalysis": true,
       "variables": [
         {
-          "name": "DISCORD_INTEGRATION",
-          "value": "True",
-          "type": "BOOL"
-        }
-      ]
-    },
-    {
-      "name": "x64-Debug-WSL-GCC",
-      "generator": "Ninja",
-      "configurationType": "Debug",
-      "buildRoot": "${workspaceRoot}\\build\\${name}",
-      "installRoot": "${env.USERPROFILE}\\CMakeBuilds\\${workspaceHash}\\install\\${name}",
-      "cmakeExecutable": "cmake",
-      "cmakeCommandArgs": "",
-      "buildCommandArgs": "",
-      "ctestCommandArgs": "",
-      "inheritEnvironments": [ "linux_x64" ],
-      "wslPath": "${defaultWSLPath}",
-      "variables": [
+          "name": "CMAKE_TOOLCHAIN_FILE",
+          "value": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+          "type": "STRING"
+        },
         {
           "name": "DISCORD_INTEGRATION",
           "value": "True",

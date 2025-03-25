@@ -1141,6 +1141,28 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 	};
 }
 
+EnhancedOptions::EnhancedOptions()
+    : OptionCategoryBase("Enhanced", N_("Enhanced"), N_("Enhanced Options"))
+    , EnhancedOption1("Speed", OptionEntryFlags::CantChangeInMultiPlayer, "Speed", "Gameplay ticks per second.", 20)
+    , EnhancedOption2("Run in Town", OptionEntryFlags::CantChangeInMultiPlayer, N_("Run in Town"), N_("Enable jogging/fast walking in town for Diablo and Hellfire. This option was introduced in the expansion."), false)
+    , EnhancedOption3("Cow Quest", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::OnlyHellfire, N_("Cow Quest"), N_("Enable Jersey's quest. Lester the farmer is replaced by the Complete Nut."), false)
+    , EnhancedOption4("Friendly Fire", OptionEntryFlags::CantChangeInMultiPlayer, N_("Friendly Fire"), N_("Allow arrow/spell damage between players in multiplayer even when the friendly mode is on."), true)
+    , EnhancedOption5("Auto Oil Pickup", OptionEntryFlags::OnlyHellfire, N_("Auto Oil Pickup"), N_("Oils are automatically collected when in close proximity to the player."), false)
+    , EnhancedOption6("Auto Pickup in Town", OptionEntryFlags::None, N_("Auto Pickup in Town"), N_("Automatically pickup items in town."), false)
+{
+}
+std::vector<OptionEntryBase *> EnhancedOptions::GetEntries()
+{
+	return {
+		&EnhancedOption1,
+		&EnhancedOption2,
+		&EnhancedOption3,
+		&EnhancedOption4,
+		&EnhancedOption5,
+		&EnhancedOption6,
+	};
+}
+
 ControllerOptions::ControllerOptions()
     : OptionCategoryBase("Controller", N_("Controller"), N_("Controller Settings"))
 {
