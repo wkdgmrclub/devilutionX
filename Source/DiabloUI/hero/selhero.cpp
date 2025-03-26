@@ -19,6 +19,7 @@
 #include "options.h"
 #include "pfile.h"
 #include "utils/language.h"
+#include "utils/paths.h"
 #include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
 
@@ -159,7 +160,7 @@ void SelheroListSelect(int value)
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Warrior"), static_cast<int>(HeroClass::Warrior)));
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Rogue"), static_cast<int>(HeroClass::Rogue)));
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Sorcerer"), static_cast<int>(HeroClass::Sorcerer)));
-		if (gbIsHellfire) {
+		if (gbIsHellfire || *sgOptions.Enhanced.enableMonkDiablo) {
 			vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Monk"), static_cast<int>(HeroClass::Monk)));
 		}
 		if (gbBard || *sgOptions.Gameplay.testBard) {
@@ -189,6 +190,12 @@ void SelheroListSelect(int value)
 	}
 
 	if (selhero_heroInfo.hassaved) {
+		// Skip Monk saves if Enhanced option is off in Diablo mode
+		if (selhero_heroInfo.heroclass == HeroClass::Monk && !gbIsHellfire && !*sgOptions.Enhanced.enableMonkDiablo) {
+			// Pretend this slot is empty to avoid crashing due to missing Monk assets
+			return;
+		}
+
 		vecSelDlgItems.clear();
 
 		SDL_Rect rect1 = { (Sint16)(uiPosition.x + 242), (Sint16)(uiPosition.y + 211), 365, 33 };

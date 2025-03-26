@@ -18,6 +18,7 @@
 #include "loadsave.h"
 #include "menu.h"
 #include "mpq/mpq_common.hpp"
+#include "options.h"
 #include "pack.h"
 #include "playerdat.hpp"
 #include "qol/stash.h"
@@ -61,7 +62,7 @@ std::string GetSavePath(uint32_t saveNum, string_view savePrefix = {})
 #ifdef UNPACKED_SAVES
 	    gbIsHellfire ? "_hsv" DIRECTORY_SEPARATOR_STR : "_sv" DIRECTORY_SEPARATOR_STR
 #else
-	    gbIsHellfire ? ".hsv" : ".sv"
+	    (gbIsHellfire && !*sgOptions.Enhanced.enableMonkDiablo) ? ".hsv" : ".sv"
 #endif
 	);
 }
@@ -73,7 +74,7 @@ std::string GetStashSavePath()
 #ifdef UNPACKED_SAVES
 	    gbIsHellfire ? "_hsv" DIRECTORY_SEPARATOR_STR : "_sv" DIRECTORY_SEPARATOR_STR
 #else
-	    gbIsHellfire ? ".hsv" : ".sv"
+	    (gbIsHellfire && !*sgOptions.Enhanced.enableMonkDiablo) ? ".hsv" : ".sv"
 #endif
 	);
 }
@@ -642,27 +643,29 @@ bool pfile_ui_set_hero_infos(bool (*uiAddHeroInfo)(_uiheroinfo *))
 
 	for (uint32_t i = 0; i < MAX_CHARACTERS; i++) {
 		std::optional<SaveReader> archive = OpenSaveArchive(i);
-		if (archive) {
-			PlayerPack pkplr;
-			if (ReadHero(*archive, &pkplr)) {
-				_uiheroinfo uihero;
-				uihero.saveNumber = i;
-				strcpy(hero_names[i], pkplr.pName);
-				bool hasSaveGame = ArchiveContainsGame(*archive);
-				if (hasSaveGame)
-					pkplr.bIsHellfire = gbIsHellfireSaveGame ? 1 : 0;
+		if (!archive)
+			continue;
 
-				Player &player = Players[0];
+		PlayerPack pkplr;
+		if (!ReadHero(*archive, &pkplr))
+			continue;
 
-				UnPackPlayer(pkplr, player);
-				LoadHeroItems(player);
-				RemoveAllInvalidItems(player);
-				CalcPlrInv(player, false);
+		_uiheroinfo uihero;
+		uihero.saveNumber = i;
+		strcpy(hero_names[i], pkplr.pName);
+		bool hasSaveGame = ArchiveContainsGame(*archive);
+		if (hasSaveGame)
+			pkplr.bIsHellfire = gbIsHellfireSaveGame ? 1 : 0;
 
-				Game2UiPlayer(player, &uihero, hasSaveGame);
-				uiAddHeroInfo(&uihero);
-			}
-		}
+		Player &player = Players[0];
+
+		UnPackPlayer(pkplr, player);
+		LoadHeroItems(player);
+		RemoveAllInvalidItems(player);
+		CalcPlrInv(player, false);
+
+		Game2UiPlayer(player, &uihero, hasSaveGame);
+		uiAddHeroInfo(&uihero);
 	}
 
 	return true;

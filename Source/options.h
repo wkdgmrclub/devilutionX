@@ -618,8 +618,8 @@ struct EnhancedOptions : OptionCategoryBase {
 	OptionEntryBoolean disableSearch;
 	/** @brief Enable double walk speed when in town. */
 	OptionEntryBoolean AutoMapShowItems;
-	/** @brief Enable double walk speed when in town.
-	OptionEntryBoolean EnhancedOption3;
+	/** @brief Allows selection of the Monk class when playing Diablo mode with Hellfire.mpq loaded. */
+	OptionEntryBoolean enableMonkDiablo;
 	/** @brief Enable double walk speed when in town.
 	OptionEntryBoolean EnhancedOption4;
 	/** @brief Enable double walk speed when in town.

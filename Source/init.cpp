@@ -358,6 +358,11 @@ void LoadGameArchives()
 		UiErrorOkDialog(_("Some Hellfire MPQs are missing"), _("Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files."));
 		diablo_quit(1);
 	}
+	if (!gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo) {
+		hfmonk_mpq = LoadMPQ(paths, "hfmonk.mpq");
+		hellfire_mpq = LoadMPQ(paths, "hellfire.mpq");
+		hfvoice_mpq = LoadMPQ(paths, "hfvoice.mpq");
+	}
 #endif
 }
 

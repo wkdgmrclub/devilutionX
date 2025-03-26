@@ -21,6 +21,8 @@
 #include "engine/load_file.hpp"
 #else
 #include "engine/assets.hpp"
+#include "mpq/mpq_reader.hpp"
+#include "options.h"
 #include "utils/pcx.hpp"
 #include "utils/pcx_to_clx.hpp"
 #endif
@@ -28,6 +30,8 @@
 #ifdef USE_SDL1
 #include "utils/sdl2_to_1_2_backports.h"
 #endif
+
+extern std::optional<devilution::MpqArchive> hellfire_mpq;
 
 namespace devilution {
 
@@ -59,12 +63,29 @@ OptionalOwnedClxSpriteList LoadPcxSpriteList(const char *filename, int numFrames
 	return result;
 #else
 	size_t fileSize;
-	AssetHandle handle = OpenAsset(path, fileSize);
-	if (!handle.ok()) {
-		if (logError)
-			LogError("Missing file: {}", path);
-		return std::nullopt;
+	AssetRef ref;
+
+	if (!gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo && strcmp(path, "ui_art\\heros.pcx") == 0 && hellfire_mpq) {
+		const devilution::MpqArchive::FileHash hash = devilution::MpqArchive::CalculateFileHash(path);
+		uint32_t fileNumber;
+		if (hellfire_mpq->GetFileNumber(hash, fileNumber)) {
+			ref.archive = &*hellfire_mpq;
+			ref.fileNumber = fileNumber;
+			ref.filename = path;
+			fileSize = ref.size(); // Needed for correct allocation
+		}
+	} else {
+		ref = FindAsset(path);
+		if (!ref.ok())
+			return std::nullopt;
+		fileSize = ref.size();
 	}
+
+	AssetHandle handle = OpenAsset(std::move(ref));
+	if (!handle.ok())
+		return std::nullopt;
+
+	return PcxToClx(handle, fileSize, static_cast<int>(numFramesOrFrameHeight), transparentColor, outPalette);
 #ifdef DEBUG_PCX_TO_CL2_SIZE
 	std::cout << filename;
 #endif

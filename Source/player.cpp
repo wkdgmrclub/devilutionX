@@ -2550,12 +2550,18 @@ void InitPlayer(Player &player, bool firstTime)
 	}
 
 	SpellID s = PlayersData[static_cast<size_t>(player._pClass)].skill;
+
+	if (player._pClass == HeroClass::Monk) {
+		if (!gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo) {
+			s = SpellID::Infravision;
+			player._pAblSpells = GetSpellBitmask(s);
+			player._pSplLvl[static_cast<int>(SpellID::Infravision)] = 1;
+		} else if (*sgOptions.Enhanced.disableSearch) {
+			s = SpellID::Infravision;
+		}
+	}
+
 	player._pAblSpells = GetSpellBitmask(s);
-	// Override for Monk: if disableSearch is enabled, use Infravision instead of Search.
-	player._pAblSpells = GetSpellBitmask(
-	    player._pClass == HeroClass::Monk && *sgOptions.Enhanced.disableSearch
-	        ? SpellID::Infravision
-	        : SpellID::Search);
 
 	player._pNextExper = ExpLvlsTbl[std::min<int8_t>(player._pLevel, MaxCharacterLevel - 1)];
 	player._pInvincible = false;

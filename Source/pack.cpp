@@ -11,6 +11,7 @@
 #include "init.h"
 #include "items/validation.h"
 #include "loadsave.h"
+#include "options.h"
 #include "playerdat.hpp"
 #include "plrmsg.h"
 #include "stores.h"
@@ -196,7 +197,7 @@ void PackPlayer(PlayerPack &packed, const Player &player)
 	packed.wReflections = SDL_SwapLE16(player.wReflections);
 	packed.pDamAcFlags = SDL_SwapLE32(static_cast<uint32_t>(player.pDamAcFlags));
 	packed.pDiabloKillLevel = SDL_SwapLE32(player.pDiabloKillLevel);
-	packed.bIsHellfire = gbIsHellfire ? 1 : 0;
+	packed.bIsHellfire = (gbIsHellfire || (player._pClass == HeroClass::Monk && *sgOptions.Enhanced.enableMonkDiablo)) ? 0 : 1;
 }
 
 void PackNetItem(const Item &item, ItemNetPack &packedItem)

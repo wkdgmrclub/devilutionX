@@ -55,11 +55,15 @@ bool GetSpellListSelection(SpellID &pSpell, SpellType &pSplType)
 		if (spellListItem.isSelected) {
 			pSpell = spellListItem.id;
 			pSplType = spellListItem.type;
-			if (myPlayer._pClass == HeroClass::Monk) {
-				if ((spellListItem.id == SpellID::Search && !*sgOptions.Enhanced.disableSearch) || (spellListItem.id == SpellID::Infravision && *sgOptions.Enhanced.disableSearch)) {
+
+			// Enhanced Monk support: treat Infravision as a skill
+			if (myPlayer._pClass == HeroClass::Monk && !gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo) {
+				if (spellListItem.id == SpellID::Infravision) {
 					pSplType = SpellType::Skill;
 				}
 			}
+
+			return true;
 		}
 	}
 

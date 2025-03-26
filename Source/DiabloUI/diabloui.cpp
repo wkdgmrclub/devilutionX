@@ -20,6 +20,7 @@
 #include "engine/load_pcx.hpp"
 #include "engine/render/clx_render.hpp"
 #include "hwcursor.hpp"
+#include "options.h"
 #include "utils/display.h"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -580,7 +581,11 @@ void LoadHeros()
 	for (size_t i = 0; i <= enum_size<HeroClass>::value; ++i) {
 		char portraitPath[18];
 		*BufCopy(portraitPath, "ui_art\\hero", i) = '\0';
-		ArtHeroOverrides[i] = LoadPcx(portraitPath, /*transparentColor=*/std::nullopt, /*outPalette=*/nullptr, /*logError=*/false);
+		if (i != static_cast<size_t>(HeroClass::Monk) || gbIsHellfire || !*sgOptions.Enhanced.enableMonkDiablo) {
+			ArtHeroOverrides[i] = LoadPcx(portraitPath, std::nullopt, nullptr, false);
+		} else {
+			ArtHeroOverrides[i] = LoadPcx("ui_art\\hero.pcx", std::nullopt, nullptr, false);
+		}
 	}
 }
 

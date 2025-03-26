@@ -49,6 +49,29 @@ std::string GetMp3Path(const char *path)
 bool LoadAudioFile(const char *path, bool stream, bool errorDialog, SoundSample &result)
 {
 	bool isMp3 = true;
+	if (!gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo && strncmp(path, "sfx\\monk\\", 9) == 0) {
+		if (hfvoice_mpq) {
+			const auto hash = MpqArchive::CalculateFileHash(path);
+			uint32_t fileNumber;
+			if (hfvoice_mpq->GetFileNumber(hash, fileNumber)) {
+				AssetRef ref;
+				ref.archive = &*hfvoice_mpq;
+				ref.fileNumber = fileNumber;
+				ref.filename = path;
+	
+				AssetHandle handle = OpenAsset(std::move(ref));
+				if (handle.ok()) {
+					const size_t size = ref.size();
+					auto waveFile = MakeArraySharedPtr<std::uint8_t>(size);
+					if (handle.read(waveFile.get(), size)) {
+						const int error = result.SetChunk(waveFile, size, false);
+						if (error == 0)
+							return true;
+					}
+				}				
+			}
+		}
+	}
 	std::string foundPath = GetMp3Path(path);
 	AssetRef ref = FindAsset(foundPath.c_str());
 	if (!ref.ok()) {

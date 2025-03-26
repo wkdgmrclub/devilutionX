@@ -2075,7 +2075,7 @@ void SpawnOnePremium(Item &premiumItem, int plvl, const Player &player)
 			    && premiumItem._iMinMag <= magic
 			    && premiumItem._iMinDex <= dexterity
 			    && premiumItem._iIvalue >= itemValue
-				&& (!*sgOptions.Enhanced.disableSearch || premiumItem._iSpell != SpellID::Search)) {
+			    && (!*sgOptions.Enhanced.disableSearch || premiumItem._iSpell != SpellID::Search)) {
 				break;
 			}
 		}
@@ -2486,7 +2486,10 @@ bool IsItemAvailable(int i)
 	    || (
 	        // Bard items are technically Hellfire-exclusive
 	        // but are just normal items with adjusted stats.
-	        *sgOptions.Gameplay.testBard && IsAnyOf(i, IDI_BARDSWORD, IDI_BARDDAGGER));
+	        *sgOptions.Gameplay.testBard && IsAnyOf(i, IDI_BARDSWORD, IDI_BARDDAGGER))
+	    || (
+	        // Enable IDI_SHORTSTAFF availability in Diablo for Monk
+	        *sgOptions.Enhanced.enableMonkDiablo && i == IDI_SHORTSTAFF);
 }
 
 uint8_t GetOutlineColor(const Item &item, bool checkReq)
@@ -3068,12 +3071,14 @@ void CreatePlrItems(Player &player)
 	case HeroClass::Monk:
 		InitializeItem(player.InvBody[INVLOC_HAND_LEFT], IDI_SHORTSTAFF);
 		GenerateNewSeed(player.InvBody[INVLOC_HAND_LEFT]);
+
 		InitializeItem(player.SpdList[0], IDI_HEAL);
 		GenerateNewSeed(player.SpdList[0]);
 
 		InitializeItem(player.SpdList[1], IDI_HEAL);
 		GenerateNewSeed(player.SpdList[1]);
 		break;
+
 	case HeroClass::Bard:
 		InitializeItem(player.InvBody[INVLOC_HAND_LEFT], IDI_BARDSWORD);
 		GenerateNewSeed(player.InvBody[INVLOC_HAND_LEFT]);
@@ -4505,7 +4510,7 @@ void SpawnBoy(int lvl)
 	            || boyitem._iMinMag > magic
 	            || boyitem._iMinDex > dexterity
 	            || boyitem._iIvalue < ivalue
-				|| (boyitem._iSpell == SpellID::Search && *sgOptions.Enhanced.disableSearch))
+	            || (boyitem._iSpell == SpellID::Search && *sgOptions.Enhanced.disableSearch))
 	        && count < 250));
 	boyitem._iCreateInfo = lvl | CF_BOY;
 	boyitem._iIdentified = true;

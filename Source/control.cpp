@@ -1029,6 +1029,10 @@ void CheckPanelInfo()
 		Player &myPlayer = *MyPlayer;
 		const SpellID spellId = myPlayer._pRSpell;
 		if (IsValidSpell(spellId)) {
+			if (myPlayer._pRSplType == SpellType::Skill
+			    && !(myPlayer._pClass == HeroClass::Monk && (!gbIsHellfire && *sgOptions.Enhanced.enableMonkDiablo))) {
+				return;
+			}
 			switch (myPlayer._pRSplType) {
 			case SpellType::Skill:
 				AddPanelString(fmt::format(fmt::runtime(_("{:s} Skill")), pgettext("spell", GetSpellData(spellId).sNameText)));
