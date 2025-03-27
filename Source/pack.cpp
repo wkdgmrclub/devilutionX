@@ -41,6 +41,16 @@ namespace devilution {
 
 namespace {
 
+uint16_t GenerateModCompatibilityFlags()
+{
+	uint16_t flags = 0;
+	if (*sgOptions.Enhanced.disableSearch)
+		flags |= 1 << 0;
+	if (*sgOptions.Enhanced.enableMonkDiablo)
+		flags |= 1 << 1;
+	return flags;
+}
+
 void EventFailedJoinAttempt(const char *playerName)
 {
 	std::string message = fmt::format("Player '{}' sent invalid player data during attempt to join the game.", playerName);
@@ -280,6 +290,7 @@ void PackNetPlayer(PlayerNetPack &packed, const Player &player)
 	packed.pIFMaxDam = SDL_SwapLE32(player._pIFMaxDam);
 	packed.pILMinDam = SDL_SwapLE32(player._pILMinDam);
 	packed.pILMaxDam = SDL_SwapLE32(player._pILMaxDam);
+	packed.modCompatibilityFlags = GenerateModCompatibilityFlags();
 }
 
 void UnPackItem(const ItemPack &packedItem, const Player &player, Item &item, bool isHellfire)
@@ -584,6 +595,7 @@ bool UnPackNetPlayer(const PlayerNetPack &packed, Player &player)
 	ValidateFields(player._pILMaxDam, SDL_SwapLE32(packed.pILMaxDam), player._pILMaxDam == SDL_SwapLE32(packed.pILMaxDam));
 	ValidateFields(player._pMaxHPBase, player.calculateBaseLife(), player._pMaxHPBase <= player.calculateBaseLife());
 	ValidateFields(player._pMaxManaBase, player.calculateBaseMana(), player._pMaxManaBase <= player.calculateBaseMana());
+	ValidateField(packed.modCompatibilityFlags, GenerateModCompatibilityFlags(), packed.modCompatibilityFlags == GenerateModCompatibilityFlags());
 
 	return true;
 }

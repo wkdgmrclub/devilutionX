@@ -139,6 +139,7 @@ struct PlayerNetPack {
 	int32_t pIFMaxDam;
 	int32_t pILMinDam;
 	int32_t pILMaxDam;
+	uint16_t modCompatibilityFlags = 0; // Enhanced mod handshake versioning
 };
 #pragma pack(pop)
 
