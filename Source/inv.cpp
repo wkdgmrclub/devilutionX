@@ -266,7 +266,7 @@ void ChangeEquipment(Player &player, inv_body_loc bodyLocation, const Item &item
 	player.InvBody[bodyLocation] = item;
 
 	if (sendNetworkMessage) {
-		NetSendCmdChItem(false, bodyLocation, true);
+		NetSendCmdChItem(false, bodyLocation, false);
 	}
 }
 

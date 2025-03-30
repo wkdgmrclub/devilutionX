@@ -4600,7 +4600,11 @@ bool Monster::isPossibleToHit() const
 
 void Monster::tag(const Player &tagger)
 {
-	whoHit |= 1 << tagger.getId();
+	for (const auto &player : Players) {
+		if (player.plractive && player.plrlevel == tagger.plrlevel) {
+			whoHit |= 1 << player.getId();
+		}
+	}
 }
 
 bool Monster::tryLiftGargoyle()
