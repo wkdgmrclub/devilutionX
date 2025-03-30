@@ -130,7 +130,7 @@ bool cineflag;
 int PauseMode;
 clicktype sgbMouseDown;
 uint16_t gnTickDelay = 50;
-char gszProductName[64] = "DevilutionX vUnknown";
+char gszProductName[64] = "middleearthmod vUnknown";
 
 #ifdef _DEBUG
 bool DebugDisableNetworkTimeout = false;

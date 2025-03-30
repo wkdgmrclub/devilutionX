@@ -24,7 +24,7 @@ OBJ_CRUX2	cruxsk2	0	0				Solid,Light,Breakable	1	15	96	Bottom,Middle
 OBJ_CRUX3	cruxsk3	0	0				Solid,Light,Breakable	1	15	96	Bottom,Middle
 OBJ_STAND	rockstan	5	5				Solid,MissilesPassThrough,Light	1	0	96	
 OBJ_ANGEL	angel	0	0				Solid,Light	1	0	96	
-OBJ_BOOK2L	book2	0	0				Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
+OBJ_BOOK2L	book1	0	0				Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
 OBJ_BCROSS	burncros	0	0				Animated,Solid	0	10	160	
 OBJ_NUDEW2R	nude2	0	0				Animated,Solid,Light	3	6	128	
 OBJ_SWITCHSKL	switch4	16	16				Solid,MissilesPassThrough,Light,Trap	1	0	96	Bottom
@@ -40,7 +40,7 @@ OBJ_TORTURE2	tsoul	13	15			Q_BUTCHER	MissilesPassThrough,Light	2	0	128
 OBJ_TORTURE3	tsoul	13	15			Q_BUTCHER	MissilesPassThrough,Light	3	0	128	
 OBJ_TORTURE4	tsoul	13	15			Q_BUTCHER	MissilesPassThrough,Light	4	0	128	
 OBJ_TORTURE5	tsoul	13	15			Q_BUTCHER	MissilesPassThrough,Light	5	0	128	
-OBJ_BOOK2R	book2	6	6				Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle
+OBJ_BOOK2R	book1	6	6				Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle
 OBJ_L2LDOOR	l2doors	0	0	DTYPE_CATACOMBS			Light,Trap	1	0	64	Bottom,Middle
 OBJ_L2RDOOR	l2doors	0	0	DTYPE_CATACOMBS			Light,Trap	2	0	64	Bottom,Middle
 OBJ_TORCHL	wtorch4	5	8				Animated,MissilesPassThrough	1	9	96	
@@ -60,10 +60,10 @@ OBJ_BARREL	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,M
 OBJ_BARRELEX	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
 OBJ_SHRINEL	lshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
 OBJ_SHRINER	rshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
-OBJ_SKELBOOK	book2	0	0		THEME_SKELROOM		Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle
+OBJ_SKELBOOK	book1	0	0		THEME_SKELROOM		Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle
 OBJ_BOOKCASEL	bshelf	0	0		THEME_LIBRARY		Solid,Light	3	0	96	Bottom,Middle
 OBJ_BOOKCASER	bshelf	0	0		THEME_LIBRARY		Solid,Light	4	0	96	Bottom,Middle
-OBJ_BOOKSTAND	book2	0	0		THEME_LIBRARY		Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
+OBJ_BOOKSTAND	book1	0	0		THEME_LIBRARY		Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
 OBJ_BOOKCANDLE	candle2	0	0		THEME_LIBRARY		Animated,Solid,MissilesPassThrough,Light	2	4	96	
 OBJ_BLOODFTN	bloodfnt	0	0		THEME_BLOODFOUNTAIN		Animated,Solid,MissilesPassThrough,Light	2	10	96	Bottom,Middle
 OBJ_DECAP	decap	13	15		THEME_DECAPITATED		Solid,MissilesPassThrough,Light	1	0	96	Bottom
