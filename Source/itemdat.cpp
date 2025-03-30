@@ -80,6 +80,7 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "EAR_WARRIOR") return ICURS_EAR_WARRIOR;
 	if (value == "EAR_ROGUE") return ICURS_EAR_ROGUE;
 	if (value == "BLOOD_STONE") return ICURS_BLOOD_STONE;
+	if (value == "GEM") return ICURS_GEM;
 	if (value == "OIL") return ICURS_OIL;
 	if (value == "ELIXIR_OF_VITALITY") return ICURS_ELIXIR_OF_VITALITY;
 	if (value == "POTION_OF_HEALING") return ICURS_POTION_OF_HEALING;
@@ -91,8 +92,10 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "ELIXIR_OF_STRENGTH") return ICURS_ELIXIR_OF_STRENGTH;
 	if (value == "POTION_OF_MANA") return ICURS_POTION_OF_MANA;
 	if (value == "BRAIN") return ICURS_BRAIN;
+	if (value == "CLAW") return ICURS_CLAW;
 	if (value == "OPTIC_AMULET") return ICURS_OPTIC_AMULET;
 	if (value == "AMULET") return ICURS_AMULET;
+	if (value == "MAJ_AMULET") return ICURS_MAJ_AMULET;
 	if (value == "WIZARDSPIKE") return ICURS_WIZARDSPIKE;
 	if (value == "DAGGER") return ICURS_DAGGER;
 	if (value == "BLACK_RAZOR") return ICURS_BLACK_RAZOR;
@@ -111,7 +114,9 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "SABRE") return ICURS_SABRE;
 	if (value == "GRYPHONS_CLAW") return ICURS_GRYPHONS_CLAW;
 	if (value == "SPIKED_CLUB") return ICURS_SPIKED_CLUB;
+	if (value == "SPIKED_CLUB2") return ICURS_SPIKED_CLUB2;
 	if (value == "SCIMITAR") return ICURS_SCIMITAR;
+	if (value == "ELVEN_BLADE") return ICURS_ELVEN_BLADE;
 	if (value == "FULL_HELM") return ICURS_FULL_HELM;
 	if (value == "MAGIC_ROCK") return ICURS_MAGIC_ROCK;
 	if (value == "HELM_OF_SPIRITS") return ICURS_HELM_OF_SPIRITS;
@@ -119,8 +124,10 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "ROYAL_CIRCLET") return ICURS_ROYAL_CIRCLET;
 	if (value == "FOOLS_CREST") return ICURS_FOOLS_CREST;
 	if (value == "HARLEQUIN_CREST") return ICURS_HARLEQUIN_CREST;
+	if (value == "SHIRT") return ICURS_SHIRT;
 	if (value == "HELM") return ICURS_HELM;
 	if (value == "BUCKLER") return ICURS_BUCKLER;
+	if (value == "GREAT_HELM") return ICURS_GREAT_HELM;
 	if (value == "VEIL_OF_STEEL") return ICURS_VEIL_OF_STEEL;
 	if (value == "BOOK_GREY") return ICURS_BOOK_GREY;
 	if (value == "BOOK_RED") return ICURS_BOOK_RED;
@@ -133,8 +140,9 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "CROWN") return ICURS_CROWN;
 	if (value == "MAP_OF_THE_STARS") return ICURS_MAP_OF_THE_STARS;
 	if (value == "FUNGAL_TOME") return ICURS_FUNGAL_TOME;
-	if (value == "GREAT_HELM") return ICURS_GREAT_HELM;
+	if (value == "GREAT_HELM2") return ICURS_GREAT_HELM2;
 	if (value == "OVERLORDS_HELM") return ICURS_OVERLORDS_HELM;
+	if (value == "MITHRIL_SHIELD") return ICURS_MITHRIL_SHIELD;
 	if (value == "BATTLE_AXE") return ICURS_BATTLE_AXE;
 	if (value == "HUNTERS_BOW") return ICURS_HUNTERS_BOW;
 	if (value == "FIELD_PLATE") return ICURS_FIELD_PLATE;
@@ -149,6 +157,7 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "SMALL_AXE") return ICURS_SMALL_AXE;
 	if (value == "KITE_SHIELD") return ICURS_KITE_SHIELD;
 	if (value == "SCALE_MAIL") return ICURS_SCALE_MAIL;
+	if (value == "DWARVEN_SHIELD") return ICURS_DWARVEN_SHIELD;
 	if (value == "SPLIT_SKULL_SHIELD") return ICURS_SPLIT_SKULL_SHIELD;
 	if (value == "DRAGONS_BREACH") return ICURS_DRAGONS_BREACH;
 	if (value == "SHORT_BOW") return ICURS_SHORT_BOW;
@@ -162,6 +171,7 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "HARD_LEATHER_ARMOR") return ICURS_HARD_LEATHER_ARMOR;
 	if (value == "RAGS") return ICURS_RAGS;
 	if (value == "QUILTED_ARMOR") return ICURS_QUILTED_ARMOR;
+	if (value == "WARFLAIL") return ICURS_WARFLAIL;
 	if (value == "FLAIL") return ICURS_FLAIL;
 	if (value == "TOWER_SHIELD") return ICURS_TOWER_SHIELD;
 	if (value == "COMPOSITE_BOW") return ICURS_COMPOSITE_BOW;
@@ -170,6 +180,7 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "SPLINT_MAIL") return ICURS_SPLINT_MAIL;
 	if (value == "ROBE") return ICURS_ROBE;
 	if (value == "THE_RAINBOW_CLOAK") return ICURS_THE_RAINBOW_CLOAK;
+	if (value == "CHAIN_SHIRT") return ICURS_CHAIN_SHIRT;
 	if (value == "ANVIL_OF_FURY") return ICURS_ANVIL_OF_FURY;
 	if (value == "BROAD_AXE") return ICURS_BROAD_AXE;
 	if (value == "LARGE_AXE") return ICURS_LARGE_AXE;
@@ -185,6 +196,7 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "BREAST_PLATE") return ICURS_BREAST_PLATE;
 	if (value == "RING_MAIL") return ICURS_RING_MAIL;
 	if (value == "STAFF_OF_LAZARUS") return ICURS_STAFF_OF_LAZARUS;
+	if (value == "WAR_AXE") return ICURS_WAR_AXE;
 	if (value == "ARKAINES_VALOR") return ICURS_ARKAINES_VALOR;
 	if (value == "THE_NEEDLER") return ICURS_THE_NEEDLER;
 	if (value == "NAJS_LIGHT_PLATE") return ICURS_NAJS_LIGHT_PLATE;
@@ -230,6 +242,18 @@ tl::expected<item_cursor_graphic, std::string> ParseItemCursorGraphic(std::strin
 	if (value == "BLITZEN") return ICURS_BLITZEN;
 	if (value == "DEMON_PLATE_ARMOR") return ICURS_DEMON_PLATE_ARMOR;
 	if (value == "BOVINE") return ICURS_BOVINE;
+	if (value == "NEW_HELM") return ICURS_NEW_HELM;
+	if (value == "SKULLCAP") return ICURS_SKULLCAP;
+	if (value == "PLATE_MAIL") return ICURS_PLATE_MAIL;
+	if (value == "GREAT_BLADE") return ICURS_GREAT_BLADE;
+	if (value == "LONG_BOW") return ICURS_LONG_BOW;
+	if (value == "ELVEN_SH_BOW") return ICURS_ELVEN_SH_BOW;
+	if (value == "EORLS_TWO_HANDER") return ICURS_EORLS_TWO_HANDER;
+	if (value == "ARAGORNS_ROYAL_SHIELD") return ICURS_ARAGORNS_ROYAL_SHIELD;
+	if (value == "THE_ELESSAR") return ICURS_THE_ELESSAR;
+	if (value == "OLORINS_STAFF") return ICURS_OLORINS_STAFF;
+	if (value == "AEGLOS_SPEAR") return ICURS_AEGLOS_SPEAR;
+	if (value == "EARENDILS_WARHELM") return ICURS_EARENDILS_WARHELM;
 	if (value == "") return ICURS_DEFAULT;
 	return tl::make_unexpected("Unknown enum value");
 }
@@ -324,6 +348,40 @@ tl::expected<unique_base_item, std::string> ParseUniqueBaseItem(std::string_view
 	if (value == "LGTFORGE") return UITYPE_LGTFORGE;
 	if (value == "LAZSTAFF") return UITYPE_LAZSTAFF;
 	if (value == "BOVINE") return UITYPE_BOVINE;
+	if (value == "NUMSWORD") return UITYPE_NUMSWORD;
+	if (value == "MAJAMULET") return UITYPE_MAJAMULET;
+	if (value == "WARAXE") return UITYPE_WARAXE;
+	if (value == "HEAVYXBOW") return UITYPE_HEAVYXBOW;
+	if (value == "MALLORNBOW") return UITYPE_MALLORNBOW;
+	if (value == "WARFLAIL") return UITYPE_WARFLAIL;
+	if (value == "WARHELM") return UITYPE_WARHELM;
+	if (value == "NUMSHIELD") return UITYPE_NUMSHIELD;
+	if (value == "ELVISHSBOW") return UITYPE_ELVISHSBOW;
+	if (value == "MITHCHAINMAIL") return UITYPE_MITHCHAINMAIL;
+	if (value == "ELVENBLADE") return UITYPE_ELVENBLADE;
+	if (value == "MITHRILSHIELD") return UITYPE_MITHRILSHIELD;
+	if (value == "ELVENBOW") return UITYPE_ELVENBOW;
+	if (value == "MITHRILHELM") return UITYPE_MITHRILHELM;
+	if (value == "MAJRING") return UITYPE_MAJRING;
+	if (value == "LESSRING") return UITYPE_LESSRING;
+	if (value == "NORMRING") return UITYPE_NORMRING;
+	if (value == "LCAP") return UITYPE_LCAP;
+	if (value == "CHAINSHIRT") return UITYPE_CHAINSHIRT;
+	if (value == "FULLHELM") return UITYPE_FULLHELM;
+	if (value == "SDSCALE") return UITYPE_SDSCALE;
+	if (value == "GREATFLAIL") return UITYPE_GREATFLAIL;
+	if (value == "SHBATTLEBOW") return UITYPE_SHBATTLEBOW;
+	if (value == "DWARVENSHIELD") return UITYPE_DWARVENSHIELD;
+	if (value == "LEATHERARMOR") return UITYPE_LEATHERARMOR;
+	if (value == "MAGEROBE") return UITYPE_MAGEROBE;
+	if (value == "SCALEMAIL") return UITYPE_SCALEMAIL;
+	if (value == "HAUBERK") return UITYPE_HAUBERK;
+	if (value == "DWARVENAXE") return UITYPE_DWARVENAXE;
+	if (value == "LONGKNIFE") return UITYPE_LONGKNIFE;
+	if (value == "CSABRE") return UITYPE_CSABRE;
+	if (value == "WOODAXE") return UITYPE_WOODAXE;
+	if (value == "SHWARBOW") return UITYPE_SHWARBOW;
+	if (value == "MINRING") return UITYPE_MINRING;
 	if (value == "INVALID") return UITYPE_INVALID;
 	return tl::make_unexpected("Unknown enum value");
 }
@@ -356,6 +414,7 @@ tl::expected<ItemSpecialEffect, std::string> ParseItemSpecialEffect(std::string_
 	if (value == "HalfTrapDamage") return ItemSpecialEffect::HalfTrapDamage;
 	if (value == "TripleDemonDamage") return ItemSpecialEffect::TripleDemonDamage;
 	if (value == "ZeroResistance") return ItemSpecialEffect::ZeroResistance;
+	if (value == "NoHealOnMonsters") return ItemSpecialEffect::NoHealOnMonsters;
 	return tl::make_unexpected("Unknown enum value");
 }
 
@@ -492,6 +551,8 @@ tl::expected<item_effect_type, std::string> ParseItemEffectType(std::string_view
 	if (value == "ACUNDEAD") return IPL_ACUNDEAD;
 	if (value == "MANATOLIFE") return IPL_MANATOLIFE;
 	if (value == "LIFETOMANA") return IPL_LIFETOMANA;
+	if (value == "NOHEALMON") return IPL_NOHEALMON;
+	if (value == "INFRAVISION") return IPL_INFRAVISION;
 	return tl::make_unexpected("Unknown enum value");
 }
 

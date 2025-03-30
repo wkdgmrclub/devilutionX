@@ -2318,7 +2318,7 @@ void AddStoneCurse(Missile &missile, AddMissileParameter &parameter)
 
 		    Monster &monster = Monsters[monsterId];
 
-		    if (IsAnyOf(monster.type().type, MT_GOLEM, MT_DIABLO, MT_NAKRUL)) {
+		    if (IsAnyOf(monster.type().type, MT_GOLEM, MT_DIABLO)) {
 			    return false;
 		    }
 		    if (monster.ai == MonsterAIID::Diablo) {

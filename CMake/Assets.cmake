@@ -57,6 +57,7 @@ set(devilutionx_assets
   data/hintboxbackground.clx
   data/hinticons.clx
   data/monstertags.clx
+  data/inv/objcurs.cel
   data/panel8buc.clx
   data/panel8bucp.clx
   data/resistance.clx
@@ -152,13 +153,56 @@ set(devilutionx_assets
   lua/inspect.lua
   lua/mods/clock/init.lua
   lua/repl_prelude.lua
+  monsters/balrog/megaa1.wav
+  monsters/balrog/megaa2.wav
+  monsters/balrog/megad1.wav
+  monsters/balrog/megah1.wav
+  monsters/balrog/megah2.wav
+  monsters/balrog/megas1.wav
+  monsters/balrog/megas2.wav
+  monsters/byclps/biclopa1.wav
+  monsters/byclps/biclopa2.wav
+  monsters/byclps/biclopd1.wav
+  monsters/byclps/biclopd2.wav
+  monsters/byclps/bicloph1.wav
+  monsters/byclps/bicloph2.wav
+  monsters/byclps/byclpsa.cl2
+  monsters/byclps/byclpsd.cl2
+  monsters/byclps/byclpsh.cl2
+  monsters/byclps/byclpsn.cl2
+  monsters/byclps/byclpsw.cl2
+  monsters/gargoyle/gargoa1.wav
+  monsters/gargoyle/gargoa2.wav
+  monsters/spider/spidera.cl2
+  monsters/spider/spiderd.cl2
+  monsters/spider/spiderh.cl2
+  monsters/spider/spidern.cl2
+  monsters/spider/spiderw.cl2
+  monsters/wolf/wolfa1.wav
+  monsters/wolf/wolfa2.wav
+  monsters/wolf/wolfd1.wav
+  monsters/wolf/wolfd2.wav
+  monsters/wolf/wolfh1.wav
+  monsters/wolf/wolfh2.wav
   nlevels/cutl5w.clx
   nlevels/cutl6w.clx
   nlevels/l5data/cornerstone.dun
   nlevels/l5data/uberroom.dun
+  objects/barrelex.cel
+  objects/sarc.cel
+  objects/urn.cel
   plrgfx/warrior/whu/whufm.trn
   plrgfx/warrior/whu/whulm.trn
   plrgfx/warrior/whu/whuqm.trn
+  sfx/items/barlfire.wav
+  sfx/items/barrel.wav
+  sfx/items/chest.wav
+  sfx/items/flipaxe.wav
+  sfx/items/fliplarm.wav
+  sfx/items/flipswor.wav
+  sfx/items/invaxe.wav
+  sfx/items/invlarm.wav
+  sfx/items/invsword.wav
   txtdata/Experience.tsv
   txtdata/classes/barbarian/attributes.tsv
   txtdata/classes/bard/attributes.tsv
@@ -177,14 +221,24 @@ set(devilutionx_assets
   txtdata/objects/objdat.tsv
   txtdata/sound/effects.tsv
   txtdata/spells/spelldat.tsv
+  ui_art/credits.pcx
+  ui_art/creditsw.pcx
   ui_art/diablo.pal
   ui_art/hellfire.pal
+  ui_art/hf_titlew.pcx
   ui_art/creditsw.clx
   ui_art/dvl_but_sml.clx
   ui_art/dvl_lrpopup.clx
   ui_art/hf_titlew.clx
+  ui_art/mainmenu.pcx
+  ui_art/mainmenuw.pcx
   ui_art/mainmenuw.clx
-  ui_art/supportw.clx)
+  ui_art/selconn.pcx
+  ui_art/selgame.pcx
+  ui_art/selhero.pcx
+  ui_art/supportw.pcx
+  ui_art/supportw.clx
+  ui_art/title.pcx)
 
 if(NOT UNPACKED_MPQS)
   list(APPEND devilutionx_assets

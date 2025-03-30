@@ -24,9 +24,6 @@ const char *const TownerTableNames[NUM_TOWNER_TYPES] {
 	"gillian",
 	"wirt",
 	"cow",
-	"lester",
-	"celia",
-	"nut",
 };
 
 void PopulateTownerTable(_talker_id townerId, sol::table &out)

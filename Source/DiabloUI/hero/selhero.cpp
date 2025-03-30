@@ -161,15 +161,6 @@ void SelheroListSelect(size_t value)
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Dunadan"), static_cast<int>(HeroClass::Warrior)));
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Noldo"), static_cast<int>(HeroClass::Rogue)));
 		vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Istar"), static_cast<int>(HeroClass::Sorcerer)));
-		if (gbIsHellfire) {
-			vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Monk"), static_cast<int>(HeroClass::Monk)));
-			if (HaveBardAssets() || *GetOptions().Gameplay.testBard) {
-				vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Bard"), static_cast<int>(HeroClass::Bard)));
-			}
-			if (HaveBarbarianAssets() || *GetOptions().Gameplay.testBarbarian) {
-				vecSelHeroDlgItems.push_back(std::make_unique<UiListItem>(_("Barbarian"), static_cast<int>(HeroClass::Barbarian)));
-			}
-		}
 		if (vecSelHeroDlgItems.size() > 4)
 			itemH = 26;
 		int itemY = static_cast<int>(246 + (176 - vecSelHeroDlgItems.size() * itemH) / 2);

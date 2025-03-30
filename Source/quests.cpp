@@ -918,10 +918,6 @@ void SetMultiQuest(int q, quest_state s, bool log, int v1, int v2, int16_t qmsg)
 		// Ensure that water also changes for remote players
 		if (quest._qidx == Q_PWATER && questGotCompleted && MyPlayer->isOnLevel(quest._qslvl))
 			StartPWaterPurify();
-		if (quest._qidx == Q_GIRL && questGotCompleted && MyPlayer->isOnLevel(0))
-			UpdateGirlAnimAfterQuestComplete();
-		if (quest._qidx == Q_JERSEY && questGotCompleted && MyPlayer->isOnLevel(0))
-			UpdateCowFarmerAnimAfterQuestComplete();
 	}
 }
 
