@@ -156,7 +156,7 @@ set(devilutionx_assets
   monsters/balrog/megaa1.wav
   monsters/balrog/megaa2.wav
   monsters/balrog/megad1.wav
-  monsonter/balrog/megad2.wav
+  monsters/balrog/megad2.wav
   monsters/balrog/megah1.wav
   monsters/balrog/megah2.wav
   monsters/balrog/megas1.wav
