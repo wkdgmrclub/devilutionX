@@ -1462,7 +1462,7 @@ void ValidatePlayer()
 	}
 
 	myPlayer._pMemSpells &= msk;
-	myPlayer._pInfraFlag = false;
+	// myPlayer._pInfraFlag = false;
 }
 
 HeroClass GetPlayerSpriteClass(HeroClass cls)

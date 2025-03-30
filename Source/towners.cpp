@@ -586,167 +586,6 @@ void TalkToCow(Player &player, Towner &cow)
 	PlaySfxLoc(CowPlaying, cow.position);
 }
 
-void TalkToFarmer(Player &player, Towner &farmer)
-{
-	auto &quest = Quests[Q_FARMER];
-	switch (quest._qactive) {
-	case QUEST_NOTAVAIL:
-	case QUEST_INIT:
-		if (HasInventoryItemWithId(player, IDI_RUNEBOMB)) {
-			InitQTextMsg(TEXT_FARMER2);
-			quest._qactive = QUEST_ACTIVE;
-			quest._qvar1 = 1;
-			quest._qmsg = TEXT_FARMER1;
-			quest._qlog = true;
-			if (gbIsMultiplayer)
-				NetSendCmdQuest(true, quest);
-			break;
-		}
-
-		if (!player._pLvlVisited[9] && player.getCharacterLevel() < 15) {
-			_speech_id qt = TEXT_FARMER8;
-			if (player._pLvlVisited[2])
-				qt = TEXT_FARMER5;
-			if (player._pLvlVisited[5])
-				qt = TEXT_FARMER7;
-			if (player._pLvlVisited[7])
-				qt = TEXT_FARMER9;
-			InitQTextMsg(qt);
-			break;
-		}
-
-		InitQTextMsg(TEXT_FARMER1);
-		quest._qactive = QUEST_ACTIVE;
-		quest._qvar1 = 1;
-		quest._qlog = true;
-		quest._qmsg = TEXT_FARMER1;
-		SpawnRuneBomb(farmer.position + Displacement { 1, 0 }, true);
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	case QUEST_ACTIVE:
-		InitQTextMsg(HasInventoryItemWithId(player, IDI_RUNEBOMB) ? TEXT_FARMER2 : TEXT_FARMER3);
-		break;
-	case QUEST_DONE:
-		InitQTextMsg(TEXT_FARMER4);
-		SpawnRewardItem(IDI_AURIC, farmer.position + Displacement { 1, 0 }, true);
-		quest._qactive = QUEST_HIVE_DONE;
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	case QUEST_HIVE_DONE:
-		break;
-	default:
-		InitQTextMsg(TEXT_FARMER4);
-		break;
-	}
-}
-
-void TalkToCowFarmer(Player &player, Towner &cowFarmer)
-{
-	if (RemoveInventoryItemById(player, IDI_GREYSUIT)) {
-		InitQTextMsg(TEXT_JERSEY7);
-		return;
-	}
-
-	auto &quest = Quests[Q_JERSEY];
-
-	if (RemoveInventoryItemById(player, IDI_BROWNSUIT)) {
-		SpawnUnique(UITEM_BOVINE, cowFarmer.position + Direction::SouthEast, quest._qlevel);
-		InitQTextMsg(TEXT_JERSEY8);
-		quest._qactive = QUEST_DONE;
-		UpdateCowFarmerAnimAfterQuestComplete();
-		NetSendCmdQuest(true, quest);
-		return;
-	}
-
-	if (HasInventoryItemWithId(player, IDI_RUNEBOMB)) {
-		InitQTextMsg(TEXT_JERSEY5);
-		quest._qactive = QUEST_ACTIVE;
-		quest._qvar1 = 1;
-		quest._qmsg = TEXT_JERSEY4;
-		quest._qlog = true;
-		NetSendCmdQuest(true, quest);
-		return;
-	}
-
-	switch (quest._qactive) {
-	case QUEST_NOTAVAIL:
-	case QUEST_INIT:
-		InitQTextMsg(TEXT_JERSEY1);
-		quest._qactive = QUEST_HIVE_TEASE1;
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	case QUEST_DONE:
-		InitQTextMsg(TEXT_JERSEY1);
-		break;
-	case QUEST_HIVE_TEASE1:
-		InitQTextMsg(TEXT_JERSEY2);
-		quest._qactive = QUEST_HIVE_TEASE2;
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	case QUEST_HIVE_TEASE2:
-		InitQTextMsg(TEXT_JERSEY3);
-		quest._qactive = QUEST_HIVE_ACTIVE;
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	case QUEST_HIVE_ACTIVE:
-		if (!player._pLvlVisited[9] && player.getCharacterLevel() < 15) {
-			InitQTextMsg(PickRandomlyAmong({ TEXT_JERSEY9, TEXT_JERSEY10, TEXT_JERSEY11, TEXT_JERSEY12 }));
-			break;
-		}
-
-		InitQTextMsg(TEXT_JERSEY4);
-		quest._qactive = QUEST_ACTIVE;
-		quest._qvar1 = 1;
-		quest._qmsg = TEXT_JERSEY4;
-		quest._qlog = true;
-		SpawnRuneBomb(cowFarmer.position + Displacement { 1, 0 }, true);
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		break;
-	default:
-		InitQTextMsg(TEXT_JERSEY5);
-		break;
-	}
-}
-
-void TalkToGirl(Player &player, Towner &girl)
-{
-	auto &quest = Quests[Q_GIRL];
-
-	if (quest._qactive != QUEST_DONE && RemoveInventoryItemById(player, IDI_THEODORE)) {
-		InitQTextMsg(TEXT_GIRL4);
-		CreateAmulet(girl.position, 13, false, false, true);
-		quest._qactive = QUEST_DONE;
-		UpdateGirlAnimAfterQuestComplete();
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		return;
-	}
-
-	switch (quest._qactive) {
-	case QUEST_NOTAVAIL:
-	case QUEST_INIT:
-		InitQTextMsg(TEXT_GIRL2);
-		quest._qactive = QUEST_ACTIVE;
-		quest._qvar1 = 1;
-		quest._qlog = true;
-		quest._qmsg = TEXT_GIRL2;
-		if (gbIsMultiplayer)
-			NetSendCmdQuest(true, quest);
-		return;
-	case QUEST_ACTIVE:
-		InitQTextMsg(TEXT_GIRL3);
-		return;
-	default:
-		return;
-	}
-}
-
 const TownerData TownersData[] = {
 	// clang-format off
 	// type         position    dir                   init           talk
@@ -762,9 +601,6 @@ const TownerData TownersData[] = {
 	{ TOWN_COW,     { 58, 16 }, Direction::SouthWest, InitCows,      TalkToCow         },
 	{ TOWN_COW,     { 56, 14 }, Direction::NorthWest, InitCows,      TalkToCow         },
 	{ TOWN_COW,     { 59, 20 }, Direction::North,     InitCows,      TalkToCow         },
-	{ TOWN_COWFARM, { 61, 22 }, Direction::SouthWest, InitCowFarmer, TalkToCowFarmer   },
-	{ TOWN_FARMER,  { 62, 16 }, Direction::South,     InitFarmer,    TalkToFarmer      },
-	{ TOWN_GIRL,    { 77, 43 }, Direction::South,     InitGirl,      TalkToGirl        },
 	// clang-format on
 };
 
@@ -783,9 +619,6 @@ const char *const TownerLongNames[NUM_TOWNER_TYPES] {
 	N_("Rosie Cotton"),
 	N_("Gollum the Wicked"),
 	N_("Cow"),
-	N_("Lester the farmer"),
-	N_("Celia"),
-	N_("Complete Nut")
 };
 
 /** Contains the data related to quest gossip for each towner ID. */
@@ -802,9 +635,6 @@ _speech_id QuestDialogTable[NUM_TOWNER_TYPES][MAXQUESTS] = {
 	/*TOWN_BMAID*/   { TEXT_INFRA4,  TEXT_MUSH5,  TEXT_NONE, TEXT_NONE, TEXT_VEIL4, TEXT_NONE,  TEXT_BUTCH4, TEXT_BANNER5, TEXT_BLIND4, TEXT_BLOOD4, TEXT_ANVIL4,  TEXT_WARLRD4, TEXT_KING6,  TEXT_POISON6,  TEXT_BONE4, TEXT_VILE8,  TEXT_GRAVE8, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
 	/*TOWN_PEGBOY*/  { TEXT_INFRA10, TEXT_MUSH13, TEXT_NONE, TEXT_NONE, TEXT_VEIL8, TEXT_NONE,  TEXT_BUTCH8, TEXT_BANNER9, TEXT_BLIND8, TEXT_BLOOD8, TEXT_ANVIL10, TEXT_WARLRD8, TEXT_KING10, TEXT_POISON10, TEXT_BONE8, TEXT_VILE12, TEXT_GRAVE9, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
 	/*TOWN_COW*/     { TEXT_NONE,    TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE,  TEXT_NONE,  TEXT_NONE,   TEXT_NONE,    TEXT_NONE,   TEXT_NONE,   TEXT_NONE,    TEXT_NONE,    TEXT_NONE,   TEXT_NONE,     TEXT_NONE,  TEXT_NONE,   TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
-	/*TOWN_FARMER*/  { TEXT_NONE,    TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE,  TEXT_NONE,  TEXT_NONE,   TEXT_NONE,    TEXT_NONE,   TEXT_NONE,   TEXT_NONE,    TEXT_NONE,    TEXT_NONE,   TEXT_NONE,     TEXT_NONE,  TEXT_NONE,   TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
-	/*TOWN_GIRL*/    { TEXT_NONE,    TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE,  TEXT_NONE,  TEXT_NONE,   TEXT_NONE,    TEXT_NONE,   TEXT_NONE,   TEXT_NONE,    TEXT_NONE,    TEXT_NONE,   TEXT_NONE,     TEXT_NONE,  TEXT_NONE,   TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
-	/*TOWN_COWFARM*/ { TEXT_NONE,    TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE,  TEXT_NONE,  TEXT_NONE,   TEXT_NONE,    TEXT_NONE,   TEXT_NONE,   TEXT_NONE,    TEXT_NONE,    TEXT_NONE,   TEXT_NONE,     TEXT_NONE,  TEXT_NONE,   TEXT_NONE,   TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE, TEXT_NONE },
 	// clang-format on
 };
 
@@ -813,12 +643,6 @@ bool IsTownerPresent(_talker_id npc)
 	switch (npc) {
 	case TOWN_DEADGUY:
 		return Quests[Q_BUTCHER]._qactive != QUEST_NOTAVAIL && Quests[Q_BUTCHER]._qactive != QUEST_DONE;
-	case TOWN_FARMER:
-		return gbIsHellfire && sgGameInitInfo.bCowQuest == 0 && Quests[Q_FARMER]._qactive != QUEST_HIVE_DONE;
-	case TOWN_COWFARM:
-		return gbIsHellfire && sgGameInitInfo.bCowQuest != 0;
-	case TOWN_GIRL:
-		return gbIsHellfire && sgGameInitInfo.bTheoQuest != 0 && MyPlayer->_pLvlVisited[17] && Quests[Q_GIRL]._qactive != QUEST_DONE;
 	default:
 		return true;
 	}
@@ -899,24 +723,6 @@ void TalkToTowner(Player &player, int t)
 	}
 
 	towner.talk(player, towner);
-}
-
-void UpdateGirlAnimAfterQuestComplete()
-{
-	Towner *girl = GetTowner(TOWN_GIRL);
-	if (girl == nullptr || !girl->ownedAnim)
-		return; // Girl is not spawned in town yet
-	auto curFrame = girl->_tAnimFrame;
-	LoadTownerAnimations(*girl, "towners\\girl\\girls1", 20, 6);
-	girl->_tAnimFrame = std::min<uint8_t>(curFrame, girl->_tAnimLen - 1);
-}
-
-void UpdateCowFarmerAnimAfterQuestComplete()
-{
-	Towner *cowFarmer = GetTowner(TOWN_COWFARM);
-	auto curFrame = cowFarmer->_tAnimFrame;
-	LoadTownerAnimations(*cowFarmer, "towners\\farmer\\mfrmrn2", 15, 3);
-	cowFarmer->_tAnimFrame = std::min<uint8_t>(curFrame, cowFarmer->_tAnimLen - 1);
 }
 
 #ifdef _DEBUG

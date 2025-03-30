@@ -1253,40 +1253,40 @@ struct ItemPanelData {
 
 ItemPanelData ItemPanelList[] {
 	// clang-format off
-	{  36,  "Hit monster doesn't heal"      },
-	{  37,  "Grants Haste & Harmony"        },
-	{  41,  "Grants Speed & Harmony"        },
-	{  43,  "Grants Holiness"               },
-	{  45,  "Grants Speed & Harmony"        },
-	{  62,  "Grants Harmony & Fast Block"   },
-	{  68,  "Grants Speed & Harmony"        },
-	{  69,  "grants 1-3 damage"             },
-	{  88,  "Grants Speed & Harmony"        },
-	{  92,  "Grants Swiftness & Harmony"    },
-	{ 102,  "Grants Harmony"                },
-	{ 115,  "grants 3-5 Armor"              },
-	{ 117,  "Grants Speed & Harmony"        },
-	{ 123,  "Grants Speed & Harmony"        },
-	{ 124,  "Grants Speed & Harmony"        },
-	{ 125,  "Grants Speed & Harmony"        },
-	{ 126,  "Grants Speed & Harmony"        },
-	{ 127,  "Grants Speed & Harmony"        },
-	{ 128,  "Grants Speed & Harmony"        },
-	{ 129,  "Grants Speed & Harmony"        },
-	{ 130,  "Grants Speed & Harmony"        },
-	{ 138,  "Grants Harmony"                },
-	{ 139,  "Grants Harmony"                },
-	{ 140,  "Grants Harmony"                },
-	{ 141,  "Grants Harmony"                },
-	{ 142,  "Grants Harmony"                },
-	{ 143,  "Grants Speed & Harmony"        },
-	{ 144,  "Grants Harmony"                },
-	{ 145,  "Grants Harmony"                },
-	{ 146,  "Grants Harmony"                },
-	{ 147,  "Grants Harmony"                },
-	{ 148,  "Grants Harmony"                },
-	{ 149,  "Grants Harmony"                },
-	{ 150,  "Grants Harmony"                },
+	{  36,  "Grants Holiness"               }, // +Morgul Knife+
+	{  37,  "Grants Haste & Harmony"        }, // Heavy Crossbow
+	{  41,  "Grants Speed & Harmony"        }, // Elven Bow
+	{  43,  "Grants Holiness"               }, // Elven Blade
+	{  45,  "Grants Speed & Harmony"        }, // +Romacil+
+	{  62,  "Grants Harmony & Fast Block"   }, // Mage Robe
+	{  68,  "Grants Speed & Harmony"        }, // Dwarven Axe
+	{  69,  "Grants 1-3 damage"             }, // +Claw+
+	{  88,  "Grants Speed & Harmony"        }, // War Axe
+	{  92,  "Grants Swiftness & Harmony"    }, // Mallorn Bow
+	{ 102,  "Grants Harmony"                }, // Elvish Short Bow
+	{ 115,  "Grants 3-5 Armor"              }, // +Gem+
+	{ 117,  "Grants Speed & Harmony"        }, // Great Flail
+	{ 123,  "Grants Speed & Harmony"        }, // Two-Handed Sword
+	{ 124,  "Grants Speed & Harmony"        }, // Great Battle Blade
+	{ 125,  "Grants Speed & Harmony"        }, // Hatchet
+	{ 126,  "Grants Speed & Harmony"        }, // Woodman's Axe
+	{ 127,  "Grants Speed & Harmony"        }, // Large Axe
+	{ 128,  "Grants Speed & Harmony"        }, // Broad Axe
+	{ 129,  "Grants Speed & Harmony"        }, // Battle Axe
+	{ 130,  "Grants Speed & Harmony"        }, // Great Axe
+	{ 138,  "Grants Harmony"                }, // Short Bow
+	{ 139,  "Grants Harmony"                }, // Hunter's Bow
+	{ 140,  "Grants Harmony"                }, // Long Bow
+	{ 141,  "Grants Harmony"                }, // Composite Bow
+	{ 142,  "Grants Harmony"                }, // Short Battle Bow
+	{ 143,  "Grants Speed & Harmony"        }, // Crossbow
+	{ 144,  "Grants Harmony"                }, // Short War Bow
+	{ 145,  "Grants Harmony"                }, // Long War Bow
+	{ 146,  "Grants Harmony"                }, // Short Staff
+	{ 147,  "Grants Harmony"                }, // Long Staff
+	{ 148,  "Grants Harmony"                }, // Composite Staff
+	{ 149,  "Grants Harmony"                }, // Quarter Staff
+	{ 150,  "Grants Harmony"                }, // War Staff
 	{   0,  ""                              },
 	// clang-format on
 };

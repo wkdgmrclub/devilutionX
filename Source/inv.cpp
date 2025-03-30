@@ -944,36 +944,6 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 	}
 }
 
-void TryCombineNaKrulNotes(Player &player, Item &noteItem)
-{
-	int idx = noteItem.IDidx;
-	_item_indexes notes[] = { IDI_NOTE1, IDI_NOTE2, IDI_NOTE3 };
-
-	if (IsNoneOf(idx, IDI_NOTE1, IDI_NOTE2, IDI_NOTE3)) {
-		return;
-	}
-
-	for (_item_indexes note : notes) {
-		if (idx != note && !HasInventoryItemWithId(player, note)) {
-			return; // the player doesn't have all notes
-		}
-	}
-
-	MyPlayer->Say(HeroSpeech::JustWhatIWasLookingFor, 10);
-
-	for (_item_indexes note : notes) {
-		if (idx != note) {
-			RemoveInventoryItemById(player, note);
-		}
-	}
-
-	Point position = noteItem.position; // copy the position to restore it after re-initialising the item
-	noteItem = {};
-	GetItemAttrs(noteItem, IDI_FULLNOTE, 16);
-	SetupItem(noteItem);
-	noteItem.position = position; // this ensures CleanupItem removes the entry in the dropped items lookup table
-}
-
 void CheckQuestItem(Player &player, Item &questItem)
 {
 	Player &myPlayer = *MyPlayer;
@@ -1022,31 +992,12 @@ void CheckQuestItem(Player &player, Item &questItem)
 		NetSendCmdQuest(true, Quests[Q_BLOOD]);
 		myPlayer.Say(HeroSpeech::MayTheSpiritOfArkaineProtectMe, 20);
 	}
-
-	if (questItem.IDidx == IDI_MAPOFDOOM) {
-		Quests[Q_GRAVE]._qactive = QUEST_ACTIVE;
-		if (Quests[Q_GRAVE]._qvar1 != 1) {
-			MyPlayer->Say(HeroSpeech::UhHuh, 10);
-			Quests[Q_GRAVE]._qvar1 = 1;
-		}
-	}
-
-	TryCombineNaKrulNotes(player, questItem);
 }
 
 void CleanupItems(int ii)
 {
 	Item &item = Items[ii];
 	dItem[item.position.x][item.position.y] = 0;
-
-	if (CornerStone.isAvailable() && item.position == CornerStone.position) {
-		CornerStone.item.clear();
-		CornerStone.item.selectionRegion = SelectionRegion::None;
-		CornerStone.item.position = { 0, 0 };
-		CornerStone.item._iAnimFlag = false;
-		CornerStone.item._iIdentified = false;
-		CornerStone.item._iPostDraw = false;
-	}
 
 	int i = 0;
 	while (i < ActiveItemCount) {

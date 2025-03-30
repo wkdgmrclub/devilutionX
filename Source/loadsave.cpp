@@ -2073,9 +2073,6 @@ void RemoveInvalidItem(Item &item)
 _item_indexes RemapItemIdxFromDiablo(_item_indexes i)
 {
 	constexpr auto GetItemIdValue = [](int i) -> int {
-		if (i == IDI_SORCERER) {
-			return IDI_SORCERER_DIABLO;
-		}
 		if (i >= 156) {
 			i += 5; // Hellfire exclusive items
 		}
@@ -2095,9 +2092,6 @@ _item_indexes RemapItemIdxFromDiablo(_item_indexes i)
 _item_indexes RemapItemIdxToDiablo(_item_indexes i)
 {
 	constexpr auto GetItemIdValue = [](int i) -> int {
-		if (i == IDI_SORCERER_DIABLO) {
-			return IDI_SORCERER;
-		}
 		if ((i >= 83 && i <= 86) || i == 92 || i >= 161) {
 			return -1; // Hellfire exclusive items
 		}

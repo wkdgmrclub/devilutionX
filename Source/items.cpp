@@ -435,26 +435,6 @@ void AddInitItems()
 	}
 }
 
-void SpawnNote()
-{
-	_item_indexes id;
-
-	switch (currlevel) {
-	case 22:
-		id = IDI_NOTE2;
-		break;
-	case 23:
-		id = IDI_NOTE3;
-		break;
-	default:
-		id = IDI_NOTE1;
-		break;
-	}
-
-	Point position = GetRandomAvailableItemPosition();
-	SpawnQuestItem(id, position, 0, SelectionRegion::Bottom, false);
-}
-
 void CalcSelfItems(Player &player)
 {
 	int sa = 0;
@@ -931,6 +911,8 @@ int SaveItemPower(const Player &player, Item &item, ItemPower &power)
 	case IPL_RNDSTEALLIFE:
 		item._iFlags |= ItemSpecialEffect::RandomStealLife;
 		break;
+	case IPL_INFRAVISION:
+		item._iFlags |= ItemSpecialEffect::Infravision;
 	case IPL_NOMINSTR:
 		item._iMinStr = 0;
 		break;
@@ -1321,11 +1303,6 @@ struct WeightedItemIndex {
 	unsigned cumulativeWeight;
 };
 
-struct WeightedItemIndex {
-	_item_indexes index;
-	unsigned cumulativeWeight;
-};
-
 _item_indexes GetItemIndexForDroppableItem(
     bool considerDropRate,
     tl::function_ref<bool(const ItemData &item)> isItemOkay)
@@ -1360,11 +1337,9 @@ _item_indexes GetItemIndexForDroppableItem(
 		ril.push_back({ static_cast<_item_indexes>(i), cumulativeWeight });
 	}
 	unsigned targetWeight = static_cast<unsigned>(RandomIntLessThan(static_cast<int>(cumulativeWeight)));
-	return std::upper_bound(ril.begin(), ril.end(), targetWeight,
-	    [](unsigned target, const WeightedItemIndex &value) {
-		    return target < value.cumulativeWeight;
-	    })
-	    ->index;
+	auto it = std::upper_bound(ril.begin(), ril.end(), targetWeight,
+	    [](unsigned target, const WeightedItemIndex &value) { return target < value.cumulativeWeight; });
+	return (*it).index;
 }
 
 _item_indexes RndUItem(Monster *monster)
@@ -2417,10 +2392,6 @@ void InitItems()
 			SpawnRock();
 		if (Quests[Q_ANVIL].IsAvailable())
 			SpawnQuestItem(IDI_ANVIL, SetPiece.position.megaToWorld() + Displacement { 11, 11 }, 0, SelectionRegion::Bottom, false);
-		if (sgGameInitInfo.bCowQuest != 0 && currlevel == 20)
-			SpawnQuestItem(IDI_BROWNSUIT, { 25, 25 }, 3, SelectionRegion::Bottom, false);
-		if (sgGameInitInfo.bCowQuest != 0 && currlevel == 19)
-			SpawnQuestItem(IDI_GREYSUIT, { 25, 25 }, 3, SelectionRegion::Bottom, false);
 		// In multiplayer items spawn during level generation to avoid desyncs
 		if (gbIsMultiplayer) {
 			if (Quests[Q_MUSHROOM].IsAvailable())
@@ -2430,8 +2401,6 @@ void InitItems()
 		}
 		if (currlevel > 0 && currlevel < 16)
 			AddInitItems();
-		if (currlevel >= 21 && currlevel <= 23)
-			SpawnNote();
 	}
 
 	ShowUniqueItemInfoBox = false;
@@ -2714,22 +2683,6 @@ void CalcPlrGraphics(Player &player, PlayerWeaponGraphic animWeaponId, PlayerArm
 	}
 }
 
-void CalcPlrAuricBonus(Player &player)
-
-{
-	if (&player == MyPlayer) {
-		if (player.InvBody[INVLOC_AMULET].isEmpty() || player.InvBody[INVLOC_AMULET].IDidx != IDI_AURIC) {
-			int half = MaxGold;
-			MaxGold = GOLD_MAX_LIMIT;
-
-			if (half != MaxGold)
-				StripTopGold(player);
-		} else {
-			MaxGold = GOLD_MAX_LIMIT * 2;
-		}
-	}
-}
-
 void CalcPlrItemVals(Player &player, bool loadgfx)
 {
 	int minDamage = 0;
@@ -2831,12 +2784,12 @@ void CalcPlrItemVals(Player &player, bool loadgfx)
 	player._pIFMaxDam = maxFireDam;
 	player._pILMinDam = minLightDam;
 	player._pILMaxDam = maxLightDam;
+	player._pInfraFlag = HasAnyOf(flags, ItemSpecialEffect::Infravision);
 
 	CalcPlrBlockFlag(player);
 
 	CalcPlrGraphics(player, GetPlrAnimWeaponId(player), GetPlrAnimArmorId(player), loadgfx);
 
-	CalcPlrAuricBonus(player);
 	RedrawComponent(PanelDrawComponent::Mana);
 	RedrawComponent(PanelDrawComponent::Health);
 }
@@ -3656,21 +3609,6 @@ void SpawnRewardItem(_item_indexes itemid, Point position, bool sendmsg)
 	}
 }
 
-void SpawnMapOfDoom(Point position, bool sendmsg)
-{
-	SpawnRewardItem(IDI_MAPOFDOOM, position, sendmsg);
-}
-
-void SpawnRuneBomb(Point position, bool sendmsg)
-{
-	SpawnRewardItem(IDI_RUNEBOMB, position, sendmsg);
-}
-
-void SpawnTheodore(Point position, bool sendmsg)
-{
-	SpawnRewardItem(IDI_THEODORE, position, sendmsg);
-}
-
 void RespawnItem(Item &item, bool flipFlag)
 {
 	int it = ItemCAnimTbl[item._iCurs];
@@ -4002,6 +3940,8 @@ bool DoOil(Player &player, int cii)
 		return _("constantly lose hit points");
 	case IPL_RNDSTEALLIFE:
 		return _("life stealing");
+	case IPL_INFRAVISION:
+		return _("see with infravision");
 	case IPL_NOMINSTR:
 		return _("no strength requirement");
 	case IPL_ADDACLIFE:
@@ -4313,13 +4253,6 @@ void UseItem(Player &player, item_misc_id mid, SpellID spellID, int spellFrom)
 
 bool UseItemOpensHive(const Item &item, Point position)
 {
-	if (item.IDidx != IDI_RUNEBOMB)
-		return false;
-	for (auto dir : PathDirs) {
-		Point adjacentPosition = position + dir;
-		if (OpensHive(adjacentPosition))
-			return true;
-	}
 	return false;
 }
 

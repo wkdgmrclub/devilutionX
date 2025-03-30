@@ -230,13 +230,6 @@ bool CanPlaceMonster(Point position)
 
 void PlaceMonster(size_t i, size_t typeIndex, Point position)
 {
-	if (LevelMonsterTypes[typeIndex].type == MT_NAKRUL) {
-		for (size_t j = 0; j < ActiveMonsterCount; j++) {
-			if (Monsters[j].levelType == typeIndex) {
-				return;
-			}
-		}
-	}
 	Monster &monster = Monsters[i];
 	monster.occupyTile(position, false);
 
@@ -519,22 +512,6 @@ tl::expected<void, std::string> PlaceQuestMonsters()
 			auto dunData = LoadFileInMem<uint16_t>("levels\\l4data\\vile1.dun");
 			RETURN_IF_ERROR(SetMapMonsters(dunData.get(), SetPiece.position.megaToWorld()));
 		}
-
-		if (currlevel == 24) {
-			UberDiabloMonsterIndex = -1;
-			const size_t typeIndex = GetMonsterTypeIndex(MT_NAKRUL);
-			if (typeIndex < LevelMonsterTypeCount) {
-				for (size_t i = 0; i < ActiveMonsterCount; i++) {
-					Monster &monster = Monsters[i];
-					if (monster.isUnique() || monster.levelType == typeIndex) {
-						UberDiabloMonsterIndex = static_cast<int>(i);
-						break;
-					}
-				}
-			}
-			if (UberDiabloMonsterIndex == -1)
-				RETURN_IF_ERROR(PlaceUniqueMonst(UniqueMonsterType::NaKrul, 0, 0));
-		}
 	} else if (setlvlnum == SL_SKELKING) {
 		RETURN_IF_ERROR(PlaceUniqueMonst(UniqueMonsterType::SkeletonKing, 0, 0));
 	} else if (setlvlnum == SL_VILEBETRAYER) {
@@ -814,35 +791,8 @@ void DiabloDeath(Monster &diablo, bool sendmsg)
 
 void SpawnLoot(Monster &monster, bool sendmsg)
 {
-	if (monster.type().type == MT_HORKSPWN) {
-		return;
-	}
-
 	if (Quests[Q_GARBUD].IsAvailable() && monster.uniqueType == UniqueMonsterType::Garbud) {
 		CreateTypeItem(monster.position.tile + Displacement { 1, 1 }, true, ItemType::Mace, IMISC_NONE, sendmsg, false);
-	} else if (monster.uniqueType == UniqueMonsterType::Defiler) {
-		if (effect_is_playing(SfxID::Defiler8))
-			stream_stop();
-		SpawnMapOfDoom(monster.position.tile, sendmsg);
-		Quests[Q_DEFILER]._qactive = QUEST_DONE;
-		NetSendCmdQuest(true, Quests[Q_DEFILER]);
-	} else if (monster.uniqueType == UniqueMonsterType::HorkDemon) {
-		if (sgGameInitInfo.bTheoQuest != 0) {
-			SpawnTheodore(monster.position.tile, sendmsg);
-		} else {
-			CreateAmulet(monster.position.tile, 13, sendmsg, false);
-		}
-	} else if (monster.type().type == MT_NAKRUL) {
-		SfxID nSFX = IsUberRoomOpened ? SfxID::NaKrul4 : SfxID::NaKrul5;
-		if (sgGameInitInfo.bCowQuest != 0)
-			nSFX = SfxID::NaKrul6;
-		if (effect_is_playing(nSFX))
-			stream_stop();
-		UberDiabloMonsterIndex = -2;
-		CreateMagicWeapon(monster.position.tile, ItemType::Sword, ICURS_GREAT_SWORD, sendmsg, false);
-		CreateMagicWeapon(monster.position.tile, ItemType::Staff, ICURS_WAR_STAFF, sendmsg, false);
-		CreateMagicWeapon(monster.position.tile, ItemType::Bow, ICURS_LONG_WAR_BOW, sendmsg, false);
-		CreateSpellBook(monster.position.tile, SpellID::Apocalypse, sendmsg, false);
 	} else if (!monster.isPlayerMinion()) {
 		SpawnItem(monster, monster.position.tile, sendmsg);
 	}
@@ -999,11 +949,6 @@ bool MonsterWalk(Monster &monster)
 		monster.occupyTile(monster.position.tile, false);
 		ChangeLightXY(monster.lightId, monster.position.tile);
 		M_StartStand(monster, monster.direction);
-	} else { // We didn't reach new tile so update monster's "sub-tile" position
-		if (monster.animInfo.tickCounterOfCurrentFrame == 0) {
-			if (monster.animInfo.currentFrame == 0 && monster.type().type == MT_FLESTHNG)
-				PlayEffect(monster, MonsterSound::Special);
-		}
 	}
 
 	SyncLightPosition(monster);
@@ -3207,19 +3152,6 @@ tl::expected<void, std::string> GetLevelMTypes()
 		RETURN_IF_ERROR(AddMonsterType(MT_DIABLO, PLACE_SPECIAL));
 	}
 
-	if (currlevel == 18)
-		RETURN_IF_ERROR(AddMonsterType(MT_HORKSPWN, PLACE_SCATTER));
-	if (currlevel == 19) {
-		RETURN_IF_ERROR(AddMonsterType(MT_HORKSPWN, PLACE_SCATTER));
-		RETURN_IF_ERROR(AddMonsterType(MT_HORKDMN, PLACE_UNIQUE));
-	}
-	if (currlevel == 20)
-		RETURN_IF_ERROR(AddMonsterType(MT_DEFILER, PLACE_UNIQUE));
-	if (currlevel == 24) {
-		RETURN_IF_ERROR(AddMonsterType(MT_ARCHLICH, PLACE_SCATTER));
-		RETURN_IF_ERROR(AddMonsterType(MT_NAKRUL, PLACE_SPECIAL));
-	}
-
 	if (!setlevel) {
 		if (Quests[Q_BUTCHER].IsAvailable())
 			RETURN_IF_ERROR(AddMonsterType(MT_CLEAVER, PLACE_SPECIAL));
@@ -3357,29 +3289,11 @@ tl::expected<void, std::string> InitMonsterGFX(CMonster &monsterType, MonsterSpr
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::BloodStarYellow).LoadGFX());
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::BloodStarYellowExplosion).LoadGFX());
 	}
-	if (IsAnyOf(mtype, MT_NACID, MT_RACID, MT_BACID, MT_XACID, MT_SPIDLORD)) {
+	if (IsAnyOf(mtype, MT_NACID, MT_RACID, MT_BACID, MT_XACID)) {
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::Acid).LoadGFX());
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::AcidSplat).LoadGFX());
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::AcidPuddle).LoadGFX());
 	}
-	if (mtype == MT_LICH) {
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::OrangeFlare).LoadGFX());
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::OrangeFlareExplosion).LoadGFX());
-	}
-	if (mtype == MT_ARCHLICH) {
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::YellowFlare).LoadGFX());
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::YellowFlareExplosion).LoadGFX());
-	}
-	if (IsAnyOf(mtype, MT_PSYCHORB, MT_BONEDEMN))
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::BlueFlare2).LoadGFX());
-	if (mtype == MT_NECRMORB) {
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::RedFlare).LoadGFX());
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::RedFlareExplosion).LoadGFX());
-	}
-	if (mtype == MT_PSYCHORB)
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::BlueFlareExplosion).LoadGFX());
-	if (mtype == MT_BONEDEMN)
-		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::BlueFlareExplosion2).LoadGFX());
 	if (mtype == MT_DIABLO)
 		RETURN_IF_ERROR(GetMissileSpriteData(MissileGraphicID::DiabloApocalypseBoom).LoadGFX());
 
@@ -3688,7 +3602,7 @@ void M_StartHit(Monster &monster, int dam)
 	if (IsHardHit(monster, dam)) {
 		if (monster.type().type == MT_BLINK) {
 			Teleport(monster);
-		} else if (IsAnyOf(monster.type().type, MT_NSCAV, MT_BSCAV, MT_WSCAV, MT_YSCAV, MT_GRAVEDIG)) {
+		} else if (IsAnyOf(monster.type().type, MT_NSCAV, MT_BSCAV, MT_WSCAV, MT_YSCAV)) {
 			monster.goal = MonsterGoal::Normal;
 			monster.goalVar1 = 0;
 			monster.goalVar2 = 0;
@@ -3747,7 +3661,7 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 	monster.occupyTile(monster.position.tile, false);
 	CheckQuestKill(monster, sendmsg);
 	M_FallenFear(monster.position.tile);
-	if (IsAnyOf(monster.type().type, MT_NACID, MT_RACID, MT_BACID, MT_XACID, MT_SPIDLORD))
+	if (IsAnyOf(monster.type().type, MT_NACID, MT_RACID, MT_BACID, MT_XACID))
 		AddMissile(monster.position.tile, { 0, 0 }, Direction::South, MissileID::AcidPuddle, TARGET_PLAYERS, monster, monster.intelligence + 1, 0);
 }
 
@@ -3972,18 +3886,6 @@ void ProcessMonsters()
 			if (monster.type().type == MT_CLEAVER) {
 				PlaySFX(SfxID::ButcherGreeting);
 			}
-			if (monster.type().type == MT_NAKRUL) {
-				if (sgGameInitInfo.bCowQuest != 0) {
-					PlaySFX(SfxID::NaKrul6);
-				} else {
-					if (IsUberRoomOpened)
-						PlaySFX(SfxID::NaKrul4);
-					else
-						PlaySFX(SfxID::NaKrul5);
-				}
-			}
-			if (monster.type().type == MT_DEFILER)
-				PlaySFX(SfxID::Defiler8);
 			UpdateEnemy(monster);
 		}
 
@@ -4678,8 +4580,6 @@ bool Monster::isResistant(MissileID missileType, DamageType missileElement) cons
 	if (((resistance & RESIST_MAGIC) != 0 && missileElement == DamageType::Magic)
 	    || ((resistance & RESIST_FIRE) != 0 && missileElement == DamageType::Fire)
 	    || ((resistance & RESIST_LIGHTNING) != 0 && missileElement == DamageType::Lightning))
-		return true;
-	if (gbIsHellfire && missileType == MissileID::HolyBolt && IsAnyOf(type().type, MT_DIABLO, MT_BONEDEMN))
 		return true;
 	return false;
 }

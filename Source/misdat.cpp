@@ -214,6 +214,7 @@ tl::expected<MissileData::AddFn, std::string> ParseMissileAddFn(std::string_view
 	if (value == "AddFlashBottom") return AddFlashBottom;
 	if (value == "AddFlashTop") return AddFlashTop;
 	if (value == "AddManaShield") return AddManaShield;
+	if (value == "AddEtherealize") return AddEtherealize;
 	if (value == "AddFlameWave") return AddFlameWave;
 	if (value == "AddGuardian") return AddGuardian;
 	if (value == "AddChainLightning") return AddChainLightning;
@@ -296,6 +297,7 @@ tl::expected<MissileData::ProcessFn, std::string> ParseMissileProcessFn(std::str
 	if (value == "ProcessChargedBolt") return ProcessChargedBolt;
 	if (value == "ProcessHolyBolt") return ProcessHolyBolt;
 	if (value == "ProcessElemental") return ProcessElemental;
+	if (value == "ProcessEtherealize") return ProcessEtherealize;
 	if (value == "ProcessBoneSpirit") return ProcessBoneSpirit;
 	if (value == "ProcessResurrectBeam") return ProcessResurrectBeam;
 	if (value == "ProcessRedPortal") return ProcessRedPortal;

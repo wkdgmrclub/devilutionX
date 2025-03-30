@@ -175,32 +175,6 @@ const _monster_id MonstConvTbl[] = {
 	MT_INVALID,
 	MT_BIGFALL,
 	MT_DARKMAGE,
-	MT_HELLBOAR,
-	MT_STINGER,
-	MT_PSYCHORB,
-	MT_ARACHNON,
-	MT_FELLTWIN,
-	MT_HORKSPWN,
-	MT_VENMTAIL,
-	MT_NECRMORB,
-	MT_SPIDLORD,
-	MT_LASHWORM,
-	MT_TORCHANT,
-	MT_HORKDMN,
-	MT_DEFILER,
-	MT_GRAVEDIG,
-	MT_TOMBRAT,
-	MT_FIREBAT,
-	MT_SKLWING,
-	MT_LICH,
-	MT_CRYPTDMN,
-	MT_HELLBAT,
-	MT_BONEDEMN,
-	MT_LICH,
-	MT_BICLOPS,
-	MT_FLESTHNG,
-	MT_REAPER,
-	MT_NAKRUL,
 	MT_CLEAVER,
 	MT_INVILORD,
 	MT_LRDSAYTR,
@@ -338,32 +312,6 @@ tl::expected<_monster_id, std::string> ParseMonsterId(std::string_view value)
 	if (value == "MT_INVALID") return MT_INVALID;
 	if (value == "MT_BIGFALL") return MT_BIGFALL;
 	if (value == "MT_DARKMAGE") return MT_DARKMAGE;
-	if (value == "MT_HELLBOAR") return MT_HELLBOAR;
-	if (value == "MT_STINGER") return MT_STINGER;
-	if (value == "MT_PSYCHORB") return MT_PSYCHORB;
-	if (value == "MT_ARACHNON") return MT_ARACHNON;
-	if (value == "MT_FELLTWIN") return MT_FELLTWIN;
-	if (value == "MT_HORKSPWN") return MT_HORKSPWN;
-	if (value == "MT_VENMTAIL") return MT_VENMTAIL;
-	if (value == "MT_NECRMORB") return MT_NECRMORB;
-	if (value == "MT_SPIDLORD") return MT_SPIDLORD;
-	if (value == "MT_LASHWORM") return MT_LASHWORM;
-	if (value == "MT_TORCHANT") return MT_TORCHANT;
-	if (value == "MT_HORKDMN") return MT_HORKDMN;
-	if (value == "MT_DEFILER") return MT_DEFILER;
-	if (value == "MT_GRAVEDIG") return MT_GRAVEDIG;
-	if (value == "MT_TOMBRAT") return MT_TOMBRAT;
-	if (value == "MT_FIREBAT") return MT_FIREBAT;
-	if (value == "MT_SKLWING") return MT_SKLWING;
-	if (value == "MT_LICH") return MT_LICH;
-	if (value == "MT_CRYPTDMN") return MT_CRYPTDMN;
-	if (value == "MT_HELLBAT") return MT_HELLBAT;
-	if (value == "MT_BONEDEMN") return MT_BONEDEMN;
-	if (value == "MT_LICH") return MT_LICH;
-	if (value == "MT_BICLOPS") return MT_BICLOPS;
-	if (value == "MT_FLESTHNG") return MT_FLESTHNG;
-	if (value == "MT_REAPER") return MT_REAPER;
-	if (value == "MT_NAKRUL") return MT_NAKRUL;
 	if (value == "MT_CLEAVER") return MT_CLEAVER;
 	if (value == "MT_INVILORD") return MT_INVILORD;
 	if (value == "MT_LRDSAYTR") return MT_LRDSAYTR;
@@ -457,6 +405,7 @@ tl::expected<monster_resistance, std::string> ParseMonsterResistance(std::string
 	if (value == "IMMUNE_FIRE") return IMMUNE_FIRE;
 	if (value == "IMMUNE_LIGHTNING") return IMMUNE_LIGHTNING;
 	if (value == "IMMUNE_ACID") return IMMUNE_ACID;
+	if (value == "IMMUNE_SC") return IMMUNE_SC;
 	return tl::make_unexpected("Unknown enum value");
 }
 

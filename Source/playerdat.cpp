@@ -236,7 +236,7 @@ std::vector<PlayerCombatData> PlayersCombatData;
 
 void LoadClassesAttributes()
 {
-	const std::array classPaths { "warrior", "rogue", "sorcerer", "monk", "bard", "barbarian" };
+	const std::array classPaths { "warrior", "rogue", "sorcerer" };
 	ClassAttributesPerClass.clear();
 	ClassAttributesPerClass.reserve(classPaths.size());
 	PlayersCombatData.clear();
@@ -251,13 +251,9 @@ const PlayerData PlayersData[] = {
 	// clang-format off
 // HeroClass                 className
 // TRANSLATORS: Player Block start
-/* HeroClass::Warrior */   { N_("Warrior"),   },
-/* HeroClass::Rogue */     { N_("Rogue"),     },
-/* HeroClass::Sorcerer */  { N_("Sorcerer"),  },
-/* HeroClass::Monk */      { N_("Monk"),      },
-/* HeroClass::Bard */      { N_("Bard"),      },
-// TRANSLATORS: Player Block end
-/* HeroClass::Barbarian */ { N_("Barbarian"), },
+/* HeroClass::Warrior */   { N_("Dunadan"),   },
+/* HeroClass::Rogue */     { N_("Noldo"),     },
+/* HeroClass::Sorcerer */  { N_("Istar"),     },
 	// clang-format on
 };
 
@@ -266,10 +262,7 @@ const std::array<PlayerStartingLoadoutData, enum_size<HeroClass>::value> Players
 // HeroClass                 skill,                  spell,             spellLevel,     items[0].diablo,       items[0].hellfire, items[1].diablo,  items[1].hellfire, items[2].diablo, items[2].hellfire, items[3].diablo, items[3].hellfire, items[4].diablo, items[4].hellfire, gold,
 /* HeroClass::Warrior   */ { SpellID::ItemRepair,    SpellID::Null,              0, { { { IDI_WARRIOR,         IDI_WARRIOR,    }, { IDI_WARRSHLD,   IDI_WARRSHLD,   }, { IDI_WARRCLUB,  IDI_WARRCLUB,   }, { IDI_HEAL,    IDI_HEAL,  }, { IDI_HEAL,      IDI_HEAL, }, }, },  100, },
 /* HeroClass::Rogue     */ { SpellID::TrapDisarm,    SpellID::Null,              0, { { { IDI_ROGUE,           IDI_ROGUE,      }, { IDI_HEAL,       IDI_HEAL,       }, { IDI_HEAL,      IDI_HEAL,       }, { IDI_NONE,    IDI_NONE,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, },
-/* HeroClass::Sorcerer  */ { SpellID::StaffRecharge, SpellID::Firebolt,          2, { { { IDI_SORCERER_DIABLO, IDI_SORCERER,   }, { IDI_MANA,       IDI_HEAL,       }, { IDI_MANA,      IDI_HEAL,       }, { IDI_NONE,    IDI_NONE,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, },
-/* HeroClass::Monk      */ { SpellID::Search,        SpellID::Null,              0, { { { IDI_SHORTSTAFF,      IDI_SHORTSTAFF, }, { IDI_HEAL,       IDI_HEAL,       }, { IDI_HEAL,      IDI_HEAL,       }, { IDI_NONE,    IDI_NONE,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, },
-/* HeroClass::Bard      */ { SpellID::Identify,      SpellID::Null,              0, { { { IDI_BARDSWORD,       IDI_BARDSWORD,  }, { IDI_BARDDAGGER, IDI_BARDDAGGER, }, { IDI_HEAL,      IDI_HEAL,       }, { IDI_HEAL,    IDI_HEAL,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, },
-/* HeroClass::Barbarian */ { SpellID::Rage,          SpellID::Null,              0, { { { IDI_BARBARIAN,       IDI_BARBARIAN,  }, { IDI_WARRSHLD,   IDI_WARRSHLD,   }, { IDI_HEAL,      IDI_HEAL,       }, { IDI_HEAL,    IDI_HEAL,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, }
+/* HeroClass::Sorcerer  */ { SpellID::StaffRecharge, SpellID::Firebolt,          2, { { { IDI_SORCERER,        IDI_SORCERER,   }, { IDI_MANA,       IDI_HEAL,       }, { IDI_MANA,      IDI_HEAL,       }, { IDI_NONE,    IDI_NONE,  }, { IDI_NONE,      IDI_NONE, }, }, },  100, },
 	// clang-format on
 } };
 

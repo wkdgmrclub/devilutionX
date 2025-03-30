@@ -228,13 +228,13 @@ struct SpellData {
 	std::string sNameText;
 	SfxID sSFX;
 	uint16_t bookCost10;
-	uint8_t staffCost10;
+	uint16_t staffCost10;
 	uint8_t sManaCost;
 	SpellDataFlags flags;
 	int8_t sBookLvl;
 	int8_t sStaffLvl;
 	uint8_t minInt;
-	MissileID sMissiles[2];
+	MissileID sMissiles[3];
 	uint8_t sManaAdj;
 	uint8_t sMinMana;
 	uint8_t sStaffMin;

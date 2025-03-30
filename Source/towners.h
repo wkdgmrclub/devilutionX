@@ -19,7 +19,7 @@
 
 namespace devilution {
 
-#define NUM_TOWNERS 16
+#define NUM_TOWNERS 13
 
 enum _talker_id : uint8_t {
 	TOWN_SMITH,
@@ -32,9 +32,6 @@ enum _talker_id : uint8_t {
 	TOWN_BMAID,
 	TOWN_PEGBOY,
 	TOWN_COW,
-	TOWN_FARMER,
-	TOWN_GIRL,
-	TOWN_COWFARM,
 	NUM_TOWNER_TYPES,
 };
 
@@ -88,9 +85,6 @@ void InitTowners();
 void FreeTownerGFX();
 void ProcessTowners();
 void TalkToTowner(Player &player, int t);
-
-void UpdateGirlAnimAfterQuestComplete();
-void UpdateCowFarmerAnimAfterQuestComplete();
 
 #ifdef _DEBUG
 bool DebugTalkToTowner(_talker_id type);

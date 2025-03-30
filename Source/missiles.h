@@ -452,7 +452,7 @@ void ProcessInfernoControl(Missile &missile);
 void ProcessChargedBolt(Missile &missile);
 void ProcessHolyBolt(Missile &missile);
 void ProcessElemental(Missile &missile);
-void ProcessEtherealize(Missle &missile);
+void ProcessEtherealize(Missile &missile);
 void ProcessBoneSpirit(Missile &missile);
 void ProcessResurrectBeam(Missile &missile);
 void ProcessRedPortal(Missile &missile);
