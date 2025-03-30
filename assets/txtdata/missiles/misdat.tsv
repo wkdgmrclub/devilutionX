@@ -33,7 +33,7 @@ StoneCurse	AddStoneCurse	ProcessStoneCurse	SpellStoneCurse			Magic,Invisible
 BloodRitual						Physical	
 Invisibility			SpellInvisibility			Physical,Invisible	
 Golem	AddGolem		SpellGolem			Physical,Invisible	
-Etherealize			SpellEtherealize		Etherealize	Physical	
+Etherealize	AddEtherealize	ProcessEtherealize	SpellEtherealize		Etherealize	Physical,Invisible	
 Spurt					Spurt	Physical	
 ApocalypseBoom	AddApocalypseBoom	ProcessApocalypseBoom			ApocalypseBoom	Physical	
 Healing	AddHealing					Physical,Invisible	

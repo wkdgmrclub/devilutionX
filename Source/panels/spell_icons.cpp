@@ -49,7 +49,7 @@ const SpellIcon SpellITbl[] = {
 /* SpellID::Invisibility     */ SpellIcon::Invisibility,
 /* SpellID::Inferno          */ SpellIcon::Inferno,
 /* SpellID::Golem            */ SpellIcon::Golem,
-/* SpellID::Rage             */ SpellIcon::BloodBoil,
+/* SpellID::Rage             */ SpellIcon::BloodRitual,
 /* SpellID::Teleport         */ SpellIcon::Teleport,
 /* SpellID::Apocalypse       */ SpellIcon::Apocalypse,
 /* SpellID::Etherealize      */ SpellIcon::Etherealize,

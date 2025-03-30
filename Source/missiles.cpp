@@ -267,6 +267,9 @@ bool MonsterMHit(const Player &player, int monsterId, int mindam, int maxdam, in
 	if (&player == MyPlayer)
 		ApplyMonsterDamage(damageType, monster, dam);
 
+	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::NoHealOnMonsters))
+		monster.flags |= MFLAG_NOHEAL;
+
 	if (monster.hitPoints >> 6 <= 0) {
 		M_StartKill(monster, player);
 	} else if (resist) {
@@ -900,7 +903,7 @@ DamageRange GetDamageAmt(SpellID spell, int spellLevel)
 	case SpellID::HolyBolt:
 		return { myPlayer.getCharacterLevel() + 9, myPlayer.getCharacterLevel() + 18 };
 	case SpellID::BloodStar: {
-		const int min = (myPlayer._pMagic / 2) + 3 * spellLevel - (myPlayer._pMagic / 8);
+		const int min = (10 * spellLevel + myPlayer._pMagic) - (myPlayer._pMagic / 2);
 		return { min, min };
 	}
 	default:
@@ -1007,19 +1010,19 @@ bool PlayerMHit(Player &player, Monster *monster, int dist, int mind, int maxd, 
 	if (DebugGodMode)
 		hit = 1000;
 #endif
-	int hper = 40;
+	int hper = 50;
 	if (missileData.isArrow()) {
 		int tac = player.GetArmor();
 		if (monster != nullptr) {
 			hper = monster->toHit(sgGameInitInfo.nDifficulty)
 			    + ((monster->level(sgGameInitInfo.nDifficulty) - player.getCharacterLevel()) * 2)
-			    + 30
+			    + 50
 			    - (dist * 2) - tac;
 		} else {
 			hper = 100 - (tac / 2) - (dist * 2);
 		}
 	} else if (monster != nullptr) {
-		hper += (monster->level(sgGameInitInfo.nDifficulty) * 2) - (player.getCharacterLevel() * 2) - (dist * 2);
+		hper = (monster->level(sgGameInitInfo.nDifficulty) * 2) - (player.getCharacterLevel() * 2) - (dist * 2) + 60;
 	}
 
 	int minhit = 10;
@@ -1894,7 +1897,7 @@ void AddFireWall(Missile &missile, AddMissileParameter &parameter)
 		missile.duration *= i + 1;
 	if (missile._micaster == TARGET_PLAYERS || missile._misource < 0)
 		missile.duration += currlevel;
-	missile.duration *= 16;
+	missile.duration *= 8;
 	missile.var1 = missile.duration - missile._miAnimLen;
 }
 
@@ -1909,7 +1912,7 @@ void AddFireball(Missile &missile, AddMissileParameter &parameter)
 		sp += std::min(missile._mispllvl * 2, 34);
 		Player &player = Players[missile._misource];
 
-		int dmg = 2 * (player.getCharacterLevel() + GenerateRndSum(10, 2)) + 4;
+		int dmg = 2 * (player.getCharacterLevel() + GenerateRndSum(10, 2));
 		missile._midam = ScaleSpellEffect(dmg, missile._mispllvl);
 	}
 	UpdateMissileVelocity(missile, dst, sp);
@@ -2092,6 +2095,26 @@ void AddManaShield(Missile &missile, AddMissileParameter &parameter)
 		NetSendCmd(true, CMD_SETSHIELD);
 }
 
+void AddEtherealize(Missile &missile, AddMissileParameter &parameter)
+{
+	auto &player = Players[missile._misource];
+
+	if (player.pEtherealize) {
+		parameter.spellFizzled = true;
+		return;
+	}
+
+	missile.duration = 16 * player.getCharacterLevel() >> 1;
+
+	for (int i = 0; i < missile._mispllvl; i++) {
+		missile.duration += missile.duration >> 3;
+	}
+
+	player.pEtherealize = true;
+	if (&player == MyPlayer)
+		NetSendCmd(true, CMD_SETETHEREALIZE);
+}
+
 void AddFlameWave(Missile &missile, AddMissileParameter &parameter)
 {
 	missile._midam = GenerateRnd(10) + Players[missile._misource].getCharacterLevel() + 1;
@@ -2218,8 +2241,8 @@ void AddGenericMagicMissile(Missile &missile, AddMissileParameter &parameter)
 			SetMissAnim(missile, MissileGraphicID::BloodStar);
 		if (monster.type().type == MT_SNOWWICH)
 			SetMissAnim(missile, MissileGraphicID::BloodStarBlue);
-		if (monster.type().type == MT_HLSPWN)
-			SetMissAnim(missile, MissileGraphicID::BloodStarRed);
+		// if (monster.type().type == MT_HLSPWN)
+		// SetMissAnim(missile, MissileGraphicID::BloodStarRed);
 		if (monster.type().type == MT_SOLBRNR)
 			SetMissAnim(missile, MissileGraphicID::BloodStarYellow);
 	}
@@ -2232,7 +2255,7 @@ void AddGenericMagicMissile(Missile &missile, AddMissileParameter &parameter)
 		switch (missile.sourceType()) {
 		case MissileSource::Player: {
 			const Player &player = *missile.sourcePlayer();
-			missile._midam = 3 * missile._mispllvl - (player._pMagic / 8) + (player._pMagic / 2);
+			missile._midam = (10 * missile._mispllvl) + player._pMagic - (player._pMagic / 2);
 			break;
 		}
 		case MissileSource::Monster:
@@ -2296,6 +2319,12 @@ void AddStoneCurse(Missile &missile, AddMissileParameter &parameter)
 		    Monster &monster = Monsters[monsterId];
 
 		    if (IsAnyOf(monster.type().type, MT_GOLEM, MT_DIABLO, MT_NAKRUL)) {
+			    return false;
+		    }
+		    if (monster.ai == MonsterAIID::Diablo) {
+			    return false;
+		    }
+		    if ((monster.resistance & IMMUNE_SC) != 0) {
 			    return false;
 		    }
 		    if (IsAnyOf(monster.mode, MonsterMode::FadeIn, MonsterMode::FadeOut, MonsterMode::Charge)) {
@@ -3028,7 +3057,6 @@ void ProcessFireball(Missile &missile)
 			ChangeLight(missile._mlid, missile.position.tile, missile._miAnimFrame);
 
 			constexpr Direction Offsets[] = {
-				Direction::NoDirection,
 				Direction::SouthWest,
 				Direction::NorthEast,
 				Direction::SouthEast,
@@ -3493,12 +3521,12 @@ void ProcessChainLightning(Missile &missile)
 	Point dst { missile.var1, missile.var2 };
 	Direction dir = GetDirection(position, dst);
 	AddMissile(position, dst, dir, MissileID::LightningControl, TARGET_MONSTERS, id, 1, missile._mispllvl);
-	int rad = std::min<int>(missile._mispllvl + 3, MaxCrawlRadius);
+	int rad = std::min<int>(17, MaxCrawlRadius);
 	Crawl(1, rad, [&](Displacement displacement) {
 		Point target = position + displacement;
 		if (InDungeonBounds(target) && dMonster[target.x][target.y] > 0) {
 			dir = GetDirection(position, target);
-			AddMissile(position, target, dir, MissileID::LightningControl, TARGET_MONSTERS, id, 1, missile._mispllvl);
+			AddMissile(position, target, dir, MissileID::LightningControl, TARGET_MONSTERS, id, 1, missile._mispllvl >> 1);
 		}
 		return false;
 	});
@@ -4054,6 +4082,20 @@ void ProcessElemental(Missile &missile)
 			missile.position.StopMissile();
 		}
 	}
+	PutMissile(missile);
+}
+
+void ProcessEtherealize(Missile &missile)
+{
+	missile.duration--;
+
+	Player &myPlayer = *MyPlayer;
+	if (missile.duration == 0) {
+		missile._miDelFlag = true;
+		myPlayer.pEtherealize = false;
+		NetSendCmd(true, CMD_REMETHEREALIZE);
+	}
+
 	PutMissile(missile);
 }
 

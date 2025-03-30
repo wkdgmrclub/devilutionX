@@ -1,4 +1,4 @@
-package org.diasurgical.devilutionx;
+package org.diasurgical.devilutionx.mod.middleearth;
 
 import android.content.Intent;
 import android.graphics.Rect;

@@ -1041,17 +1041,6 @@ bool IsPItemValid(const TCmdPItem &message, const Player &player)
 	if (idx != IDI_EAR) {
 		uint16_t creationFlags = SDL_SwapLE16(message.item.wCI);
 		uint32_t dwBuff = SDL_SwapLE16(message.item.dwBuff);
-
-		if (idx != IDI_GOLD)
-			ValidateField(creationFlags, IsCreationFlagComboValid(creationFlags));
-		if ((creationFlags & CF_TOWN) != 0)
-			ValidateField(creationFlags, IsTownItemValid(creationFlags, player));
-		else if ((creationFlags & CF_USEFUL) == CF_UPER15)
-			ValidateFields(creationFlags, dwBuff, IsUniqueMonsterItemValid(creationFlags, dwBuff));
-		else if ((dwBuff & CF_HELLFIRE) != 0 && AllItemsList[idx].iMiscId == IMISC_BOOK)
-			return RecreateHellfireSpellBook(player, message.item);
-		else
-			ValidateFields(creationFlags, dwBuff, IsDungeonItemValid(creationFlags, dwBuff));
 	}
 
 	return IsItemAvailable(idx);
@@ -2333,6 +2322,22 @@ size_t OnRemoveShield(const TCmd *pCmd, Player &player)
 	return sizeof(*pCmd);
 }
 
+size_t OnSetEtherealize(const TCmd *pCmd, Player &player)
+{
+	if (gbBufferMsgs != 1)
+		player.pEtherealize = true;
+
+	return sizeof(*pCmd);
+}
+
+size_t OnRemoveEtherealize(const TCmd *pCmd, Player &player)
+{
+	if (gbBufferMsgs != 1)
+		player.pEtherealize = false;
+
+	return sizeof(*pCmd);
+}
+
 size_t OnSetReflect(const TCmd *pCmd, Player &player)
 {
 	const auto &message = *reinterpret_cast<const TCmdParam1 *>(pCmd);
@@ -3329,6 +3334,10 @@ size_t ParseCmd(uint8_t pnum, const TCmd *pCmd)
 		return OnSetShield(pCmd, player);
 	case CMD_REMSHIELD:
 		return OnRemoveShield(pCmd, player);
+	case CMD_SETETHEREALIZE:
+		return OnSetEtherealize(pCmd, player);
+	case CMD_REMETHEREALIZE:
+		return OnRemoveEtherealize(pCmd, player);
 	case CMD_SETREFLECT:
 		return OnSetReflect(pCmd, player);
 	case CMD_NAKRUL:

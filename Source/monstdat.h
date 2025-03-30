@@ -73,6 +73,7 @@ enum monster_resistance : uint8_t {
 	IMMUNE_MAGIC     = 1 << 3,
 	IMMUNE_FIRE      = 1 << 4,
 	IMMUNE_LIGHTNING = 1 << 5,
+	IMMUNE_SC        = 1 << 6,
 	IMMUNE_ACID      = 1 << 7,
 	// clang-format on
 };
@@ -241,22 +242,22 @@ enum _monster_id : int16_t {
 	MT_RSNAKE,
 	MT_BSNAKE,
 	MT_GSNAKE,
-	MT_NBLACK,
+	MT_DARKMAGE,
 	MT_RTBLACK,
 	MT_BTBLACK,
-	MT_RBLACK,
+	MT_BIGFALL,
 	MT_UNRAV,
 	MT_HOLOWONE,
 	MT_PAINMSTR,
 	MT_REALWEAV,
 	MT_SUCCUBUS,
 	MT_SNOWWICH,
-	MT_HLSPWN,
+	MT_RSNAKE,
 	MT_SOLBRNR,
 	MT_COUNSLR,
 	MT_MAGISTR,
 	MT_CABALIST,
-	MT_ADVOCATE,
+	MT_UNRAV,
 	MT_GOLEM,
 	MT_DIABLO,
 	MT_DARKMAGE,
@@ -327,6 +328,9 @@ struct UniqueMonsterData {
 	UniqueMonsterPack monsterPack;
 	uint8_t customToHit;
 	uint8_t customArmorClass;
+	uint8_t levelNormal;
+	uint8_t levelNightmare;
+	uint8_t levelHell;
 	_speech_id mtalkmsg;
 };
 

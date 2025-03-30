@@ -36,7 +36,7 @@ namespace devilution {
 
 constexpr int InventoryGridCells = 40;
 constexpr int MaxBeltItems = 8;
-constexpr int MaxResistance = 75;
+constexpr int MaxResistance = 85;
 constexpr uint8_t MaxSpellLevel = 15;
 constexpr int PlayerNameLength = 32;
 
@@ -364,6 +364,7 @@ public:
 	uint8_t pDungMsgs;
 	uint8_t pLvlLoad;
 	bool pManaShield;
+	bool pEtherealize;
 	uint8_t pDungMsgs2;
 	bool pOriginalCathedral;
 	uint8_t pDiabloKillLevel;
@@ -572,7 +573,7 @@ public:
 	 */
 	int GetArmor() const
 	{
-		return _pIBonusAC + _pIAC + _pDexterity / 5;
+		return _pIBonusAC + _pIAC + _pDexterity / 4;
 	}
 
 	/**

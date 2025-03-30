@@ -527,6 +527,8 @@ void LoadItemDat()
 		ItemData &item = AllItemsList.emplace_back();
 		reader.advance(); // Skip the first column (item ID).
 		reader.readInt("dropRate", item.dropRate);
+		reader.readInt("monstDropRate", item.monstDropRate);
+		reader.readInt("uMonstDropRate", item.uMonstDropRate);
 		reader.read("class", item.iClass, ParseItemClass);
 		reader.read("equipType", item.iLoc, ParseItemEquipType);
 		reader.read("cursorGraphic", item.iCurs, ParseItemCursorGraphic);

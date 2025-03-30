@@ -436,7 +436,7 @@ tl::expected<monster_flag, std::string> ParseMonsterFlag(std::string_view value)
 	if (value == "CAN_OPEN_DOOR") return MFLAG_CAN_OPEN_DOOR;
 	if (value == "NO_ENEMY") return MFLAG_NO_ENEMY;
 	if (value == "BERSERK") return MFLAG_BERSERK;
-	if (value == "NOLIFESTEAL") return MFLAG_NOLIFESTEAL;
+	if (value == "LIFESTEAL") return MFLAG_LIFESTEAL;
 	return tl::make_unexpected("Unknown enum value");
 }
 
@@ -569,6 +569,9 @@ void LoadUniqueMonstDat()
 		reader.read("monsterPack", monster.monsterPack, ParseUniqueMonsterPack);
 		reader.readInt("customToHit", monster.customToHit);
 		reader.readInt("customArmorClass", monster.customArmorClass);
+		reader.readInt("levelNormal", monster.levelNormal);
+		reader.readInt("levelNightmare", monster.levelNightmare);
+		reader.readInt("levelHell", monster.levelHell);
 
 		// talkMessage
 		// TODO: Replace this hack with proper parsing once messages have been migrated to data files.

@@ -310,6 +310,7 @@ void AddTownPortal(Missile &missile, AddMissileParameter &parameter);
 void AddFlashBottom(Missile &missile, AddMissileParameter &parameter);
 void AddFlashTop(Missile &missile, AddMissileParameter &parameter);
 void AddManaShield(Missile &missile, AddMissileParameter &parameter);
+void AddEtherealize(Missile &missile, AddMissileParameter &parameter);
 void AddFlameWave(Missile &missile, AddMissileParameter &parameter);
 
 /**
@@ -451,6 +452,7 @@ void ProcessInfernoControl(Missile &missile);
 void ProcessChargedBolt(Missile &missile);
 void ProcessHolyBolt(Missile &missile);
 void ProcessElemental(Missile &missile);
+void ProcessEtherealize(Missle &missile);
 void ProcessBoneSpirit(Missile &missile);
 void ProcessResurrectBeam(Missile &missile);
 void ProcessRedPortal(Missile &missile);

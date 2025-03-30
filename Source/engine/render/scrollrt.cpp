@@ -385,6 +385,8 @@ void DrawPlayerIcons(const Surface &out, const Player &player, Point position, b
 {
 	if (player.pManaShield)
 		DrawPlayerIconHelper(out, MissileGraphicID::ManaShield, position, player, infraVision, lightTableIndex);
+	if (player.pEtherealize)
+		DrawPlayerIconHelper(out, MissileGraphicID::Etherealize, position, player, infraVision, lightTableIndex);
 	if (player.wReflections > 0)
 		DrawPlayerIconHelper(out, MissileGraphicID::Reflect, position + Displacement { 0, 16 }, player, infraVision, lightTableIndex);
 }

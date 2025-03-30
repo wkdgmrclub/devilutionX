@@ -113,11 +113,6 @@ bool IsDungeonItemValid(uint16_t iCreateInfo, uint32_t dwBuff)
 			continue;
 		}
 
-		if (i == MT_DIABLO && !isHellfireItem) {
-			// Adjust The Dark Lord's mlvl if the item isn't a Hellfire item to match the Diablo mlvl
-			monsterLevel -= 15;
-		}
-
 		if (level == monsterLevel) {
 			// If the ilvl matches the mlvl, we confirm the item is legitimate
 			return true;
