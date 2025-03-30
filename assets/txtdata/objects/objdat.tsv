@@ -54,15 +54,15 @@ OBJ_WATER	miniwatr	0	0				Animated,Solid,Light	1	10	64
 OBJ_BOOKLVR	book1	0	0				Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
 OBJ_TRAPL	traphole	1	24				MissilesPassThrough,Light	1	0	64	
 OBJ_TRAPR	traphole	1	24				MissilesPassThrough,Light	2	0	64	
-OBJ_BOOKSHELF	bcase	0	0				Solid,Light	1	0	96	
+OBJ_BOOKSHELF	bshelf	0	0				Solid,Light	1	0	96	
 OBJ_WEAPRACK	weapstnd	0	0				Solid,Light	1	0	96	
-OBJ_BARREL	barrel	1	15				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,Middle
-OBJ_BARRELEX	barrelex	1	15				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
+OBJ_BARREL	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,Middle
+OBJ_BARRELEX	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
 OBJ_SHRINEL	lshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
 OBJ_SHRINER	rshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
 OBJ_SKELBOOK	book2	0	0		THEME_SKELROOM		Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle
-OBJ_BOOKCASEL	bcase	0	0		THEME_LIBRARY		Solid,Light	3	0	96	Bottom,Middle
-OBJ_BOOKCASER	bcase	0	0		THEME_LIBRARY		Solid,Light	4	0	96	Bottom,Middle
+OBJ_BOOKCASEL	bshelf	0	0		THEME_LIBRARY		Solid,Light	3	0	96	Bottom,Middle
+OBJ_BOOKCASER	bshelf	0	0		THEME_LIBRARY		Solid,Light	4	0	96	Bottom,Middle
 OBJ_BOOKSTAND	book2	0	0		THEME_LIBRARY		Solid,MissilesPassThrough,Light	1	0	96	Bottom,Middle
 OBJ_BOOKCANDLE	candle2	0	0		THEME_LIBRARY		Animated,Solid,MissilesPassThrough,Light	2	4	96	
 OBJ_BLOODFTN	bloodfnt	0	0		THEME_BLOODFOUNTAIN		Animated,Solid,MissilesPassThrough,Light	2	10	96	Bottom,Middle
@@ -97,7 +97,7 @@ OBJ_MUSHPATCH	mushptch	0	0			Q_MUSHROOM	Solid,MissilesPassThrough,Light,Trap	1	0
 OBJ_LAZSTAND	lzstand	0	0			Q_BETRAYER	Solid,Light	1	0	128	Bottom,Middle
 OBJ_SLAINHERO	decap	9	9				Solid,MissilesPassThrough,Light	2	0	96	Bottom
 OBJ_SIGNCHEST	chest3	0	0				Solid,MissilesPassThrough,Light	1	0	96	Bottom
-OBJ_BOOKSHELFR	bcase	0	0				Solid,Light	2	0	96	
+OBJ_BOOKSHELFR	bshelf	0	0				Solid,Light	2	0	96	
 OBJ_POD	l6pod1	17	20				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,Middle
 OBJ_PODEX	l6pod2	17	20				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
 OBJ_URN	urn	21	24				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,Middle

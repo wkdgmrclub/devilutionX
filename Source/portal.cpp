@@ -23,10 +23,10 @@ size_t portalindex;
 
 /** Coordinate of each player's portal in town. */
 Point PortalTownPosition[MAXPORTAL] = {
-	{ 57, 40 },
-	{ 59, 40 },
-	{ 61, 40 },
-	{ 63, 40 },
+	{ 57, 67 },
+	{ 57, 74 },
+	{ 64, 67 },
+	{ 64, 74 },
 };
 
 } // namespace

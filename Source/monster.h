@@ -42,6 +42,7 @@ enum monster_flag : uint16_t {
 	MFLAG_HIDDEN          = 1 << 0,
 	MFLAG_LOCK_ANIMATION  = 1 << 1,
 	MFLAG_ALLOW_SPECIAL   = 1 << 2,
+	MFLAG_NOHEAL          = 1 << 3,
 	MFLAG_TARGETS_MONSTER = 1 << 4,
 	MFLAG_GOLEM           = 1 << 5,
 	MFLAG_QUEST_COMPLETE  = 1 << 6,
@@ -50,7 +51,7 @@ enum monster_flag : uint16_t {
 	MFLAG_CAN_OPEN_DOOR   = 1 << 9,
 	MFLAG_NO_ENEMY        = 1 << 10,
 	MFLAG_BERSERK         = 1 << 11,
-	MFLAG_NOLIFESTEAL     = 1 << 12,
+	MFLAG_LIFESTEAL     = 1 << 12,
 	// clang-format on
 };
 
@@ -390,16 +391,15 @@ struct Monster { // note: missing field _mAFNum
 	{
 		unsigned int baseLevel = data().level;
 		if (isUnique()) {
-			baseLevel = UniqueMonstersData[static_cast<int8_t>(uniqueType)].mlevel;
-			if (baseLevel != 0) {
-				baseLevel *= 2;
-			} else {
-				baseLevel = data().level + 5;
+			const auto &uniqueMonsterData = UniqueMonstersData[static_cast<size_t>(uniqueType)];
+			switch (difficulty) {
+			case DIFF_NORMAL:
+				return uniqueMonsterData.levelNormal;
+			case DIFF_NIGHTMARE:
+				return uniqueMonsterData.levelNightmare;
+			case DIFF_HELL:
+				return uniqueMonsterData.levelHell;
 			}
-		}
-
-		if (type().type == MT_DIABLO && !gbIsHellfire) {
-			baseLevel -= 15;
 		}
 
 		if (difficulty == DIFF_NIGHTMARE) {

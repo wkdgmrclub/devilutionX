@@ -58,7 +58,7 @@
         <meta-data android:name="SDL_ENV.SDL_ACCELEROMETER_AS_JOYSTICK" android:value="0"/>
          -->
 
-        <activity android:name="org.diasurgical.devilutionx.DevilutionXSDLActivity"
+        <activity android:name="org.diasurgical.devilutionx.mod.middleearth.DevilutionXSDLActivity"
             android:label="@string/app_name"
             android:windowSoftInputMode="adjustPan"
             android:alwaysRetainTaskState="true"

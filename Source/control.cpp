@@ -1246,6 +1246,51 @@ void FreeControlPan()
 	FreeModifierHints();
 }
 
+struct ItemPanelData {
+	uint8_t ItemIdx;
+	const char *PanelText;
+};
+
+ItemPanelData ItemPanelList[] {
+	// clang-format off
+	{  36,  "Hit monster doesn't heal"      },
+	{  37,  "Grants Haste & Harmony"        },
+	{  41,  "Grants Speed & Harmony"        },
+	{  43,  "Grants Holiness"               },
+	{  45,  "Grants Speed & Harmony"        },
+	{  62,  "Grants Harmony & Fast Block"   },
+	{  68,  "Grants Speed & Harmony"        },
+	{  69,  "grants 1-3 damage"             },
+	{  88,  "Grants Speed & Harmony"        },
+	{  92,  "Grants Swiftness & Harmony"    },
+	{ 102,  "Grants Harmony"                },
+	{ 115,  "grants 3-5 Armor"              },
+	{ 117,  "Grants Speed & Harmony"        },
+	{ 123,  "Grants Speed & Harmony"        },
+	{ 124,  "Grants Speed & Harmony"        },
+	{ 125,  "Grants Speed & Harmony"        },
+	{ 126,  "Grants Speed & Harmony"        },
+	{ 127,  "Grants Speed & Harmony"        },
+	{ 128,  "Grants Speed & Harmony"        },
+	{ 129,  "Grants Speed & Harmony"        },
+	{ 130,  "Grants Speed & Harmony"        },
+	{ 138,  "Grants Harmony"                },
+	{ 139,  "Grants Harmony"                },
+	{ 140,  "Grants Harmony"                },
+	{ 141,  "Grants Harmony"                },
+	{ 142,  "Grants Harmony"                },
+	{ 143,  "Grants Speed & Harmony"        },
+	{ 144,  "Grants Harmony"                },
+	{ 145,  "Grants Harmony"                },
+	{ 146,  "Grants Harmony"                },
+	{ 147,  "Grants Harmony"                },
+	{ 148,  "Grants Harmony"                },
+	{ 149,  "Grants Harmony"                },
+	{ 150,  "Grants Harmony"                },
+	{   0,  ""                              },
+	// clang-format on
+};
+
 void DrawInfoBox(const Surface &out)
 {
 	DrawPanelBox(out, MakeSdlRect(InfoBoxRect.position.x, InfoBoxRect.position.y + PanelPaddingHeight, InfoBoxRect.size.width, InfoBoxRect.size.height), GetMainPanel().position + Displacement { InfoBoxRect.position.x, InfoBoxRect.position.y });
@@ -1265,6 +1310,12 @@ void DrawInfoBox(const Surface &out)
 		} else {
 			InfoString = myPlayer.HoldItem.getName();
 			InfoColor = myPlayer.HoldItem.getTextColor();
+			for (const ItemPanelData &itemPanel : ItemPanelList) {
+				if (itemPanel.ItemIdx == myPlayer.HoldItem.IDidx) {
+					AddInfoBoxString(fmt::format(fmt::runtime(_(itemPanel.PanelText))));
+					break;
+				}
+			}
 		}
 	} else {
 		if (pcursitem != -1)

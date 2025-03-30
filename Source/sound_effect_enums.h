@@ -178,6 +178,7 @@ enum class SfxID : int16_t {
 	MenuSelect,
 	TriggerTrap,
 	CastFire,
+	CastEscape,
 	CastLightning,
 	CastSkill,
 	SpellEnd,

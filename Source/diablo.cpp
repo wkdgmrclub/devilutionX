@@ -1190,12 +1190,9 @@ void ApplicationInit()
 
 void DiabloInit()
 {
-	if (forceSpawn || *GetOptions().GameMode.shareware)
-		gbIsSpawn = true;
+	forceDiablo = true;
 	if (forceDiablo || *GetOptions().GameMode.gameMode == StartUpGameMode::Diablo)
 		gbIsHellfire = false;
-	if (forceHellfire)
-		gbIsHellfire = true;
 
 	gbIsHellfireSaveGame = gbIsHellfire;
 
@@ -1212,17 +1209,6 @@ void DiabloInit()
 
 	UiInitialize();
 	was_ui_init = true;
-
-	if (gbIsHellfire && !forceHellfire && *GetOptions().GameMode.gameMode == StartUpGameMode::Ask) {
-		UiSelStartUpGameOption();
-		if (!gbIsHellfire) {
-			// Reinitialize the UI Elements because we changed the game
-			UnloadUiGFX();
-			UiInitialize();
-			if (IsHardwareCursor())
-				SetHardwareCursor(CursorInfo::UnknownCursor());
-		}
-	}
 
 	DiabloInitScreen();
 

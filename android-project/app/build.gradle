@@ -11,7 +11,7 @@ android {
 	compileSdk 35
 	defaultConfig {
 		if (buildAsApplication) {
-			applicationId "org.diasurgical.devilutionx"
+			applicationId "org.diasurgical.devilutionx.mod.middleearth"
 		}
 		minSdkVersion 21
 		targetSdkVersion 35
@@ -33,7 +33,7 @@ android {
 			proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
 		}
 	}
-	namespace 'org.diasurgical.devilutionx'
+	namespace 'org.diasurgical.devilutionx.mod.middleearth'
 	buildFeatures {
 		buildConfig true
 	}
@@ -60,7 +60,7 @@ android {
 			variant.outputs.each { output ->
 				def outputFile = output.outputFile
 				if (outputFile != null && outputFile.name.endsWith(".aar")) {
-					def fileName = "org.diasurgical.devilutionx.aar"
+					def fileName = "org.diasurgical.devilutionx.mod.middleearth.aar"
 					output.outputFile = new File(outputFile.parent, fileName)
 				}
 			}

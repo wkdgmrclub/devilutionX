@@ -110,6 +110,7 @@ struct PlayerNetPack {
 	uint8_t _pNumInv;
 	ItemNetPack SpdList[MaxBeltItems];
 	uint8_t pManaShield;
+	uint8_t pEtherealize;
 	uint16_t wReflections;
 	uint8_t pDiabloKillLevel;
 	uint8_t friendlyMode;

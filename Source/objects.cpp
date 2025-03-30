@@ -4830,7 +4830,7 @@ StringOrView Object::name() const
 		return _("Bookcase");
 	case OBJ_BARREL:
 	case OBJ_BARRELEX:
-		return _("Barrel");
+		return _("Urn");
 	case OBJ_POD:
 	case OBJ_PODEX:
 		return _("Pod");

@@ -361,7 +361,7 @@ bool ForceTownTrig()
 	if (IsWarpOpen(DTYPE_CATACOMBS)) {
 		for (const uint16_t tileId : TownWarp1List) {
 			if (dPiece[cursPosition.x][cursPosition.y] == tileId) {
-				InfoString = _("Down to catacombs");
+				InfoString = _("To the Paths of the Dead");
 				cursPosition = { 49, 21 };
 				return true;
 			}
@@ -371,7 +371,7 @@ bool ForceTownTrig()
 	if (IsWarpOpen(DTYPE_CAVES)) {
 		for (uint16_t i = 1198; i <= 1219; ++i) {
 			if (dPiece[cursPosition.x][cursPosition.y] == i) {
-				InfoString = _("Down to caves");
+				InfoString = _("To the Bowels of the Earth");
 				cursPosition = { 17, 69 };
 				return true;
 			}
@@ -381,7 +381,7 @@ bool ForceTownTrig()
 	if (IsWarpOpen(DTYPE_HELL)) {
 		for (uint16_t i = 1239; i <= 1254; ++i) {
 			if (dPiece[cursPosition.x][cursPosition.y] == i) {
-				InfoString = _("Down to hell");
+				InfoString = _("To the Pits of Angband");
 				cursPosition = { 41, 80 };
 				return true;
 			}
@@ -592,7 +592,7 @@ bool ForceL4Trig()
 	if (currlevel == 15) {
 		for (const uint16_t tileId : L4PentaList) {
 			if (dPiece[cursPosition.x][cursPosition.y] == tileId) {
-				InfoString = _("Down to Diablo");
+				InfoString = _("Down to Morgoth");
 				for (int j = 0; j < numtrigs; j++) {
 					if (trigs[j]._tmsg == WM_DIABNEXTLVL) {
 						cursPosition = trigs[j].position;

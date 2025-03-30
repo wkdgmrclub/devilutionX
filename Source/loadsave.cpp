@@ -333,12 +333,6 @@ void LoadItemData(LoadHelper &file, Item &item)
 	file.Skip(1); // Alignment
 	item._iStatFlag = file.NextBool32();
 	item.IDidx = static_cast<_item_indexes>(file.NextLE<int32_t>());
-	if (gbIsSpawn) {
-		item.IDidx = RemapItemIdxFromSpawn(item.IDidx);
-	}
-	if (!gbIsHellfireSaveGame) {
-		item.IDidx = RemapItemIdxFromDiablo(item.IDidx);
-	}
 	item.dwBuff = file.NextLE<uint32_t>();
 	if (gbIsHellfireSaveGame)
 		item._iDamAcFlags = static_cast<ItemSpecialEffectHf>(file.NextLE<uint32_t>());
@@ -363,7 +357,6 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player.walkpath[PlayerWalkPathSizeForSaveGame] = WALK_NONE;
 
 	player.plractive = file.NextBool8();
-	file.Skip(2); // Alignment
 	player.destAction = static_cast<action_id>(file.NextLE<int32_t>());
 	player.destParam1 = file.NextLE<int32_t>();
 	player.destParam2 = file.NextLE<int32_t>();
@@ -1069,10 +1062,6 @@ int getHellfireLevelType(int type)
 void SaveItem(SaveHelper &file, const Item &item)
 {
 	auto idx = item.IDidx;
-	if (!gbIsHellfire)
-		idx = RemapItemIdxToDiablo(idx);
-	if (gbIsSpawn)
-		idx = RemapItemIdxToSpawn(idx);
 	ItemType iType = item._itype;
 	if (idx == -1) {
 		idx = _item_indexes::IDI_GOLD;
@@ -2078,19 +2067,7 @@ tl::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter)
 
 void RemoveInvalidItem(Item &item)
 {
-	bool isInvalid = !IsItemAvailable(item.IDidx) || !IsUniqueAvailable(item._iUid);
-
-	if (!gbIsHellfire) {
-		isInvalid = isInvalid || (item._itype == ItemType::Staff && GetSpellStaffLevel(item._iSpell) == -1);
-		isInvalid = isInvalid || (item._iMiscId == IMISC_BOOK && GetSpellBookLevel(item._iSpell) == -1);
-		isInvalid = isInvalid || item._iDamAcFlags != ItemSpecialEffectHf::None;
-		isInvalid = isInvalid || item._iPrePower > IPL_LASTDIABLO;
-		isInvalid = isInvalid || item._iSufPower > IPL_LASTDIABLO;
-	}
-
-	if (isInvalid) {
-		item.clear();
-	}
+	return;
 }
 
 _item_indexes RemapItemIdxFromDiablo(_item_indexes i)

@@ -77,8 +77,8 @@ namespace {
 constexpr int NightmareToHitBonus = 85;
 constexpr int HellToHitBonus = 120;
 
-constexpr int NightmareAcBonus = 50;
-constexpr int HellAcBonus = 80;
+constexpr int NightmareAcBonus = 60;
+constexpr int HellAcBonus = 90;
 
 /** Tracks which missile files are already loaded */
 size_t totalmonsters;
@@ -158,9 +158,7 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	monster.animInfo.currentFrame = GenerateRnd(monster.animInfo.numberOfFrames - 1);
 
 	int maxhp = RandomIntBetween(monster.data().hitPointsMinimum, monster.data().hitPointsMaximum);
-	if (monster.type().type == MT_DIABLO && !gbIsHellfire) {
-		maxhp /= 2;
-	}
+
 	monster.maxHitPoints = maxhp << 6;
 
 	if (!gbIsMultiplayer)
@@ -200,11 +198,7 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	}
 
 	if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
-		monster.maxHitPoints = 3 * monster.maxHitPoints;
-		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 100 : 50) << 6;
-		else
-			monster.maxHitPoints += 100 << 6;
+		monster.maxHitPoints = 4 * monster.maxHitPoints;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
@@ -212,11 +206,8 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 		monster.maxDamageSpecial = 2 * (monster.maxDamageSpecial + 2);
 		monster.armorClass += NightmareAcBonus;
 	} else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
-		monster.maxHitPoints = 4 * monster.maxHitPoints;
-		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 200 : 100) << 6;
-		else
-			monster.maxHitPoints += 200 << 6;
+		monster.maxHitPoints = 5 * monster.maxHitPoints;
+		monster.maxHitPoints += 300 << 6;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
@@ -819,34 +810,6 @@ void DiabloDeath(Monster &diablo, bool sendmsg)
 	quest._qactive = QUEST_DONE;
 	if (sendmsg)
 		NetSendCmdQuest(true, quest);
-	sgbSaveSoundOn = gbSoundOn;
-	gbProcessPlayers = false;
-	for (size_t i = 0; i < ActiveMonsterCount; i++) {
-		int monsterId = ActiveMonsters[i];
-		Monster &monster = Monsters[monsterId];
-		if (monster.type().type == MT_DIABLO || diablo.activeForTicks == 0)
-			continue;
-
-		NewMonsterAnim(monster, MonsterGraphic::Death, monster.direction);
-		monster.mode = MonsterMode::Death;
-		monster.var1 = 0;
-		monster.position.tile = monster.position.old;
-		monster.position.future = monster.position.tile;
-		M_ClearSquares(monster);
-		monster.occupyTile(monster.position.tile, false);
-	}
-	AddLight(diablo.position.tile, 8);
-	DoVision(diablo.position.tile, 8, MAP_EXP_NONE, true);
-	int dist = diablo.position.tile.WalkingDistance(ViewPosition);
-	if (dist > 20)
-		dist = 20;
-	diablo.var3 = ViewPosition.x << 16;
-	diablo.position.temp.x = ViewPosition.y << 16;
-	diablo.position.temp.y = (int)((diablo.var3 - (diablo.position.tile.x << 16)) / (float)dist);
-	if (!gbIsMultiplayer) {
-		Player &myPlayer = *MyPlayer;
-		myPlayer.pDiabloKillLevel = std::max(myPlayer.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
-	}
 }
 
 void SpawnLoot(Monster &monster, bool sendmsg)
@@ -1108,7 +1071,7 @@ int GetMinHit()
 	case 14:
 		return 20;
 	default:
-		return 15;
+		return 10;
 	}
 }
 
@@ -1130,16 +1093,18 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 	if (HasAnyOf(player.pDamAcFlags, ItemSpecialEffectHf::ACAgainstUndead) && monster.data().monsterClass == MonsterClass::Undead)
 		ac += 20;
 	hit += 2 * (monster.level(sgGameInitInfo.nDifficulty) - player.getCharacterLevel())
-	    + 30
+	    + 50
 	    - ac;
 	int minhit = GetMinHit();
 	hit = std::max(hit, minhit);
 	int blkper = 100;
 	if ((player._pmode == PM_STAND || player._pmode == PM_ATTACK) && player._pBlockFlag) {
 		blkper = GenerateRnd(100);
+		if (blkper < (monster.level(sgGameInitInfo.nDifficulty) >> 1))
+			blkper = 100;
 	}
 	int blk = player.GetBlockChance() - (monster.level(sgGameInitInfo.nDifficulty) * 2);
-	blk = std::clamp(blk, 0, 100);
+	blk = std::clamp(blk, 0, 90);
 	if (hper >= hit)
 		return;
 	if (blkper < blk) {
@@ -1152,20 +1117,7 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 		}
 		return;
 	}
-	if (monster.type().type == MT_YZOMBIE && &player == MyPlayer) {
-		if (player._pMaxHP > 64) {
-			if (player._pMaxHPBase > 64) {
-				player._pMaxHP -= 64;
-				if (player._pHitPoints > player._pMaxHP) {
-					player._pHitPoints = player._pMaxHP;
-				}
-				player._pMaxHPBase -= 64;
-				if (player._pHPBase > player._pMaxHPBase) {
-					player._pHPBase = player._pMaxHPBase;
-				}
-			}
-		}
-	}
+
 	// New method fixes a bug which caused the maximum possible damage value to be 63/64ths too low.
 	int dam = RandomIntBetween(minDam << 6, maxDam << 6);
 	dam = std::max(dam + (player._pIGetHit << 6), 64);
@@ -1187,7 +1139,7 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 			M_StartHit(monster, player, mdam);
 	}
 
-	if ((monster.flags & MFLAG_NOLIFESTEAL) == 0 && monster.type().type == MT_SKING && gbIsMultiplayer)
+	if ((monster.flags & MFLAG_LIFESTEAL) != 0)
 		monster.hitPoints += dam;
 	if (player._pHitPoints >> 6 <= 0) {
 		if (gbIsHellfire)
@@ -1448,22 +1400,7 @@ void ShrinkLeaderPacksize(const Monster &monster)
 void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
-	if (monster.type().type == MT_DIABLO) {
-		if (monster.position.tile.x < ViewPosition.x) {
-			ViewPosition.x--;
-		} else if (monster.position.tile.x > ViewPosition.x) {
-			ViewPosition.x++;
-		}
-
-		if (monster.position.tile.y < ViewPosition.y) {
-			ViewPosition.y--;
-		} else if (monster.position.tile.y > ViewPosition.y) {
-			ViewPosition.y++;
-		}
-
-		if (monster.var1 == 140)
-			PrepDoEnding();
-	} else if (monster.animInfo.isLastFrame()) {
+	if (monster.animInfo.isLastFrame()) {
 		if (monster.isUnique())
 			AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
 		else
@@ -3203,22 +3140,15 @@ tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonst
 	}
 
 	if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
-		monster.maxHitPoints = 3 * monster.maxHitPoints;
-		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 100 : 50) << 6;
-		else
-			monster.maxHitPoints += 100 << 6;
+		monster.maxHitPoints = 4 * monster.maxHitPoints;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
 		monster.minDamageSpecial = 2 * (monster.minDamageSpecial + 2);
 		monster.maxDamageSpecial = 2 * (monster.maxDamageSpecial + 2);
 	} else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
-		monster.maxHitPoints = 4 * monster.maxHitPoints;
-		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 200 : 100) << 6;
-		else
-			monster.maxHitPoints += 200 << 6;
+		monster.maxHitPoints = 5 * monster.maxHitPoints;
+		monster.maxHitPoints += 600 << 6;
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
@@ -3249,6 +3179,7 @@ tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonst
 		monster.flags &= ~MFLAG_ALLOW_SPECIAL;
 		monster.mode = MonsterMode::Stand;
 	}
+
 	return {};
 }
 
@@ -3273,10 +3204,7 @@ tl::expected<void, std::string> GetLevelMTypes()
 {
 	RETURN_IF_ERROR(AddMonsterType(MT_GOLEM, PLACE_SPECIAL));
 	if (currlevel == 16) {
-		RETURN_IF_ERROR(AddMonsterType(MT_ADVOCATE, PLACE_SCATTER));
-		RETURN_IF_ERROR(AddMonsterType(MT_RBLACK, PLACE_SCATTER));
 		RETURN_IF_ERROR(AddMonsterType(MT_DIABLO, PLACE_SPECIAL));
-		return {};
 	}
 
 	if (currlevel == 18)
@@ -3331,9 +3259,9 @@ tl::expected<void, std::string> GetLevelMTypes()
 			typelist[nt++] = (_monster_id)i;
 		}
 
-		while (nt > 0 && LevelMonsterTypeCount < MaxLvlMTypes && monstimgtot < 4000) {
+		while (nt > 0 && LevelMonsterTypeCount < MaxLvlMTypes && monstimgtot < 4050) {
 			for (int i = 0; i < nt;) {
-				if (MonstersData[typelist[i]].image > 4000 - monstimgtot) {
+				if (MonstersData[typelist[i]].image > 4050 - monstimgtot) {
 					typelist[i] = typelist[--nt];
 					continue;
 				}
@@ -3543,8 +3471,8 @@ tl::expected<void, std::string> InitMonsters()
 		if (!gbIsSpawn)
 			RETURN_IF_ERROR(PlaceUniqueMonsters());
 		size_t na = 0;
-		for (int s = 16; s < 96; s++) {
-			for (int t = 16; t < 96; t++) {
+		for (int s = 16; s < 127; s++) {
+			for (int t = 16; t < 127; t++) {
 				if (!IsTileSolid({ s, t }))
 					na++;
 			}
@@ -3922,17 +3850,6 @@ void PrepDoEnding()
 	Player &myPlayer = *MyPlayer;
 
 	myPlayer.pDiabloKillLevel = std::max(myPlayer.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
-
-	for (Player &player : Players) {
-		player._pmode = PM_QUIT;
-		player._pInvincible = true;
-		if (gbIsMultiplayer) {
-			if (player._pHitPoints >> 6 == 0)
-				player._pHitPoints = 64;
-			if (player._pMana >> 6 == 0)
-				player._pMana = 64;
-		}
-	}
 }
 
 bool Walk(Monster &monster, Direction md)
@@ -4046,12 +3963,8 @@ void ProcessMonsters()
 			SetRndSeed(monster.aiSeed);
 			monster.aiSeed = AdvanceRndSeed();
 		}
-		if (monster.hitPoints < monster.maxHitPoints && monster.hitPoints >> 6 > 0) {
-			if (monster.level(sgGameInitInfo.nDifficulty) > 1) {
-				monster.hitPoints += monster.level(sgGameInitInfo.nDifficulty) / 2;
-			} else {
-				monster.hitPoints += monster.level(sgGameInitInfo.nDifficulty);
-			}
+		if ((monster.flags & MFLAG_NOHEAL) == 0 && monster.hitPoints < monster.maxHitPoints && monster.hitPoints >> 6 > 0) {
+			monster.hitPoints += monster.level(sgGameInitInfo.nDifficulty) << sgGameInitInfo.nDifficulty;
 			monster.hitPoints = std::min(monster.hitPoints, monster.maxHitPoints); // prevent going over max HP with part of a single regen tick
 		}
 
@@ -4321,43 +4234,18 @@ void PrintMonstHistory(int mt)
 		AddInfoBoxString(fmt::format(fmt::runtime(_("Total kills: {:d}")), MonsterKillCounts[mt]));
 	}
 
-	if (MonsterKillCounts[mt] >= 30) {
-		int minHP = MonstersData[mt].hitPointsMinimum;
-		int maxHP = MonstersData[mt].hitPointsMaximum;
-		if (!gbIsHellfire && mt == MT_DIABLO) {
-			minHP /= 2;
-			maxHP /= 2;
-		}
-		if (!gbIsMultiplayer) {
-			minHP /= 2;
-			maxHP /= 2;
-		}
-		if (minHP < 1)
-			minHP = 1;
-		if (maxHP < 1)
-			maxHP = 1;
+	int minHP = Monsters[mt].hitPoints >> 6;
+	int maxHP = Monsters[mt].maxHitPoints >> 6;
 
-		int hpBonusNightmare = 100;
-		int hpBonusHell = 200;
-		if (gbIsHellfire) {
-			hpBonusNightmare = (!gbIsMultiplayer ? 50 : 100);
-			hpBonusHell = (!gbIsMultiplayer ? 100 : 200);
-		}
-		if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
-			minHP = 3 * minHP + hpBonusNightmare;
-			maxHP = 3 * maxHP + hpBonusNightmare;
-		} else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
-			minHP = 4 * minHP + hpBonusHell;
-			maxHP = 4 * maxHP + hpBonusHell;
-		}
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Hit Points: {:d}-{:d}")), minHP, maxHP));
-	}
+	AddInfoBoxString(fmt::format(fmt::runtime(_("Hit Points: {:d} of {:d}")), minHP, maxHP));
+
+	int res = (sgGameInitInfo.nDifficulty != DIFF_HELL) ? MonstersData[mt].resistance : MonstersData[mt].resistanceHell;
+
 	if (MonsterKillCounts[mt] >= 15) {
-		int res = (sgGameInitInfo.nDifficulty != DIFF_HELL) ? MonstersData[mt].resistance : MonstersData[mt].resistanceHell;
-		if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING)) == 0) {
+		if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING | IMMUNE_SC)) == 0) {
 			AddInfoBoxString(_("No magic resistance"));
 		} else {
-			if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING)) != 0) {
+			if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_SC)) != 0) {
 				std::string resists = std::string(_("Resists:"));
 				if ((res & RESIST_MAGIC) != 0)
 					resists.append(_(" Magic"));
@@ -4375,6 +4263,27 @@ void PrintMonstHistory(int mt)
 					immune.append(_(" Fire"));
 				if ((res & IMMUNE_LIGHTNING) != 0)
 					immune.append(_(" Lightning"));
+				if ((res & IMMUNE_SC) != 0)
+					immune.append(_(" Stone Curse"));
+				AddInfoBoxString(immune);
+			}
+		}
+	} else {
+		if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING | IMMUNE_SC)) == 0) {
+			AddInfoBoxString(_("No magic resistance"));
+		} else {
+			if ((res & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_SC)) != 0) {
+				std::string resists = std::string(_("Some Resistances"));
+				AddInfoBoxString(resists);
+			} else {
+				std::string resists = std::string(_("No Resistances"));
+				AddInfoBoxString(resists);
+			}
+			if ((res & (IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING)) != 0) {
+				std::string immune = std::string(_("Some Immunities"));
+				AddInfoBoxString(immune);
+			} else {
+				std::string immune = std::string(_("No Immunities"));
 				AddInfoBoxString(immune);
 			}
 		}

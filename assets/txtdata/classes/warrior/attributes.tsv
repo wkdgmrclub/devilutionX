@@ -1,12 +1,12 @@
 Attribute	Value
 baseStr	30
-baseMag	10
+baseMag	0
 baseDex	20
-baseVit	25
-maxStr	250
-maxMag	50
+baseVit	30
+maxStr	255
+maxMag	30
 maxDex	60
-maxVit	100
+maxVit	120
 blockBonus	30
 adjLife	18
 adjMana	-1

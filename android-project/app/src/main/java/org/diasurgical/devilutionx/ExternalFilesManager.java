@@ -1,4 +1,4 @@
-package org.diasurgical.devilutionx;
+package org.diasurgical.devilutionx.mod.middleearth;
 
 import android.content.Context;
 import android.os.Build;

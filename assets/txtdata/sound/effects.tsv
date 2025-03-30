@@ -64,6 +64,7 @@ MenuMove	Ui	sfx\items\titlemov.wav
 MenuSelect	Ui	sfx\items\titlslct.wav
 TriggerTrap	Misc	sfx\items\trap.wav
 CastFire	Misc	sfx\misc\cast2.wav
+CastEscape	Misc	sfx\misc\cast3.wav
 CastLightning	Misc	sfx\misc\cast4.wav
 CastSkill	Misc	sfx\misc\cast6.wav
 SpellEnd	Misc	sfx\misc\cast7.wav

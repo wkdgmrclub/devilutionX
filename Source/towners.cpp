@@ -265,7 +265,7 @@ void TownDead(Towner &towner)
 
 	if ((Quests[Q_BUTCHER]._qactive == QUEST_DONE || Quests[Q_BUTCHER]._qvar1 == 1) && towner._tAnimLen != 1) {
 		towner._tAnimLen = 1;
-		towner.name = _("Slain Townsman");
+		towner.name = _("Slain Knight");
 	}
 }
 
@@ -756,9 +756,9 @@ const TownerData TownersData[] = {
 	{ TOWN_TAVERN,  { 55, 62 }, Direction::SouthWest, InitBarOwner,  TalkToBarOwner    },
 	{ TOWN_STORY,   { 62, 71 }, Direction::South,     InitTeller,    TalkToStoryteller },
 	{ TOWN_DRUNK,   { 71, 84 }, Direction::South,     InitDrunk,     TalkToDrunk       },
-	{ TOWN_WITCH,   { 80, 20 }, Direction::South,     InitWitch,     TalkToWitch       },
-	{ TOWN_BMAID,   { 43, 66 }, Direction::South,     InitBarmaid,   TalkToBarmaid     },
-	{ TOWN_PEGBOY,  { 11, 53 }, Direction::South,     InitBoy,       TalkToBoy         },
+	{ TOWN_WITCH,   { 43, 66 }, Direction::South,     InitWitch,     TalkToWitch       },
+	{ TOWN_BMAID,   { 54, 64 }, Direction::South,     InitBarmaid,   TalkToBarmaid     },
+	{ TOWN_PEGBOY,  { 48, 63 }, Direction::South,     InitBoy,       TalkToBoy         },
 	{ TOWN_COW,     { 58, 16 }, Direction::SouthWest, InitCows,      TalkToCow         },
 	{ TOWN_COW,     { 56, 14 }, Direction::NorthWest, InitCows,      TalkToCow         },
 	{ TOWN_COW,     { 59, 20 }, Direction::North,     InitCows,      TalkToCow         },
@@ -773,15 +773,15 @@ const TownerData TownersData[] = {
 Towner Towners[NUM_TOWNERS];
 
 const char *const TownerLongNames[NUM_TOWNER_TYPES] {
-	N_("Griswold the Blacksmith"),
-	N_("Pepin the Healer"),
-	N_("Wounded Townsman"),
-	N_("Ogden the Tavern owner"),
-	N_("Cain the Elder"),
-	N_("Farnham the Drunk"),
-	N_("Adria the Witch"),
-	N_("Gillian the Barmaid"),
-	N_("Wirt the Peg-legged boy"),
+	N_("Celebrimor of Eregion"),
+	N_("Herb-Master"),
+	N_("Wounded Knight"),
+	N_("Barliman Butterbur"),
+	N_("Gandalf the Grey"),
+	N_("Grima son of Galmod"),
+	N_("Galadriel"),
+	N_("Rosie Cotton"),
+	N_("Gollum the Wicked"),
 	N_("Cow"),
 	N_("Lester the farmer"),
 	N_("Celia"),

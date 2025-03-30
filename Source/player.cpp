@@ -178,7 +178,7 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 	// This will result in a different and slower attack speed.
 	if (HasAnyOf(flags, ItemSpecialEffect::FastestAttack)) {
 		// If the fastest attack logic is trigger frames in vanilla two frames are skipped, so missing the first frame reduces the skip logic by two frames.
-		skippedAnimationFrames = includesFirstFrame ? 4 : 2;
+		skippedAnimationFrames = includesFirstFrame ? 4 : 3;
 	} else if (HasAnyOf(flags, ItemSpecialEffect::FasterAttack)) {
 		skippedAnimationFrames = includesFirstFrame ? 3 : 2;
 	} else if (HasAnyOf(flags, ItemSpecialEffect::FastAttack)) {
@@ -207,11 +207,14 @@ void StartRangeAttack(Player &player, Direction d, WorldTileCoord cx, WorldTileC
 	const auto flags = player._pIFlags;
 
 	if (!gbIsHellfire) {
-		if (includesFirstFrame && HasAnyOf(flags, ItemSpecialEffect::QuickAttack | ItemSpecialEffect::FastAttack)) {
-			skippedAnimationFrames += 1;
-		}
-		if (HasAnyOf(flags, ItemSpecialEffect::FastAttack)) {
-			skippedAnimationFrames += 1;
+		if (HasAnyOf(flags, ItemSpecialEffect::FastestAttack)) {
+			skippedAnimationFrames = includesFirstFrame ? 4 : 3;
+		} else if (HasAnyOf(flags, ItemSpecialEffect::FasterAttack)) {
+			skippedAnimationFrames = includesFirstFrame ? 3 : 2;
+		} else if (HasAnyOf(flags, ItemSpecialEffect::FastAttack)) {
+			skippedAnimationFrames = includesFirstFrame ? 2 : 1;
+		} else if (HasAnyOf(flags, ItemSpecialEffect::QuickAttack)) {
+			skippedAnimationFrames = includesFirstFrame ? 1 : 0;
 		}
 	}
 
@@ -360,11 +363,14 @@ void InitLevelChange(Player &player)
 
 	RemovePlrMissiles(player);
 	player.pManaShield = false;
+	player.pEtherealize = false;
 	player.wReflections = 0;
 	if (&player != MyPlayer) {
 		// share info about your manashield when another player joins the level
 		if (myPlayer.pManaShield)
 			NetSendCmd(true, CMD_SETSHIELD);
+		if (myPlayer.pEtherealize)
+			NetSendCmd(true, CMD_SETETHEREALIZE);
 		// share info about your reflect charges when another player joins the level
 		NetSendCmdParam1(true, CMD_SETREFLECT, myPlayer.wReflections);
 	} else if (qtextflag) {
@@ -554,6 +560,10 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 		int midam = RandomIntBetween(player._pIFMinDam, player._pIFMaxDam);
 		AddMissile(player.position.tile, player.position.temp, player._pdir, MissileID::SpectralArrow, TARGET_MONSTERS, player, midam, 0);
 	}
+
+	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::NoHealOnMonsters))
+		monster.flags |= MFLAG_NOHEAL;
+
 	int mind = player._pIMinDam;
 	int maxd = player._pIMaxDam;
 	int dam = RandomIntBetween(mind, maxd);
@@ -2295,6 +2305,7 @@ void CreatePlayer(Player &player, HeroClass c)
 	player.pTownWarps = 0;
 	player.pLvlLoad = 0;
 	player.pManaShield = false;
+	player.pEtherealize = false;
 	player.pDamAcFlags = ItemSpecialEffectHf::None;
 	player.wReflections = 0;
 
@@ -2369,13 +2380,6 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 	// Adjust xp based on difference between the players current level and the target level (usually a monster level)
 	uint32_t clampedExp = static_cast<uint32_t>(std::clamp<int64_t>(static_cast<int64_t>(experience * (1 + levelDelta / 10.0)), 0, std::numeric_limits<uint32_t>::max()));
 
-	// Prevent power leveling
-	if (gbIsMultiplayer) {
-		// for low level characters experience gain is capped to 1/20 of current levels xp
-		// for high level characters experience gain is capped to 200 * current level - this is a smaller value than 1/20 of the exp needed for the next level after level 5.
-		clampedExp = std::min<uint32_t>({ clampedExp, /* level 1-5: */ getNextExperienceThreshold() / 20U, /* level 6-50: */ 200U * getCharacterLevel() });
-	}
-
 	const uint32_t maxExperience = GetNextExperienceThresholdForLevel(getMaxCharacterLevel());
 
 	// ensure we only add enough experience to reach the max experience cap so we don't overflow
@@ -2421,6 +2425,7 @@ void InitPlayer(Player &player, bool firstTime)
 		player.queuedSpell.spellId = player._pRSpell;
 		player.queuedSpell.spellType = player._pRSplType;
 		player.pManaShield = false;
+		player.pEtherealize = false;
 		player.wReflections = 0;
 	}
 
@@ -2752,6 +2757,9 @@ void StripTopGold(Player &player)
 
 void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP /*= 0*/, int frac /*= 0*/, DeathReason deathReason /*= DeathReason::MonsterOrTrap*/)
 {
+	if (player.pEtherealize)
+		return;
+
 	int totalDamage = (dam << 6) + frac;
 	if (&player == MyPlayer && player._pHitPoints > 0) {
 		AddFloatingNumber(damageType, player, totalDamage);

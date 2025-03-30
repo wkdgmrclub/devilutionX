@@ -39,6 +39,7 @@ tl::expected<SfxID, std::string> ParseSpellSoundId(std::string_view value)
 	if (value == "CastHealing") return SfxID::CastHealing;
 	if (value == "CastLightning") return SfxID::CastLightning;
 	if (value == "CastSkill") return SfxID::CastSkill;
+	if (value == "CastEscape") return SfxID::CastEscape;
 	return tl::make_unexpected("Unknown enum value (only a few are supported for now)");
 }
 

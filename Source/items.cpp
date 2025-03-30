@@ -68,29 +68,34 @@ int MaxGold = GOLD_MAX_LIMIT;
 
 /** Maps from item_cursor_graphic to in-memory item type. */
 int8_t ItemCAnimTbl[] = {
-	20, 16, 16, 16, 4, 4, 4, 12, 12, 12,
+	// clang-format off
+	20, 16, 16, 16,  4,  4,  4, 12, 12, 12,
 	12, 12, 12, 12, 12, 21, 21, 25, 12, 28,
-	28, 28, 38, 38, 38, 32, 38, 38, 38, 24,
-	24, 26, 2, 25, 22, 23, 24, 21, 27, 27,
-	29, 0, 0, 0, 12, 12, 12, 12, 12, 0,
-	8, 8, 0, 8, 8, 8, 8, 8, 8, 6,
-	8, 8, 8, 6, 8, 8, 6, 8, 8, 6,
-	6, 6, 8, 8, 8, 5, 9, 13, 13, 13,
-	5, 5, 5, 15, 5, 5, 18, 18, 18, 30,
-	5, 5, 14, 5, 14, 13, 16, 18, 5, 5,
-	7, 1, 3, 17, 1, 15, 10, 14, 3, 11,
-	8, 0, 1, 7, 0, 7, 15, 7, 3, 3,
-	3, 6, 6, 11, 11, 11, 31, 14, 14, 14,
-	6, 6, 7, 3, 8, 14, 0, 14, 14, 0,
-	33, 1, 1, 1, 1, 1, 7, 7, 7, 14,
-	14, 17, 17, 17, 0, 34, 1, 0, 3, 17,
-	8, 8, 6, 1, 3, 3, 11, 3, 12, 12,
-	12, 12, 12, 12, 12, 12, 12, 12, 12, 12,
-	12, 12, 12, 12, 12, 12, 12, 35, 39, 36,
-	36, 36, 37, 38, 38, 38, 38, 38, 41, 42,
-	8, 8, 8, 17, 0, 6, 8, 11, 11, 3,
-	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
-	6, 8, 1, 6, 6, 17, 40, 0, 0
+	28, 28,  0,  0,  0, 32, 32,  0,  0, 24,
+	24, 26,  2, 25, 22, 23, 24, 25, 27, 27,
+	29, 12,  0,  0, 12, 12, 12, 12, 12,  0,
+	 8,  8,  0,  8,  8,  8,  8,  8,  8,  6,
+	 8,  8,  8,  6,  8,  8,  6,  8,  8,  6,
+	 6,  6,  8,  8,  8,  5,  9, 13, 13, 13,
+	 5,  5,  5, 15,  5,  5, 18, 18, 18, 30,
+	 5,  5, 14,  5, 14, 13, 16, 18,  5,  5,
+	 7,  1,  3, 17,  1, 15, 10, 14,  3, 11,
+	 8,  0,  1,  7,  0,  7, 15,  7,  3,  3,
+	 3,  6,  6, 11, 11, 11, 31, 14, 14, 14,
+	 6,  6,  7,  3,  8, 14,  0, 14, 14,  0,
+	33,  1,  1,  1,  1,  1,  7,  7,  7, 14,
+	14, 17, 17, 17,  0, 34,  1,  0,  3, 17,
+	 8,  8,  6,  1,  3,  3, 11,  3,  4,  0,
+	 0,  0,  0,  0,  0,  0, 12, 12, 12, 12,
+	12, 12, 12, 12, 12, 12, 12, 32, 32, 16,
+	16, 16, 16, 32, 32, 32, 32, 32, 14, 14,
+	 8,  8,  8, 14,  0,  6,  8, 11, 11,  3,
+	 3,  1,  6,  6,  6,  1,  8,  6, 11,  3,
+	 6,  8,  1,  6,  6,  0, 17, 32, 32, 12,
+	32, 32, 32, 13,  5,  5,  5,  5, 18, 30,
+	 5,  7,  3, 17,  8,  0,  0,  7,  3,  3,
+	11, 11, 11,  8, 14,  1,
+	// clang-format on
 };
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
@@ -130,14 +135,6 @@ SfxID ItemInvSnds[] = {
 	SfxID::ItemBloodStone,
 	SfxID::ItemAnvil,
 	SfxID::ItemStaff,
-	SfxID::ItemRock,
-	SfxID::ItemScroll,
-	SfxID::ItemScroll,
-	SfxID::ItemRock,
-	SfxID::ItemMushroom,
-	SfxID::ItemArmor,
-	SfxID::ItemLeather,
-	SfxID::ItemLeather,
 };
 
 namespace {
@@ -272,14 +269,6 @@ int8_t ItemAnimLs[] = {
 	13,
 	13,
 	8,
-	10,
-	16,
-	16,
-	10,
-	10,
-	15,
-	15,
-	15,
 };
 /** Maps of drop sounds effect of dropping the item on ground. */
 SfxID ItemDropSnds[] = {
@@ -318,14 +307,6 @@ SfxID ItemDropSnds[] = {
 	SfxID::ItemBloodStoneFlip,
 	SfxID::ItemAnvilFlip,
 	SfxID::ItemStaffFlip,
-	SfxID::ItemRockFlip,
-	SfxID::ItemScrollFlip,
-	SfxID::ItemScrollFlip,
-	SfxID::ItemRockFlip,
-	SfxID::ItemMushroomFlip,
-	SfxID::ItemArmorFlip,
-	SfxID::ItemLeatherFlip,
-	SfxID::ItemLeatherFlip,
 };
 /** Maps from Griswold premium item number to a quality level delta as added to the base quality level. */
 int itemLevelAdd[] = {
@@ -363,33 +344,12 @@ bool IsPrefixValidForItemType(int i, AffixItemType flgs, bool hellfireItem)
 {
 	AffixItemType itemTypes = ItemPrefixes[i].PLIType;
 
-	if (!hellfireItem) {
-		if (i > 82)
-			return false;
-
-		if (i >= 12 && i <= 20)
-			itemTypes &= ~AffixItemType::Staff;
-	}
-
 	return HasAnyOf(flgs, itemTypes);
 }
 
 bool IsSuffixValidForItemType(int i, AffixItemType flgs, bool hellfireItem)
 {
 	AffixItemType itemTypes = ItemSuffixes[i].PLIType;
-
-	if (!hellfireItem) {
-		if (i > 94)
-			return false;
-
-		if ((i >= 0 && i <= 1)
-		    || (i >= 14 && i <= 15)
-		    || (i >= 21 && i <= 22)
-		    || (i >= 34 && i <= 36)
-		    || (i >= 41 && i <= 44)
-		    || (i >= 60 && i <= 63))
-			itemTypes &= ~AffixItemType::Staff;
-	}
 
 	return HasAnyOf(flgs, itemTypes);
 }
@@ -681,20 +641,20 @@ int CalculateToHitBonus(int level)
 		return RndPL(1, 5);
 	case 36:
 		return RndPL(6, 10);
-	case 51:
-		return RndPL(11, 15);
-	case 66:
-		return RndPL(16, 20);
-	case 81:
-		return RndPL(21, 30);
-	case 96:
-		return RndPL(31, 40);
-	case 111:
-		return RndPL(41, 50);
-	case 126:
-		return RndPL(51, 75);
-	case 151:
-		return RndPL(76, 100);
+	case 50:
+		return RndPL(10, 19);
+	case 65:
+		return RndPL(20, 29);
+	case 80:
+		return RndPL(30, 39);
+	case 95:
+		return RndPL(40, 59);
+	case 110:
+		return RndPL(60, 79);
+	case 125:
+		return RndPL(80, 99);
+	case 171:
+		return RndPL(100, 110);
 	default:
 		app_fatal("Unknown to hit bonus");
 	}
@@ -702,13 +662,6 @@ int CalculateToHitBonus(int level)
 
 int SaveItemPower(const Player &player, Item &item, ItemPower &power)
 {
-	if (!gbIsHellfire) {
-		if (power.type == IPL_TARGAC) {
-			power.param1 = 1 << power.param1;
-			power.param2 = 3 << power.param2;
-		}
-	}
-
 	int r = RndPL(power.param1, power.param2);
 
 	switch (power.type) {
@@ -1368,7 +1321,14 @@ struct WeightedItemIndex {
 	unsigned cumulativeWeight;
 };
 
-_item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_ref<bool(const ItemData &item)> isItemOkay)
+struct WeightedItemIndex {
+	_item_indexes index;
+	unsigned cumulativeWeight;
+};
+
+_item_indexes GetItemIndexForDroppableItem(
+    bool considerDropRate,
+    tl::function_ref<bool(const ItemData &item)> isItemOkay)
 {
 	static std::vector<WeightedItemIndex> ril;
 	ril.clear();
@@ -1378,17 +1338,33 @@ _item_indexes GetItemIndexForDroppableItem(bool considerDropRate, tl::function_r
 		if (!IsItemAvailable(i))
 			continue;
 		const ItemData &item = AllItemsList[i];
+		// Skip items that are not droppable at all.
 		if (item.dropRate == 0)
 			continue;
+		// Skip disallowed spells in single player.
 		if (IsAnyOf(item.iSpell, SpellID::Resurrect, SpellID::HealOther) && !gbIsMultiplayer)
 			continue;
 		if (!isItemOkay(item))
 			continue;
-		cumulativeWeight += considerDropRate ? item.dropRate : 1;
+
+		unsigned weight = 1;
+		if (considerDropRate) {
+			if (item.uMonstDropRate > 0)
+				weight = item.uMonstDropRate;
+			else if (item.monstDropRate > 0)
+				weight = item.monstDropRate;
+			else
+				weight = item.dropRate;
+		}
+		cumulativeWeight += weight;
 		ril.push_back({ static_cast<_item_indexes>(i), cumulativeWeight });
 	}
 	unsigned targetWeight = static_cast<unsigned>(RandomIntLessThan(static_cast<int>(cumulativeWeight)));
-	return std::upper_bound(ril.begin(), ril.end(), targetWeight, [](unsigned target, const WeightedItemIndex &value) { return target < value.cumulativeWeight; })->index;
+	return std::upper_bound(ril.begin(), ril.end(), targetWeight,
+	    [](unsigned target, const WeightedItemIndex &value) {
+		    return target < value.cumulativeWeight;
+	    })
+	    ->index;
 }
 
 _item_indexes RndUItem(Monster *monster)
@@ -1396,7 +1372,10 @@ _item_indexes RndUItem(Monster *monster)
 	int itemMaxLevel = ItemsGetCurrlevel() * 2;
 	if (monster != nullptr)
 		itemMaxLevel = monster->level(sgGameInitInfo.nDifficulty);
-	return GetItemIndexForDroppableItem(false, [&itemMaxLevel](const ItemData &item) {
+
+	// Now call the helper with drop–rate weighting turned on.
+	return GetItemIndexForDroppableItem(true, [&itemMaxLevel](const ItemData &item) {
+		// Allow books (even though they’re Misc) if needed.
 		if (item.itype == ItemType::Misc && item.iMiscId == IMISC_BOOK)
 			return true;
 		if (itemMaxLevel < item.iMinMLvl)
@@ -1424,8 +1403,6 @@ _item_indexes RndTypeItems(ItemType itemType, int imid, int lvl)
 {
 	int itemMaxLevel = lvl * 2;
 	return GetItemIndexForDroppableItem(false, [&itemMaxLevel, &itemType, &imid](const ItemData &item) {
-		if (itemMaxLevel < item.iMinMLvl)
-			return false;
 		if (item.itype != itemType)
 			return false;
 		if (imid != -1 && item.iMiscId != imid)
@@ -1863,7 +1840,7 @@ void PrintItemInfo(const Item &item)
 	uint8_t dex = item._iMinDex;
 	uint8_t mag = item._iMinMag;
 	if (str != 0 || mag != 0 || dex != 0) {
-		std::string text = std::string(_("Required:"));
+		std::string text = std::string(_("Req:"));
 		if (str != 0)
 			text.append(fmt::format(fmt::runtime(_(" {:d} Str")), str));
 		if (mag != 0)
@@ -2378,32 +2355,7 @@ std::string GetTranslatedItemNameMagical(const Item &item, bool hellfireItem, bo
 
 bool IsItemAvailable(int i)
 {
-	if (i < 0 || i > IDI_LAST)
-		return false;
-
-	if (gbIsSpawn) {
-		if (i >= 62 && i <= 70)
-			return false; // Medium and heavy armors
-		if (IsAnyOf(i, 105, 107, 108, 110, 111, 113))
-			return false; // Unavailable scrolls
-	}
-
-	if (gbIsHellfire)
-		return true;
-
-	return (
-	           i != IDI_MAPOFDOOM                   // Cathedral Map
-	           && i != IDI_LGTFORGE                 // Bovine Plate
-	           && (i < IDI_OIL || i > IDI_GREYSUIT) // Hellfire exclusive items
-	           && (i < 83 || i > 86)                // Oils
-	           && i != 92                           // Scroll of Search
-	           && (i < 161 || i > 165)              // Runes
-	           && i != IDI_SORCERER                 // Short Staff of Mana
-	           )
-	    || (
-	        // Bard items are technically Hellfire-exclusive
-	        // but are just normal items with adjusted stats.
-	        *GetOptions().Gameplay.testBard && IsAnyOf(i, IDI_BARDSWORD, IDI_BARDDAGGER));
+	return true; // i >= 0 && i <= IDI_LAST;
 }
 
 uint8_t GetOutlineColor(const Item &item, bool checkReq)
@@ -2422,7 +2374,7 @@ uint8_t GetOutlineColor(const Item &item, bool checkReq)
 
 bool IsUniqueAvailable(int i)
 {
-	return gbIsHellfire || i <= 89;
+	return true;
 }
 
 void ClearUniqueItemFlags()
@@ -2434,7 +2386,7 @@ void InitItemGFX()
 {
 	char arglist[64];
 
-	int itemTypes = gbIsHellfire ? ITEMTYPES : 35;
+	int itemTypes = 35;
 	for (int i = 0; i < itemTypes; i++) {
 		*BufCopy(arglist, "items\\", ItemDropNames[i]) = '\0';
 		itemanims[i] = LoadCel(arglist, ItemAnimWidth);
@@ -3457,8 +3409,6 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	int uper = monster.isUnique() ? 15 : 1;
 
 	int8_t mLevel = monster.data().level;
-	if (!gbIsHellfire && monster.type().type == MT_DIABLO)
-		mLevel -= 15;
 
 	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
 	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
@@ -3991,7 +3941,7 @@ bool DoOil(Player &player, int cii)
 		else
 			return fmt::format(fmt::runtime(_("fireball damage: {:d}-{:d}")), item._iFMinDam, item._iFMaxDam);
 	case IPL_THORNS:
-		return _("attacker takes 1-3 damage");
+		return _("attacker takes 1-10 damage");
 	case IPL_NOMANA:
 		return _("user loses all mana");
 	case IPL_ABSHALFTRAP:
@@ -4002,6 +3952,8 @@ bool DoOil(Player &player, int cii)
 		return _(/*xgettext:no-c-format*/ "+200% damage vs. demons");
 	case IPL_ALLRESZERO:
 		return _("All Resistance equals 0");
+	case IPL_NOHEALMON:
+		return _("Hit monster doesn't heal");
 	case IPL_STEALMANA:
 		if (HasAnyOf(item._iFlags, ItemSpecialEffect::StealMana3))
 			return _(/*xgettext:no-c-format*/ "hit steals 3% mana");
