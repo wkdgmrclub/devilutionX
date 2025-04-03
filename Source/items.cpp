@@ -4525,6 +4525,9 @@ void SpawnWitch(int lvl)
 					SetRndSeed(item._iSeed);
 					DiscardRandomValues(1);
 					GetItemAttrs(item, bookType, lvl);
+					if (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search) {
+						continue;
+					}
 					item._iCreateInfo = lvl | CF_WITCH;
 					item._iIdentified = true;
 					bookCount++;
