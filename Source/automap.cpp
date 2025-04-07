@@ -1842,7 +1842,7 @@ void DrawAutomap(const Surface &out)
 		}
 	}
 
-	if (AutoMapShowItems)
+	if (AutoMapShowItems || *GetOptions().Gameplay.disableSearch)
 		SearchAutomapItem(out, myPlayerOffset, 8, [](Point position) { return dItem[position.x][position.y] != 0; });
 #ifdef _DEBUG
 	if (IsDebugAutomapHighlightNeeded())
