@@ -17,6 +17,7 @@
 #include "engine/render/primitive_render.hpp"
 #include "levels/gendung.h"
 #include "levels/setmaps.h"
+#include "options.h"
 #include "player.h"
 #include "utils/attributes.h"
 #include "utils/enum_traits.h"
