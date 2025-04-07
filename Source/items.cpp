@@ -1522,12 +1522,11 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 	GetSuperItemSpace(position, ii);
 	int curlv = ItemsGetCurrlevel();
 
-	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
+	SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta, false);
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
 
 	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
-		uint8_t reroll = 0;
 		Point originalPos = item.position;
 		do {
 			if (item._iMiscId == IMISC_SCROLL) {
@@ -1537,12 +1536,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 				item = {};
 				idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
 			}
-			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta);
-			reroll++;
-			if (reroll >= 255) {
-				DeleteItem(ii);
-				return;
-			}
+			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta, false);
 		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
 		item.position = originalPos;
 		SetupItem(item);
@@ -3488,7 +3482,6 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 	SetupItem(item);
 
 	if ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch) {
-		uint8_t reroll = 0;
 		Point originalPos = item.position;
 		do {
 			item = {};
@@ -3497,13 +3490,10 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 			} else {
 				idx = RndItemForMonsterLevel(static_cast<int8_t>(monster.level(sgGameInitInfo.nDifficulty)));
 			}
+			if (idx == IDI_NONE)
+				continue;
 			SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-			reroll++;
-			if (reroll >= 255) {
-				DeleteItem(ii);
-				return;
-			}
-		} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+		} while (((item._iSpell == SpellID::Search) || (idx == IDI_NONE)) && *GetOptions().Gameplay.disableSearch);
 		item.position = originalPos;
 		TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 		SetupItem(item);
