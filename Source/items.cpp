@@ -4521,13 +4521,12 @@ void SpawnWitch(int lvl)
 			if (i < PinnedItemCount + MaxPinnedBookCount && bookCount < pinnedBookCount) {
 				_item_indexes bookType = PinnedBookTypes[i - PinnedItemCount];
 				if (lvl >= AllItemsList[bookType].iMinMLvl) {
-					item._iSeed = AdvanceRndSeed();
-					SetRndSeed(item._iSeed);
-					DiscardRandomValues(1);
-					GetItemAttrs(item, bookType, lvl);
-					if (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search) {
-						continue;
-					}
+					do {
+						item._iSeed = AdvanceRndSeed();
+						SetRndSeed(item._iSeed);
+						DiscardRandomValues(1);
+						GetItemAttrs(item, bookType, lvl);
+					} while (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search);
 					item._iCreateInfo = lvl | CF_WITCH;
 					item._iIdentified = true;
 					bookCount++;
