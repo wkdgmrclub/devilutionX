@@ -3481,7 +3481,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 		item = {};
 		item.position = originalPos;
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-	} while (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search);
+	} while (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search);
 	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 	SetupItem(item);
 
