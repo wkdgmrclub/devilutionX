@@ -1432,6 +1432,8 @@ _item_indexes RndTypeItems(ItemType itemType, int imid, int lvl)
 			return false;
 		if (imid != -1 && item.iMiscId != imid)
 			return false;
+		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+			return false;
 		return true;
 	});
 }
@@ -1526,13 +1528,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 
 	do {
 		auto originalPos = item.position;
-		if (item._iMiscId == IMISC_SCROLL) {
-			item = {};
-			idx = RndTypeItems(ItemType::Misc, IMISC_SCROLL, curlv);
-		} else if (item._iMiscId == IMISC_BOOK) {
-			item = {};
-			idx = RndTypeItems(ItemType::Misc, IMISC_BOOK, curlv);
-		}
+		item = {};
 		item.position = originalPos;
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta, false);
 	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
@@ -3264,9 +3260,8 @@ _item_indexes RndItemForMonsterLevel(int8_t monsterLevel)
 		return IDI_GOLD;
 
 	return GetItemIndexForDroppableItem(true, [&monsterLevel](const ItemData &item) {
-		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
-			return false;
-		return item.iMinMLvl <= monsterLevel;
+		return (!(*GetOptions().Gameplay.disableSearch) || item.iSpell != SpellID::Search)
+		    && (item.iMinMLvl <= monsterLevel);
 	});
 }
 
