@@ -3193,6 +3193,8 @@ int FindValidShrine()
 			continue;
 		if (!gbIsMultiplayer && shrineavail[rv] == ShrineTypeMulti)
 			continue;
+		if (rv == IsAnyOf(ShrineFascinating, ShrineOrnate, ShrineSacred, ShrineMurphys, ShrineTainted) && *GetOptions().Gameplay.removeCripplingEffects)
+			continue;
 		return rv;
 	}
 }
@@ -3623,13 +3625,16 @@ bool Object::IsDisabled() const
 	if (!*GetOptions().Gameplay.disableCripplingShrines) {
 		return false;
 	}
+	// if gameplay option for Shrines
 	if (IsAnyOf(_otype, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON)) {
 		return true;
 	}
 	if (!IsShrine()) {
 		return false;
 	}
-	return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
+	if (!*GetOptions().Gameplay.removeCripplingEffects) {
+		return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
+	}
 }
 
 Object *FindObjectAtPosition(Point position, bool considerLargeObjects)
