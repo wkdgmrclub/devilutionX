@@ -29,18 +29,7 @@ constexpr uint32_t GameIdHellfireSpawn = LoadBE32("HSHR");
 constexpr uint32_t GameIdDiabloEnhanced = LoadBE32("D1EN");
 constexpr uint32_t GameIdHellfireEnhanced = LoadBE32("HFEN");
 
-inline uint32_t GetGameId()
-{
-	const auto &options = GetOptions();
-	if (gbIsHellfire) {
-		if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
-			return GameIdHellfireEnhanced;
-		return gbIsSpawn ? GameIdHellfireSpawn : GameIdHellfireFull;
-	}
-	if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
-		return GameIdDiabloEnhanced;
-	return gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull;
-}
+uint32_t GetGameId();
 
 #define NUMLEVELS 25
 
