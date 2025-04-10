@@ -3491,11 +3491,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 
 void CreateRndItem(Point position, bool onlygood, bool sendmsg, bool delta)
 {
-	_item_indexes idx;
-
-	do {
-		idx = onlygood ? RndUItem(nullptr) : RndAllItems();
-	} while (sgGameInitInfo.bDisableSearch == 1 && AllItemsList[idx].iSpell == SpellID::Search);
+	_item_indexes idx = onlygood ? RndUItem(nullptr) : RndAllItems();
 
 	SetupBaseItem(position, idx, onlygood, sendmsg, delta);
 }
