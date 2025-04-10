@@ -1152,7 +1152,9 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 		}
 		return;
 	}
-	if (monster.type().type == MT_YZOMBIE && &player == MyPlayer && !*GetOptions().Gameplay.removeCripplingEffects) {
+	if (monster.type().type == MT_YZOMBIE
+	    && &player == MyPlayer
+	    && !(gbIsMultiplayer ? sgGameInitInfo.bRemoveCripplingEffects : *GetOptions().Gameplay.removeCripplingEffects)) {
 		if (player._pMaxHP > 64) {
 			if (player._pMaxHPBase > 64) {
 				player._pMaxHP -= 64;
@@ -4792,7 +4794,7 @@ bool Monster::isPossibleToHit() const
 void Monster::tag(const Player &tagger)
 {
 	whoHit |= 1 << tagger.getId();
-	if (*GetOptions().Gameplay.sharedXP) {
+	if (sgGameInitInfo.bSharedExperience) {
 		for (const auto &player : Players) {
 			if (player.plractive && player.plrlevel == tagger.plrlevel) {
 				whoHit |= 1 << player.getId();

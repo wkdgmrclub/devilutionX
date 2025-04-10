@@ -3187,14 +3187,20 @@ int FindValidShrine()
 {
 	for (;;) {
 		int rv = GenerateRnd(gbIsHellfire ? NumberOfShrineTypes : 26);
+
 		if ((rv == ShrineEnchanted && !IsAnyOf(leveltype, DTYPE_CATHEDRAL, DTYPE_CATACOMBS)) || rv == ShrineThaumaturgic)
 			continue;
+
 		if (gbIsMultiplayer && shrineavail[rv] == ShrineTypeSingle)
 			continue;
+
 		if (!gbIsMultiplayer && shrineavail[rv] == ShrineTypeMulti)
 			continue;
-		if (rv == IsAnyOf(ShrineFascinating, ShrineOrnate, ShrineSacred, ShrineMurphys, ShrineTainted) && *GetOptions().Gameplay.removeCripplingEffects)
+
+		if (IsAnyOf(rv, ShrineFascinating, ShrineOrnate, ShrineSacred, ShrineMurphys, ShrineTainted)
+		    && (gbIsMultiplayer ? sgGameInitInfo.bRemoveCripplingEffects : *GetOptions().Gameplay.removeCripplingEffects))
 			continue;
+
 		return rv;
 	}
 }
@@ -3625,16 +3631,17 @@ bool Object::IsDisabled() const
 	if (!*GetOptions().Gameplay.disableCripplingShrines) {
 		return false;
 	}
-	// if gameplay option for Shrines
+
+	if (*GetOptions().Gameplay.removeCripplingEffects) {
+		return false;
+	}
 	if (IsAnyOf(_otype, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON)) {
 		return true;
 	}
 	if (!IsShrine()) {
 		return false;
 	}
-	if (!*GetOptions().Gameplay.removeCripplingEffects) {
-		return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
-	}
+	return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
 }
 
 Object *FindObjectAtPosition(Point position, bool considerLargeObjects)

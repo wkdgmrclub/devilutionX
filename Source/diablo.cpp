@@ -155,7 +155,7 @@ uint32_t GetGameId()
 			return GameIdHellfireEnhanced;
 		return gbIsSpawn ? GameIdHellfireSpawn : GameIdHellfireFull;
 	}
-	if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
+	if (*options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
 		return GameIdDiabloEnhanced;
 	return gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull;
 }
