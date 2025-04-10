@@ -1416,6 +1416,8 @@ _item_indexes RndAllItems()
 
 	int itemMaxLevel = ItemsGetCurrlevel() * 2;
 	return GetItemIndexForDroppableItem(false, [&itemMaxLevel](const ItemData &item) {
+		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+			return false;
 		if (itemMaxLevel < item.iMinMLvl)
 			return false;
 		return true;
@@ -3260,8 +3262,9 @@ _item_indexes RndItemForMonsterLevel(int8_t monsterLevel)
 		return IDI_GOLD;
 
 	return GetItemIndexForDroppableItem(true, [&monsterLevel](const ItemData &item) {
-		return (!(*GetOptions().Gameplay.disableSearch) || item.iSpell != SpellID::Search)
-		    && (item.iMinMLvl <= monsterLevel);
+		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+			return false;
+		return item.iMinMLvl <= monsterLevel;
 	});
 }
 
@@ -3488,7 +3491,11 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 
 void CreateRndItem(Point position, bool onlygood, bool sendmsg, bool delta)
 {
-	_item_indexes idx = onlygood ? RndUItem(nullptr) : RndAllItems();
+	_item_indexes idx;
+
+	do {
+		idx = onlygood ? RndUItem(nullptr) : RndAllItems();
+	} while (*GetOptions().Gameplay.disableSearch && AllItemsList[idx].iSpell == SpellID::Search);
 
 	SetupBaseItem(position, idx, onlygood, sendmsg, delta);
 }
