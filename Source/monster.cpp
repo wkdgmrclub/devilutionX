@@ -1154,7 +1154,7 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 	}
 	if (monster.type().type == MT_YZOMBIE
 	    && &player == MyPlayer
-	    && !(gbIsMultiplayer ? sgGameInitInfo.bRemoveCripplingEffects : *GetOptions().Gameplay.removeCripplingEffects)) {
+	    && !sgGameInitInfo.bRemoveCripplingEffects) {
 		if (player._pMaxHP > 64) {
 			if (player._pMaxHPBase > 64) {
 				player._pMaxHP -= 64;
