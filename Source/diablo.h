@@ -26,7 +26,21 @@ constexpr uint32_t GameIdDiabloFull = LoadBE32("DRTL");
 constexpr uint32_t GameIdDiabloSpawn = LoadBE32("DSHR");
 constexpr uint32_t GameIdHellfireFull = LoadBE32("HRTL");
 constexpr uint32_t GameIdHellfireSpawn = LoadBE32("HSHR");
-#define GAME_ID (gbIsHellfire ? (gbIsSpawn ? GameIdHellfireSpawn : GameIdHellfireFull) : (gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull))
+constexpr uint32_t GameIdDiabloEnhanced = LoadBE32("D1EN");
+constexpr uint32_t GameIdHellfireEnhanced = LoadBE32("HFEN");
+
+inline uint32_t GetGameId()
+{
+	const auto &options = GetOptions();
+	if (gbIsHellfire) {
+		if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
+			return GameIdHellfireEnhanced;
+		return gbIsSpawn ? GameIdHellfireSpawn : GameIdHellfireFull;
+	}
+	if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
+		return GameIdDiabloEnhanced;
+	return gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull;
+}
 
 #define NUMLEVELS 25
 

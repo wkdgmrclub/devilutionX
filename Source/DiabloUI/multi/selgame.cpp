@@ -73,13 +73,13 @@ bool IsGameCompatible(const GameData &data)
 	return (data.versionMajor == PROJECT_VERSION_MAJOR
 	    && data.versionMinor == PROJECT_VERSION_MINOR
 	    && data.versionPatch == PROJECT_VERSION_PATCH
-	    && data.programid == GAME_ID);
+	    && data.programid == GetGameId());
 	return false;
 }
 
 static std::string GetErrorMessageIncompatibility(const GameData &data)
 {
-	if (data.programid != GAME_ID) {
+	if (data.programid != GetGameId()) {
 		std::string_view gameMode;
 		switch (data.programid) {
 		case GameIdDiabloFull:
@@ -93,6 +93,12 @@ static std::string GetErrorMessageIncompatibility(const GameData &data)
 			break;
 		case GameIdHellfireSpawn:
 			gameMode = _("Hellfire Shareware");
+			break;
+		case GameIdDiabloEnhanced:
+			gameMode = _("Diablo Enhanced");
+			break;
+		case GameIdHellfireEnhanced:
+			gameMode = _("Hellfire Enhanced");
 			break;
 		default:
 			return std::string(_("The host is running a different game than you."));
