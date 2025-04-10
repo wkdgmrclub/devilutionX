@@ -1403,7 +1403,7 @@ _item_indexes RndUItem(Monster *monster)
 			return false;
 		if (IsAnyOf(item.itype, ItemType::Gold, ItemType::Misc))
 			return false;
-		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+		if (sgGameInitInfo.bDisableSearch == 1 && item.iSpell == SpellID::Search)
 			return false;
 		return true;
 	});
@@ -1416,7 +1416,7 @@ _item_indexes RndAllItems()
 
 	int itemMaxLevel = ItemsGetCurrlevel() * 2;
 	return GetItemIndexForDroppableItem(false, [&itemMaxLevel](const ItemData &item) {
-		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+		if (sgGameInitInfo.bDisableSearch == 1 && item.iSpell == SpellID::Search)
 			return false;
 		if (itemMaxLevel < item.iMinMLvl)
 			return false;
@@ -1434,7 +1434,7 @@ _item_indexes RndTypeItems(ItemType itemType, int imid, int lvl)
 			return false;
 		if (imid != -1 && item.iMiscId != imid)
 			return false;
-		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+		if (sgGameInitInfo.bDisableSearch == 1 && item.iSpell == SpellID::Search)
 			return false;
 		return true;
 	});
@@ -1533,7 +1533,7 @@ void SetupBaseItem(Point position, _item_indexes idx, bool onlygood, bool sendms
 		item = {};
 		item.position = originalPos;
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * curlv, 1, onlygood, delta, false);
-	} while ((item._iSpell == SpellID::Search) && *GetOptions().Gameplay.disableSearch);
+	} while (item._iSpell == SpellID::Search && sgGameInitInfo.bDisableSearch == 1);
 	TryRandomUniqueItem(item, idx, 2 * curlv, 1, onlygood, delta);
 	SetupItem(item);
 
@@ -2017,7 +2017,7 @@ void SpawnOnePremium(Item &premiumItem, int plvl, const Player &player)
 			    && premiumItem._iMinMag <= magic
 			    && premiumItem._iMinDex <= dexterity
 			    && premiumItem._iIvalue >= itemValue
-			    && (!*GetOptions().Gameplay.disableSearch || premiumItem._iSpell != SpellID::Search)) {
+			    && (sgGameInitInfo.bDisableSearch != 1 || premiumItem._iSpell != SpellID::Search)) {
 				break;
 			}
 		}
@@ -2199,7 +2199,7 @@ void CreateMagicItem(Point position, int lvl, ItemType itemType, int imid, int i
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), 2 * lvl, 1, true, delta);
 		TryRandomUniqueItem(item, idx, 2 * lvl, 1, true, delta);
 		SetupItem(item);
-		if (item._iCurs == icurs && (!*GetOptions().Gameplay.disableSearch || item._iSpell != SpellID::Search))
+		if (item._iCurs == icurs && (sgGameInitInfo.bDisableSearch != 1 || item._iSpell != SpellID::Search))
 			break;
 
 		idx = RndTypeItems(itemType, imid, lvl);
@@ -3262,7 +3262,7 @@ _item_indexes RndItemForMonsterLevel(int8_t monsterLevel)
 		return IDI_GOLD;
 
 	return GetItemIndexForDroppableItem(true, [&monsterLevel](const ItemData &item) {
-		if (*GetOptions().Gameplay.disableSearch && item.iSpell == SpellID::Search)
+		if (sgGameInitInfo.bDisableSearch == 1 && item.iSpell == SpellID::Search)
 			return false;
 		return item.iMinMLvl <= monsterLevel;
 	});
@@ -3479,7 +3479,7 @@ void SpawnItem(Monster &monster, Point position, bool sendmsg, bool spawn /*= fa
 		item = {};
 		item.position = originalPos;
 		SetupAllItems(*MyPlayer, item, idx, AdvanceRndSeed(), mLevel, uper, onlygood, false, false);
-	} while (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search);
+	} while (sgGameInitInfo.bDisableSearch == 1 && item._iSpell == SpellID::Search);
 	TryRandomUniqueItem(item, idx, mLevel, uper, onlygood, false);
 	SetupItem(item);
 
@@ -3495,7 +3495,7 @@ void CreateRndItem(Point position, bool onlygood, bool sendmsg, bool delta)
 
 	do {
 		idx = onlygood ? RndUItem(nullptr) : RndAllItems();
-	} while (*GetOptions().Gameplay.disableSearch && AllItemsList[idx].iSpell == SpellID::Search);
+	} while (sgGameInitInfo.bDisableSearch == 1 && AllItemsList[idx].iSpell == SpellID::Search);
 
 	SetupBaseItem(position, idx, onlygood, sendmsg, delta);
 }
@@ -4504,7 +4504,7 @@ void SpawnWitch(int lvl)
 						SetRndSeed(item._iSeed);
 						DiscardRandomValues(1);
 						GetItemAttrs(item, bookType, lvl);
-					} while (*GetOptions().Gameplay.disableSearch && item._iSpell == SpellID::Search);
+					} while (sgGameInitInfo.bDisableSearch == 1 && item._iSpell == SpellID::Search);
 					item._iCreateInfo = lvl | CF_WITCH;
 					item._iIdentified = true;
 					bookCount++;
@@ -4531,7 +4531,7 @@ void SpawnWitch(int lvl)
 				maxlvl = 2 * lvl;
 			if (maxlvl != -1)
 				GetItemBonus(*MyPlayer, item, maxlvl / 2, maxlvl, true, true);
-		} while (item._iIvalue > maxValue || item._iSpell == SpellID::Search && *GetOptions().Gameplay.disableSearch);
+		} while (item._iIvalue > maxValue || item._iSpell == SpellID::Search && sgGameInitInfo.bDisableSearch == 1);
 
 		item._iCreateInfo = lvl | CF_WITCH;
 		item._iIdentified = true;
@@ -4648,7 +4648,7 @@ void SpawnBoy(int lvl)
 	            || BoyItem._iMinMag > magic
 	            || BoyItem._iMinDex > dexterity
 	            || BoyItem._iIvalue < ivalue
-	            || (BoyItem._iSpell == SpellID::Search && *GetOptions().Gameplay.disableSearch))
+	            || (BoyItem._iSpell == SpellID::Search && sgGameInitInfo.bDisableSearch == 1))
 	        && count < 250));
 	BoyItem._iCreateInfo = lvl | CF_BOY;
 	BoyItem._iIdentified = true;
