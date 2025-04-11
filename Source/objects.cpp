@@ -3198,7 +3198,7 @@ int FindValidShrine()
 			continue;
 
 		if (IsAnyOf(rv, ShrineFascinating, ShrineOrnate, ShrineSacred, ShrineMurphys, ShrineTainted)
-		    && sgGameInitInfo.bRemoveCripplingEffects)
+		    && sgGameInitInfo.bRemoveCripplingEffects == 1)
 			continue;
 
 		return rv;
@@ -3632,7 +3632,7 @@ bool Object::IsDisabled() const
 		return false;
 	}
 
-	if (sgGameInitInfo.bRemoveCripplingEffects) {
+	if (sgGameInitInfo.bRemoveCripplingEffects == 1) {
 		return false;
 	}
 	if (IsAnyOf(_otype, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON)) {
