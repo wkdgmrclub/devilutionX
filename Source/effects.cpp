@@ -231,6 +231,15 @@ void PlaySfxLoc(SfxID psfx, Point position, bool randomizeByCategory)
 	PlaySfxPriv(&sgSFX[static_cast<int16_t>(psfx)], true, position);
 }
 
+void StopSFX(SfxID sfx)
+{
+	TSFX &sfxEntry = sgSFX[static_cast<int16_t>(sfx)];
+
+	if (sfxEntry.pSnd != nullptr && sfxEntry.pSnd->DSB.IsLoaded()) {
+		sfxEntry.pSnd->DSB.Stop();
+	}
+}
+
 void sound_stop()
 {
 	if (!gbSndInited)

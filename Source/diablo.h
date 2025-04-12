@@ -100,7 +100,6 @@ void DisableInputEventHandler(const SDL_Event &event, uint16_t modState);
 tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir);
 bool IsDiabloAlive(bool playSFX);
 void PrintScreen(SDL_Keycode vkey);
-void DrawActiveBlockIcon(const Surface &out);
 
 /**
  * @param bStartup Process additional ticks before returning

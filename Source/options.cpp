@@ -77,7 +77,6 @@ void DisableEnhancedOptionsIfShareware()
 	gameplay.removeCripplingEffects.flags |= OptionEntryFlags::Invisible;
 
 	gameplay.activeBlock.SetValue(false);
-	gameplay.activeBlock.flags |= OptionEntryFlags::Invisible;
 }
 
 namespace {

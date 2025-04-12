@@ -510,6 +510,9 @@ bool InitMulti(GameData *gameData)
 
 bool CheckActiveBlock()
 {
+	if (gbIsSpawn)
+		return false;
+		
 	auto &options = GetOptions();
 	const bool toggleBlockMapped = options.Keymapper.KeyForAction("ToggleBlock") != SDLK_UNKNOWN
 	    || options.Padmapper.ButtonComboForAction("ToggleBlock").button != ControllerButton_NONE;

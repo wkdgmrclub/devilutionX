@@ -1709,7 +1709,7 @@ bool CanAutomapBeToggledOff()
 
 bool CanUseToggleActiveBlock()
 {
-	return CanPlayerTakeAction() && sgGameInitInfo.bActiveBlock == 1;
+	return CanPlayerTakeAction() && sgGameInitInfo.bActiveBlock == 1 && !gbIsSpawn;
 }
 
 } // namespace

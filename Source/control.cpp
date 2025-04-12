@@ -1105,6 +1105,9 @@ void ToggleActiveBlock()
 	if (sgGameInitInfo.bActiveBlock != 1)
 		return;
 
+	if (gbIsSpawn)
+		return;
+
 	const Item &left = MyPlayer->InvBody[INVLOC_HAND_LEFT];
 	const Item &right = MyPlayer->InvBody[INVLOC_HAND_RIGHT];
 
@@ -1122,10 +1125,15 @@ void ToggleActiveBlock()
 
 	MyPlayer->disableBlock = !MyPlayer->disableBlock;
 
-	if (MyPlayer->disableBlock)
+	if (MyPlayer->disableBlock) {
 		PlaySFX(SfxID::ItemShieldFlip);
-	else
+		SDL_AddTimer(450, [](Uint32, void*) -> Uint32 {
+			StopSFX(SfxID::ItemShieldFlip);
+			return 0;
+		}, nullptr);
+	} else {
 		PlaySFX(SfxID::ItemShield);
+	}
 }
 
 void CheckPanelInfo()
