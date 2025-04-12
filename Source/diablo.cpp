@@ -151,11 +151,11 @@ uint32_t GetGameId()
 {
 	const auto &options = GetOptions();
 	if (gbIsHellfire) {
-		if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
+		if (*options.Gameplay.disableSearch || *options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP || *options.Gameplay.activeBlock)
 			return GameIdHellfireEnhanced;
 		return gbIsSpawn ? GameIdHellfireSpawn : GameIdHellfireFull;
 	}
-	if (*options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP)
+	if (*options.Gameplay.removeCripplingEffects || *options.Gameplay.sharedXP || *options.Gameplay.activeBlock)
 		return GameIdDiabloEnhanced;
 	return gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull;
 }
@@ -1707,6 +1707,11 @@ bool CanAutomapBeToggledOff()
 	return false;
 }
 
+bool CanUseToggleActiveBlock()
+{
+	return CanPlayerTakeAction() && sgGameInitInfo.bActiveBlock == 1;
+}
+
 } // namespace
 
 void InitKeymapActions()
@@ -1850,6 +1855,14 @@ void InitKeymapActions()
 	    CycleAutomapType,
 	    nullptr,
 	    IsGameRunning);
+	options.Keymapper.AddAction(
+	    "ToggleBlock",
+	    N_("Toggle Active Block"),
+	    N_("Toggle Active Block on/off.  Active Block sets block chance to zero."),
+	    SDLK_UNKNOWN,
+	    ToggleActiveBlock,
+	    nullptr,
+	    CanUseToggleActiveBlock);
 
 	options.Keymapper.AddAction(
 	    "Inventory",
@@ -2423,6 +2436,14 @@ void InitPadmapActions()
 	    },
 	    nullptr,
 	    CanPlayerTakeAction);
+	options.Padmapper.AddAction(
+	    "ToggleBlock",
+	    N_("Toggle Active Block"),
+	    N_("Toggle Active Block on/off.  Active Block sets block chance to zero."),
+	    ControllerButton_NONE,
+	    ToggleActiveBlock,
+	    nullptr,
+	    CanUseToggleActiveBlock);
 	options.Padmapper.AddAction(
 	    "Pause Game",
 	    N_("Pause Game"),

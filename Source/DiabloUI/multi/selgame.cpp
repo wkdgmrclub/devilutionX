@@ -669,6 +669,7 @@ void selgame_Password_Select(size_t /*value*/)
 	m_game_data->bSharedExperience = *GetOptions().Gameplay.sharedXP ? 1 : 0;
 	m_game_data->bRemoveCripplingEffects = *GetOptions().Gameplay.removeCripplingEffects ? 1 : 0;
 	m_game_data->bDisableSearch = *GetOptions().Gameplay.disableSearch ? 1 : 0;
+	m_game_data->bActiveBlock = *GetOptions().Gameplay.activeBlock ? 1 : 0;
 
 	GameData gameInitInfo = *m_game_data;
 	gameInitInfo.swapLE();

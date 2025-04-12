@@ -150,6 +150,7 @@ void CheckMainPanelButton();
 void CheckMainPanelButtonDead();
 void DoAutoMap();
 void CycleAutomapType();
+void ToggleActiveBlock();
 
 /**
  * Checks the mouse cursor position within the control panel and sets information

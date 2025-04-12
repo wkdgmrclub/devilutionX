@@ -618,6 +618,8 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean removeCripplingEffects;
 	/** @brief Locally disable clicking on shrines which permanently cripple character. */
 	OptionEntryBoolean disableCripplingShrines;
+	/** @brief Allows players to manually set their shield block chance to 0. */
+	OptionEntryBoolean activeBlock;
 	/** @brief Spell hotkeys instantly cast the spell. */
 	OptionEntryBoolean quickCast;
 	/** @brief Number of Healing potions to pick up automatically */

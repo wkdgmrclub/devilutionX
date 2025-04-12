@@ -14,6 +14,8 @@
 #include <fmt/format.h>
 
 #include "DiabloUI/diabloui.h"
+#include "controls/keymapper.hpp"
+#include "controls/padmapper.hpp"
 #include "diablo.h"
 #include "engine/demomode.h"
 #include "engine/point.hpp"
@@ -506,10 +508,22 @@ bool InitMulti(GameData *gameData)
 
 } // namespace
 
+bool CheckActiveBlock()
+{
+	auto &options = GetOptions();
+	const bool toggleBlockMapped = options.Keymapper.KeyForAction("ToggleBlock") != SDLK_UNKNOWN
+	    || options.Padmapper.ButtonComboForAction("ToggleBlock").button != ControllerButton_NONE;
+
+	options.Gameplay.activeBlock.SetValue(toggleBlockMapped);
+
+	return toggleBlockMapped;
+}
+
 void InitGameInfo()
 {
 	xoshiro128plusplus gameGenerator = ReserveSeedSequence();
 	gameGenerator.save(sgGameInitInfo.gameSeed);
+	const bool toggleBlockMapped = CheckActiveBlock();
 
 	sgGameInitInfo.size = sizeof(sgGameInitInfo);
 	sgGameInitInfo.programid = GetGameId();
@@ -526,6 +540,7 @@ void InitGameInfo()
 	sgGameInitInfo.bSharedExperience = *options.Gameplay.sharedXP ? 1 : 0;
 	sgGameInitInfo.bRemoveCripplingEffects = *options.Gameplay.removeCripplingEffects ? 1 : 0;
 	sgGameInitInfo.bDisableSearch = *options.Gameplay.disableSearch ? 1 : 0;
+	sgGameInitInfo.bActiveBlock = toggleBlockMapped ? 1 : 0;
 }
 
 void NetSendLoPri(uint8_t playerId, const std::byte *data, size_t size)

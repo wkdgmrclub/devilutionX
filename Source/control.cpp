@@ -22,9 +22,11 @@
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "diablo_msg.hpp"
+#include "effects.h"
 #include "engine/backbuffer_state.hpp"
 #include "engine/clx_sprite.hpp"
 #include "engine/load_cel.hpp"
+#include "engine/palette.h"
 #include "engine/render/clx_render.hpp"
 #include "engine/render/text_render.hpp"
 #include "engine/trn.hpp"
@@ -337,54 +339,82 @@ int DrawDurIcon4Item(const Surface &out, Item &pItem, int x, int c)
 	const int durabilityThresholdGold = 5;
 	const int durabilityThresholdRed = 2;
 
-	if (pItem.isEmpty())
-		return x;
-	if (pItem._iDurability > durabilityThresholdGold)
-		return x;
+	bool isMonk = MyPlayer->_pClass == HeroClass::Monk;
+	bool isShield = pItem._itype == ItemType::Shield;
+	bool isStaff = pItem._itype == ItemType::Staff;
+	bool isBareHandedMonk = pItem.isEmpty() && isMonk && MyPlayer->disableBlock;
+
+	bool drawRedX = MyPlayer->disableBlock && (isShield || (isMonk && (isStaff || isBareHandedMonk)));
+
 	if (c == 0) {
-		switch (pItem._itype) {
-		case ItemType::Sword:
-			c = 1;
-			break;
-		case ItemType::Axe:
-			c = 5;
-			break;
-		case ItemType::Bow:
-			c = 6;
-			break;
-		case ItemType::Mace:
-			c = 4;
-			break;
-		case ItemType::Staff:
-			c = 7;
-			break;
-		case ItemType::Shield:
-		default:
+		if (isShield)
 			c = 0;
-			break;
-		}
+		else if (isStaff)
+			c = 7;
+		else if (isBareHandedMonk)
+			c = 0;
+		else
+			return x;
 	}
 
-	// Calculate how much of the icon should be gold and red
-	int height = (*pDurIcons)[c].height(); // Height of durability icon CEL
+	int height = (*pDurIcons)[c].height();
+	int width = (*pDurIcons)[c].width();
 	int partition = 0;
-	if (pItem._iDurability > durabilityThresholdRed) {
+	int y = -17 + GetMainPanel().position.y;
+
+	bool hasDurability = !pItem.isEmpty();
+	if (hasDurability && pItem._iDurability > durabilityThresholdRed) {
 		int current = pItem._iDurability - durabilityThresholdRed;
 		partition = (height * current) / (durabilityThresholdGold - durabilityThresholdRed);
 	}
 
-	// Draw icon
-	int y = -17 + GetMainPanel().position.y;
-	if (partition > 0) {
-		const Surface stenciledBuffer = out.subregionY(y - partition, partition);
-		ClxDraw(stenciledBuffer, { x, partition }, (*pDurIcons)[c + 8]); // Gold icon
-	}
-	if (partition != height) {
-		const Surface stenciledBuffer = out.subregionY(y - height, height - partition);
-		ClxDraw(stenciledBuffer, { x, height }, (*pDurIcons)[c]); // Red icon
+	bool renderBlendedDurability = hasDurability && pItem._iDurability <= durabilityThresholdGold;
+	bool renderForcedGold = drawRedX && ((isShield || isStaff) && pItem._iDurability > durabilityThresholdGold || isBareHandedMonk);
+
+	if (renderBlendedDurability) {
+		if (partition > 0) {
+			const Surface stenciledBuffer = out.subregionY(y - partition, partition);
+			ClxDraw(stenciledBuffer, { x, partition }, (*pDurIcons)[c + 8]);
+		}
+		if (partition != height) {
+			const Surface stenciledBuffer = out.subregionY(y - height, height - partition);
+			ClxDraw(stenciledBuffer, { x, height }, (*pDurIcons)[c]);
+		}
+	} else if (renderForcedGold) {
+		ClxDraw(out, { x, y }, (*pDurIcons)[c + 8]);
+	} else if (!drawRedX) {
+		return x;
 	}
 
-	return x - (*pDurIcons)[c].height() - 8; // Add in spacing for the next durability icon
+	if (drawRedX) {
+		uint8_t redColor = PAL8_RED + 5;
+		uint8_t blackColor = 0;
+		int crossSize = std::min(width, height) / 2;
+		int offsetX = x + (width - crossSize) / 2;
+		int offsetY = y + (height - crossSize) / 2 - 32;
+
+		for (int i = 0; i < crossSize; ++i) {
+			int dx1 = offsetX + i;
+			int dx2 = offsetX + (crossSize - 1 - i);
+			int dy = offsetY + i;
+
+			for (int ox = -1; ox <= 1; ++ox) {
+				for (int oy = -1; oy <= 1; ++oy) {
+					if (ox != 0 || oy != 0) {
+						out.SetPixel({ dx1 + ox, dy + oy }, blackColor); // ↘ outline
+						out.SetPixel({ dx2 + ox, dy + oy }, blackColor); // ↙ outline
+					}
+				}
+			}
+
+			for (int t = -1; t <= 1; ++t) {
+				out.SetPixel({ dx1, dy + t }, redColor); // ↘
+				out.SetPixel({ dx2, dy + t }, redColor); // ↙
+			}
+		}
+	}
+
+	return x - height - 8;
 }
 
 struct TextCmdItem {
@@ -1067,6 +1097,37 @@ void CycleAutomapType()
 	}
 }
 
+void ToggleActiveBlock()
+{
+	if (MyPlayer == nullptr || !MyPlayer->plractive)
+		return;
+
+	if (sgGameInitInfo.bActiveBlock != 1)
+		return;
+
+	const Item &left = MyPlayer->InvBody[INVLOC_HAND_LEFT];
+	const Item &right = MyPlayer->InvBody[INVLOC_HAND_RIGHT];
+
+	const bool isMonk = MyPlayer->_pClass == HeroClass::Monk;
+	const bool hasShield = left._itype == ItemType::Shield || right._itype == ItemType::Shield;
+	const bool hasStaff = left._itype == ItemType::Staff;
+	const bool isBareHanded = left.isEmpty() && right.isEmpty();
+
+	const bool canBlock =
+		(isMonk && (hasShield || hasStaff || isBareHanded)) ||
+		(!isMonk && hasShield);
+
+	if (!canBlock)
+		return;
+
+	MyPlayer->disableBlock = !MyPlayer->disableBlock;
+
+	if (MyPlayer->disableBlock)
+		PlaySFX(SfxID::ItemShieldFlip);
+	else
+		PlaySFX(SfxID::ItemShield);
+}
+
 void CheckPanelInfo()
 {
 	MainPanelFlag = false;
@@ -1409,10 +1470,38 @@ void DrawDurIcon(const Surface &out)
 	}
 
 	Player &myPlayer = *MyPlayer;
-	x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HEAD], x, 3);
-	x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_CHEST], x, 2);
-	x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HAND_LEFT], x, 0);
-	DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HAND_RIGHT], x, 0);
+
+	if (!myPlayer.InvBody[INVLOC_HEAD].isEmpty())
+		x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HEAD], x, 3);
+	if (!myPlayer.InvBody[INVLOC_CHEST].isEmpty())
+		x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_CHEST], x, 2);
+
+	const Item &left = myPlayer.InvBody[INVLOC_HAND_LEFT];
+	const Item &right = myPlayer.InvBody[INVLOC_HAND_RIGHT];
+
+	// Show staff if it's in the left hand and Monk
+	if (left._itype == ItemType::Staff && myPlayer._pClass == HeroClass::Monk)
+		x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HAND_LEFT], x, 0);
+
+	// Show shield if present in either hand
+	if (left._itype == ItemType::Shield)
+		x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HAND_LEFT], x, 0);
+	if (right._itype == ItemType::Shield)
+		x = DrawDurIcon4Item(out, myPlayer.InvBody[INVLOC_HAND_RIGHT], x, 0);
+
+	// Barehanded Monk (both hands empty, no staff)
+	if (myPlayer._pClass == HeroClass::Monk
+	    && left.isEmpty()
+	    && right.isEmpty()
+	    && myPlayer.disableBlock) {
+
+		Item dummy;
+		dummy._itype = ItemType::None;
+		dummy._iDurability = 0;
+		dummy._iMaxDur = 0;
+
+		x = DrawDurIcon4Item(out, dummy, x, 0);
+	}
 }
 
 void RedBack(const Surface &out)

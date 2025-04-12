@@ -75,6 +75,9 @@ void DisableEnhancedOptionsIfShareware()
 
 	gameplay.removeCripplingEffects.SetValue(false);
 	gameplay.removeCripplingEffects.flags |= OptionEntryFlags::Invisible;
+
+	gameplay.activeBlock.SetValue(false);
+	gameplay.activeBlock.flags |= OptionEntryFlags::Invisible;
 }
 
 namespace {
@@ -822,6 +825,7 @@ GameplayOptions::GameplayOptions()
     , autoRefillBelt("Auto Refill Belt", OptionEntryFlags::None, N_("Auto Refill Belt"), N_("Refill belt from inventory when belt item is consumed."), false)
     , removeCripplingEffects("Remove Crippling Effects", OptionEntryFlags::CantChangeInMultiPlayer, N_("Remove Crippling Effects"), N_("Fascinating, Ornate, Sacred, Murphy's and Tainted will not spawn and will not be selected for Cauldrons and Goat Shrines.  Black Deaths will not reduce max life."), true)
     , disableCripplingShrines("Disable Crippling Shrines", OptionEntryFlags::None, N_("Disable Crippling Shrines"), N_("When enabled Cauldrons, Fascinating Shrines, Goat Shrines, Ornate Shrines, Sacred Shrines and Murphy's Shrines are not able to be clicked on and labeled as disabled."), false)
+    , activeBlock("Toggle Active Block", OptionEntryFlags::Invisible, N_("Toggle Active Block"), N_("Allows players to manually set their shield block chance to 0."), false)
     , quickCast("Quick Cast", OptionEntryFlags::None, N_("Quick Cast"), N_("Spell hotkeys instantly cast the spell, rather than switching the readied spell."), false)
     , numHealPotionPickup("Heal Potion Pickup", OptionEntryFlags::None, N_("Heal Potion Pickup"), N_("Number of Healing potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
     , numFullHealPotionPickup("Full Heal Potion Pickup", OptionEntryFlags::None, N_("Full Heal Potion Pickup"), N_("Number of Full Healing potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
@@ -850,6 +854,7 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&cowQuest,
 		&runInTown,
 		&quickCast,
+		&activeBlock,
 		&testBard,
 		&testBarbarian,
 		&experienceBar,

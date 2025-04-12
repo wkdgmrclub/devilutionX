@@ -274,6 +274,7 @@ struct Player {
 	int destParam3;
 	int destParam4;
 	int _pGold;
+	bool disableBlock = false;
 
 	/**
 	 * @brief Contains Information for current Animation
@@ -626,6 +627,9 @@ public:
 	 */
 	int GetBlockChance(bool useLevel = true) const
 	{
+		if (sgGameInitInfo.bActiveBlock == 1 && disableBlock)
+			return 0;
+	
 		int blkper = _pDexterity + getBaseToBlock();
 		if (useLevel)
 			blkper += getCharacterLevel() * 2;
