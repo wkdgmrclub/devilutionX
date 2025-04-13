@@ -1782,6 +1782,11 @@ void DrawAutomap(const Surface &out)
 		DrawHorizontalLine(out, MinimapRect.position + Displacement { -2, MinimapRect.size.height }, MinimapRect.size.width + 3, MapColorsDim);
 		DrawVerticalLine(out, MinimapRect.position + Displacement { -2, -1 }, MinimapRect.size.height + 1, MapColorsDim);
 		DrawVerticalLine(out, MinimapRect.position + Displacement { MinimapRect.size.width, -1 }, MinimapRect.size.height + 1, MapColorsDim);
+
+		if (AutoMapShowItems)
+			SearchAutomapItem(out, myPlayerOffset, 8, [](Point position) {
+				return dItem[position.x][position.y] != 0;
+			});
 	}
 
 	Point screen = {};
