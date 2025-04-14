@@ -43,7 +43,6 @@ set(libdevilutionx_SRCS
   controls/devices/joystick.cpp
   controls/devices/kbcontroller.cpp
   controls/game_controls.cpp
-  controls/gamepad_repeater.cpp
   controls/keymapper.cpp
   controls/menu_controls.cpp
   controls/modifier_hints.cpp

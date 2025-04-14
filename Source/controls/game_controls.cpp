@@ -9,7 +9,6 @@
 #include "controls/devices/game_controller.h"
 #endif
 #include "controls/devices/joystick.h"
-#include "controls/gamepad_repeater.h"
 #include "controls/padmapper.hpp"
 #include "controls/plrctrls.h"
 #include "controls/touch/gamepad.h"
@@ -168,7 +167,7 @@ bool GetGameAction(const SDL_Event &event, ControllerButtonEvent ctrlEvent, Game
 			    || (!VirtualGamepadState.secondaryActionButton.isHeld && ControllerActionHeld == GameActionType_SECONDARY_ACTION)
 			    || (!VirtualGamepadState.spellActionButton.isHeld && ControllerActionHeld == GameActionType_CAST_SPELL)) {
 				ControllerActionHeld = GameActionType_NONE;
-				LastMouseButtonAction = MouseActionType::None;
+				LastPlayerAction = PlayerActionType::None;
 			}
 		}
 	}
@@ -267,7 +266,7 @@ void PressControllerButton(ControllerButton button)
 		switch (button) {
 		case devilution::ControllerButton_BUTTON_DPAD_UP:
 			PressEscKey();
-			LastMouseButtonAction = MouseActionType::None;
+			LastPlayerAction = PlayerActionType::None;
 			PadHotspellMenuActive = false;
 			PadMenuNavigatorActive = false;
 			gamemenu_on();
@@ -396,28 +395,6 @@ bool HandleControllerButtonEvent(const SDL_Event &event, const ControllerButtonE
 	}
 
 	return false;
-}
-
-static devilution::GamepadActionRepeater Repeater;
-
-void RepeatGamepadAction()
-{
-	using namespace devilution;
-
-	if (!AutomapActive)
-		return;
-
-	auto &pad = GetOptions().Padmapper;
-
-	// Repeat inputs for Automap Directional Padmapped Buttons
-	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Up")))
-		AutomapUp();
-	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Down")))
-		AutomapDown();
-	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Left")))
-		AutomapLeft();
-	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Right")))
-		AutomapRight();
 }
 
 } // namespace devilution

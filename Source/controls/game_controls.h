@@ -72,6 +72,4 @@ extern bool PadHotspellMenuActive;
 // The code for the modifier will be stored here, and the event processor can check this value when processing the second event to suppress it.
 extern ControllerButton SuppressedButton;
 
-void RepeatGamepadAction();
-
 } // namespace devilution
