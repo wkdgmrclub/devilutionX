@@ -2236,8 +2236,8 @@ void InitPadmapActions()
 	    [] {
 		    if (AutomapActive)
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    	LastPlayerAction = PlayerActionType::MoveAutomap;
-		    	AutomapUp();
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapUp();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2251,8 +2251,8 @@ void InitPadmapActions()
 	    [] {
 		    if (AutomapActive)
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		   		LastPlayerAction = PlayerActionType::MoveAutomap;
-		   		AutomapDown();
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapDown();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2266,8 +2266,8 @@ void InitPadmapActions()
 	    [] {
 		    if (AutomapActive)
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    	LastPlayerAction = PlayerActionType::MoveAutomap;
-		    	AutomapLeft();
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapLeft();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2281,8 +2281,8 @@ void InitPadmapActions()
 	    [] {
 		    if (AutomapActive)
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    	LastPlayerAction = PlayerActionType::MoveAutomap;
-		    	AutomapRight();
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapRight();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
