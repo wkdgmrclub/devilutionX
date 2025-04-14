@@ -398,7 +398,7 @@ bool HandleControllerButtonEvent(const SDL_Event &event, const ControllerButtonE
 	return false;
 }
 
-static devilution::GamepadComboRepeater Repeater;
+static devilution::GamepadActionRepeater Repeater;
 
 void RepeatGamepadAction()
 {

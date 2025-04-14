@@ -6,9 +6,9 @@
 
 namespace devilution {
 
-class GamepadComboRepeater {
+class GamepadActionRepeater {
 public:
-	explicit GamepadComboRepeater(int repeatIntervalMs = 10);
+	explicit GamepadActionRepeater(int repeatIntervalMs = 10);
 
 	/**
 	 * @brief Checks if the given button combo should fire based on the repeat interval.

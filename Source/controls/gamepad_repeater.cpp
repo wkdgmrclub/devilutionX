@@ -4,12 +4,12 @@
 
 namespace devilution {
 
-GamepadComboRepeater::GamepadComboRepeater(int repeatIntervalMs)
+GamepadActionRepeater::GamepadActionRepeater(int repeatIntervalMs)
     : repeatIntervalMs_(repeatIntervalMs)
 {
 }
 
-bool GamepadComboRepeater::ShouldFire(const ControllerButtonCombo &combo)
+bool GamepadActionRepeater::ShouldFire(const ControllerButtonCombo &combo)
 {
 	if (combo.button == ControllerButton_NONE)
 		return false;
