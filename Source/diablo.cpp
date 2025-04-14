@@ -2124,31 +2124,31 @@ void InitPadmapActions()
 	    N_("Move up"),
 	    N_("Moves the player character up."),
 	    ControllerButton_BUTTON_DPAD_UP,
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MoveDown",
 	    N_("Move down"),
 	    N_("Moves the player character down."),
 	    ControllerButton_BUTTON_DPAD_DOWN,
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MoveLeft",
 	    N_("Move left"),
 	    N_("Moves the player character left."),
 	    ControllerButton_BUTTON_DPAD_LEFT,
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MoveRight",
 	    N_("Move right"),
 	    N_("Moves the player character right."),
 	    ControllerButton_BUTTON_DPAD_RIGHT,
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "StandGround",
 	    N_("Stand ground"),
 	    N_("Hold to prevent the player from moving."),
 	    ControllerButton_NONE,
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "ToggleStandGround",
 	    N_("Toggle stand ground"),
@@ -2258,25 +2258,25 @@ void InitPadmapActions()
 	    N_("Move mouse up"),
 	    N_("Simulates upward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_UP },
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MouseDown",
 	    N_("Move mouse down"),
 	    N_("Simulates downward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_DOWN },
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MouseLeft",
 	    N_("Move mouse left"),
 	    N_("Simulates leftward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_LEFT },
-	    [] { });
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MouseRight",
 	    N_("Move mouse right"),
 	    N_("Simulates rightward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_RIGHT },
-	    [] { });
+	    [] {});
 	auto leftMouseDown = [] {
 		ControllerButtonCombo standGroundCombo = GetOptions().Padmapper.ButtonComboForAction("StandGround");
 		bool standGround = StandToggle || IsControllerButtonComboPressed(standGroundCombo);
