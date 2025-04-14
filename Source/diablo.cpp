@@ -2123,31 +2123,31 @@ void InitPadmapActions()
 	    N_("Move up"),
 	    N_("Moves the player character up."),
 	    ControllerButton_BUTTON_DPAD_UP,
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MoveDown",
 	    N_("Move down"),
 	    N_("Moves the player character down."),
 	    ControllerButton_BUTTON_DPAD_DOWN,
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MoveLeft",
 	    N_("Move left"),
 	    N_("Moves the player character left."),
 	    ControllerButton_BUTTON_DPAD_LEFT,
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MoveRight",
 	    N_("Move right"),
 	    N_("Moves the player character right."),
 	    ControllerButton_BUTTON_DPAD_RIGHT,
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "StandGround",
 	    N_("Stand ground"),
 	    N_("Hold to prevent the player from moving."),
 	    ControllerButton_NONE,
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "ToggleStandGround",
 	    N_("Toggle stand ground"),
@@ -2233,49 +2233,85 @@ void InitPadmapActions()
 	    N_("Automap Move Up"),
 	    N_("Moves the automap up when active."),
 	    ControllerButton_NONE,
-	    [] { if (AutomapActive) AutomapUp(); });
+	    [] {
+		    if (AutomapActive)
+			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapUp();
+	    },
+	    [] {
+		    ControllerActionHeld = GameActionType_NONE;
+		    LastPlayerAction = PlayerActionType::None;
+	    });
 	options.Padmapper.AddAction(
 	    "Automap Move Down",
 	    N_("Automap Move Down"),
 	    N_("Moves the automap down when active."),
 	    ControllerButton_NONE,
-	    [] { if (AutomapActive) AutomapDown(); });
+	    [] {
+		    if (AutomapActive)
+			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapDown();
+	    },
+	    [] {
+		    ControllerActionHeld = GameActionType_NONE;
+		    LastPlayerAction = PlayerActionType::None;
+	    });
 	options.Padmapper.AddAction(
 	    "Automap Move Left",
 	    N_("Automap Move Left"),
 	    N_("Moves the automap left when active."),
 	    ControllerButton_NONE,
-	    [] { if (AutomapActive) AutomapLeft(); });
+	    [] {
+		    if (AutomapActive)
+			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapLeft();
+	    },
+	    [] {
+		    ControllerActionHeld = GameActionType_NONE;
+		    LastPlayerAction = PlayerActionType::None;
+	    });
 	options.Padmapper.AddAction(
 	    "Automap Move Right",
 	    N_("Automap Move Right"),
 	    N_("Moves the automap right when active."),
 	    ControllerButton_NONE,
-	    [] { if (AutomapActive) AutomapRight(); });
+	    [] {
+		    if (AutomapActive)
+			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
+		    LastPlayerAction = PlayerActionType::MoveAutomap;
+		    AutomapRight();
+	    },
+	    [] {
+		    ControllerActionHeld = GameActionType_NONE;
+		    LastPlayerAction = PlayerActionType::None;
+	    });
 	options.Padmapper.AddAction(
 	    "MouseUp",
 	    N_("Move mouse up"),
 	    N_("Simulates upward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_UP },
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MouseDown",
 	    N_("Move mouse down"),
 	    N_("Simulates downward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_DOWN },
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MouseLeft",
 	    N_("Move mouse left"),
 	    N_("Simulates leftward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_LEFT },
-	    [] {});
+	    [] { });
 	options.Padmapper.AddAction(
 	    "MouseRight",
 	    N_("Move mouse right"),
 	    N_("Simulates rightward mouse movement."),
 	    { ControllerButton_BUTTON_BACK, ControllerButton_BUTTON_DPAD_RIGHT },
-	    [] {});
+	    [] { });
 	auto leftMouseDown = [] {
 		ControllerButtonCombo standGroundCombo = GetOptions().Padmapper.ButtonComboForAction("StandGround");
 		bool standGround = StandToggle || IsControllerButtonComboPressed(standGroundCombo);

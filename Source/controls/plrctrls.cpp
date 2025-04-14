@@ -1520,23 +1520,6 @@ void ProcessLeftStickOrDPadGameUI()
 		handler(GetLeftStickOrDpadDirection(false));
 }
 
-void RepeatGamepadAction()
-{
-
-	// Automap directional movement via padmapping
-	if (AutomapActive) {
-		const auto &padmapper = GetOptions().Padmapper;
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Up")))
-			AutomapUp();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Down")))
-			AutomapDown();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Left")))
-			AutomapLeft();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Right")))
-			AutomapRight();
-	}
-}
-
 void Movement(Player &player)
 {
 	if (PadMenuNavigatorActive || PadHotspellMenuActive || InGameMenu())
@@ -1944,7 +1927,6 @@ void plrctrls_every_frame()
 {
 	ProcessLeftStickOrDPadGameUI();
 	HandleRightStickMotion();
-	RepeatGamepadAction();
 }
 
 void plrctrls_after_game_logic()

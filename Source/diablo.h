@@ -61,6 +61,7 @@ enum class PlayerActionType : uint8_t {
 	AttackMonsterTarget,
 	AttackPlayerTarget,
 	OperateObject,
+	MoveAutomap
 };
 
 extern uint32_t DungeonSeeds[NUMLEVELS];
