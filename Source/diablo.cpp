@@ -225,6 +225,7 @@ bool ProcessInput()
 		CheckCursMove();
 		plrctrls_after_check_curs_move();
 		RepeatMouseAction();
+		RepeatGamepadAction();
 	}
 
 	return true;
@@ -2228,6 +2229,30 @@ void InitPadmapActions()
 	    N_("Toggles if automap is displayed."),
 	    ControllerButton_BUTTON_LEFTSTICK,
 	    DoAutoMap);
+	options.Padmapper.AddAction(
+		"Automap Move Up",
+		N_("Automap Move Up"),
+		N_("Moves the automap up when active."),
+		ControllerButton_NONE,
+		[] { if (AutomapActive) AutomapUp(); });
+	options.Padmapper.AddAction(
+		"Automap Move Down",
+		N_("Automap Move Down"),
+		N_("Moves the automap down when active."),
+		ControllerButton_NONE,
+		[] { if (AutomapActive) AutomapDown(); });
+	options.Padmapper.AddAction(
+		"Automap Move Left",
+		N_("Automap Move Left"),
+		N_("Moves the automap left when active."),
+		ControllerButton_NONE,
+		[] { if (AutomapActive) AutomapLeft(); });
+	options.Padmapper.AddAction(
+		"Automap Move Right",
+		N_("Automap Move Right"),
+		N_("Moves the automap right when active."),
+		ControllerButton_NONE,
+		[] { if (AutomapActive) AutomapRight(); });
 	options.Padmapper.AddAction(
 	    "MouseUp",
 	    N_("Move mouse up"),

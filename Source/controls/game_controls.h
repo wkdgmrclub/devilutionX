@@ -21,6 +21,10 @@ enum GameActionType : uint8_t {
 	GameActionType_TOGGLE_SPELL_BOOK,
 	GameActionType_TOGGLE_QUEST_LOG,
 	GameActionType_SEND_KEY,
+	GameActionType_AutomapMoveUp,
+	GameActionType_AutomapMoveDown,
+	GameActionType_AutomapMoveLeft,
+	GameActionType_AutomapMoveRight,
 };
 
 struct GameActionSendKey {
@@ -71,5 +75,7 @@ extern bool PadHotspellMenuActive;
 // The event processor may interpret the second event's button as a modifier for the action taken when processing the first event.
 // The code for the modifier will be stored here, and the event processor can check this value when processing the second event to suppress it.
 extern ControllerButton SuppressedButton;
+
+void RepeatGamepadAction();
 
 } // namespace devilution

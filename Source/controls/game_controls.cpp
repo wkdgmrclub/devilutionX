@@ -2,12 +2,14 @@
 
 #include <cstdint>
 
+#include "automap.h"
 #include "controls/control_mode.hpp"
 #include "controls/controller_motion.h"
 #ifndef USE_SDL1
 #include "controls/devices/game_controller.h"
 #endif
 #include "controls/devices/joystick.h"
+#include "controls/gamepad_repeater.h"
 #include "controls/padmapper.hpp"
 #include "controls/plrctrls.h"
 #include "controls/touch/gamepad.h"
@@ -394,6 +396,28 @@ bool HandleControllerButtonEvent(const SDL_Event &event, const ControllerButtonE
 	}
 
 	return false;
+}
+
+static devilution::GamepadComboRepeater Repeater;
+
+void RepeatGamepadAction()
+{
+	using namespace devilution;
+
+	if (!AutomapActive)
+		return;
+
+	auto &pad = GetOptions().Padmapper;
+
+	// Repeat inputs for Automap Directional Padmapped Buttons
+	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Up")))
+		AutomapUp();
+	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Down")))
+		AutomapDown();
+	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Left")))
+		AutomapLeft();
+	if (Repeater.ShouldFire(pad.ButtonComboForAction("Automap Move Right")))
+		AutomapRight();
 }
 
 } // namespace devilution
