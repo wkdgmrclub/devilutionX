@@ -1826,16 +1826,6 @@ void HandleRightStickMotion()
 		return;
 	}
 
-	// Disabled map movement via right stick to allow mouse control during automap
-	// if (AutomapActive) { // move map
-	// 	int dx = 0;
-	// 	int dy = 0;
-	// 	acc.Pool(&dx, &dy, 32);
-	// 	AutomapOffset.deltaX += dy + dx;
-	// 	AutomapOffset.deltaY += dy - dx;
-	// 	return;
-	// }
-
 	{ // move cursor
 		InvalidateInventorySlot();
 		int x = MousePosition.x;

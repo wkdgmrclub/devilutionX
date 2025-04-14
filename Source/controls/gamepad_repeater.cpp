@@ -15,7 +15,7 @@ bool GamepadActionRepeater::ShouldFire(const ControllerButtonCombo &combo)
 		return false;
 
 	if (!IsControllerButtonComboPressed(combo)) {
-		lastTriggerTime_.erase(combo.button); // Reset timer if released
+		lastTriggerTime_.erase(combo.button);
 		return false;
 	}
 
