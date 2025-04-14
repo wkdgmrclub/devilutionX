@@ -2,7 +2,6 @@
 
 #include <cstdint>
 
-#include "automap.h"
 #include "controls/control_mode.hpp"
 #include "controls/controller_motion.h"
 #ifndef USE_SDL1
