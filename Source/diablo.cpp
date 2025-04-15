@@ -2234,10 +2234,11 @@ void InitPadmapActions()
 	    N_("Moves the automap up when active."),
 	    ControllerButton_NONE,
 	    [] {
-		    if (AutomapActive)
+		    if (AutomapActive) {
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    LastPlayerAction = PlayerActionType::MoveAutomap;
-		    AutomapUp();
+			    LastPlayerAction = PlayerActionType::MoveAutomap;
+			    AutomapUp();
+		    }
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2249,10 +2250,11 @@ void InitPadmapActions()
 	    N_("Moves the automap down when active."),
 	    ControllerButton_NONE,
 	    [] {
-		    if (AutomapActive)
+		    if (AutomapActive) {
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    LastPlayerAction = PlayerActionType::MoveAutomap;
-		    AutomapDown();
+			    LastPlayerAction = PlayerActionType::MoveAutomap;
+			    AutomapDown();
+		    }
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2264,10 +2266,11 @@ void InitPadmapActions()
 	    N_("Moves the automap left when active."),
 	    ControllerButton_NONE,
 	    [] {
-		    if (AutomapActive)
+		    if (AutomapActive) {
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    LastPlayerAction = PlayerActionType::MoveAutomap;
-		    AutomapLeft();
+			    LastPlayerAction = PlayerActionType::MoveAutomap;
+			    AutomapLeft();
+		    }
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
@@ -2279,10 +2282,11 @@ void InitPadmapActions()
 	    N_("Moves the automap right when active."),
 	    ControllerButton_NONE,
 	    [] {
-		    if (AutomapActive)
+		    if (AutomapActive) {
 			    ControllerActionHeld = GameActionType_MOVE_AUTOMAP;
-		    LastPlayerAction = PlayerActionType::MoveAutomap;
-		    AutomapRight();
+			    LastPlayerAction = PlayerActionType::MoveAutomap;
+			    AutomapRight();
+		    }
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
