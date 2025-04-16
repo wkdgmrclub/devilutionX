@@ -41,6 +41,7 @@
 #include "objdat.h"
 #include "options.h"
 #include "qol/stash.h"
+#include "spelldat.h"
 #include "stores.h"
 #include "towners.h"
 #include "track.h"
@@ -2496,47 +2497,48 @@ void OperateShrineThaumaturgic(DiabloGenerator &rng, const Player &player)
 	InitDiabloMsg(EMSG_SHRINE_THAUMATURGIC);
 }
 
-void OperateShrineCostOfWisdom(Player &player, SpellID spellId, diablo_message message)
+void OperateShrineCostOfWisdom(Player &player, MagicType magicType, SpellID shrineSpellId, diablo_message message)
 {
 	if (&player != MyPlayer)
 		return;
 
-	player._pMemSpells |= GetSpellBitmask(spellId);
+	std::vector<SpellID> randomSpellId;
+	for (int i = static_cast<int>(SpellID::Null) + 1; i <= static_cast<int>(SpellID::LastDiablo); ++i) {
+		SpellID spell = static_cast<SpellID>(i);
+		if (GetSpellData(spell).type() == magicType && (player._pMemSpells & GetSpellBitmask(spell)) != 0) {
+			randomSpellId.push_back(spell);
+		}
+	}
 
-	uint8_t curSpellLevel = player._pSplLvl[static_cast<int8_t>(spellId)];
-	if (curSpellLevel < MaxSpellLevel) {
-		uint8_t newSpellLevel = std::min(static_cast<uint8_t>(curSpellLevel + 2), MaxSpellLevel);
-		player._pSplLvl[static_cast<int8_t>(spellId)] = newSpellLevel;
-		NetSendCmdParam2(true, CMD_CHANGE_SPELL_LEVEL, static_cast<uint16_t>(spellId), newSpellLevel);
+	SpellID upgradeSpell = randomSpellId.empty()
+	    ? shrineSpellId
+	    : randomSpellId[GenerateRnd(randomSpellId.size())];
+
+	player._pMemSpells |= GetSpellBitmask(upgradeSpell);
+
+	bool spellLeveled = false;
+	uint8_t &SpellLevel = player._pSplLvl[static_cast<int8_t>(upgradeSpell)];
+	if (SpellLevel < MaxSpellLevel) {
+		uint8_t spellLevelUp = std::min(static_cast<uint8_t>(SpellLevel + 2), MaxSpellLevel);
+		SpellLevel = spellLevelUp;
+		NetSendCmdParam2(true, CMD_CHANGE_SPELL_LEVEL, static_cast<uint16_t>(upgradeSpell), spellLevelUp);
+		spellLeveled = true;
 	}
 
 	if (&player == MyPlayer) {
-		for (Item &item : InventoryPlayerItemsRange { player }) {
+		for (Item &item : InventoryPlayerItemsRange { player })
 			item.updateRequiredStatsCacheForPlayer(player);
-		}
-		if (IsStashOpen) {
+		if (IsStashOpen)
 			Stash.RefreshItemStatFlags();
-		}
 	}
 
-	uint32_t t = player._pMaxManaBase / 10;
-	int v1 = player._pMana - player._pManaBase;
-	int v2 = player._pMaxMana - player._pMaxManaBase;
-	player._pManaBase -= t;
-	player._pMana -= t;
-	player._pMaxMana -= t;
-	player._pMaxManaBase -= t;
-	if (player._pMana >> 6 <= 0) {
-		player._pMana = v1;
-		player._pManaBase = 0;
-	}
-	if (player._pMaxMana >> 6 <= 0) {
-		player._pMaxMana = v2;
-		player._pMaxManaBase = 0;
-	}
+	if (spellLeveled)
+		ModifyPlrMag(*MyPlayer, -2);
 
+	CheckStats(*MyPlayer);
+	CalcPlrInv(*MyPlayer, true);
 	RedrawEverything();
-
+	
 	InitDiabloMsg(message);
 }
 
@@ -2756,30 +2758,39 @@ void OperateShrineGlimmering(Player &player)
 
 void OperateShrineTainted(DiabloGenerator &rng, const Player &player)
 {
-	if (&player == MyPlayer) {
-		InitDiabloMsg(EMSG_SHRINE_TAINTED1);
-		return;
-	}
+    if (&player == MyPlayer) {
+        InitDiabloMsg(EMSG_SHRINE_TAINTED1);
+        return;
+    }
 
-	int r = rng.generateRnd(4);
+    Player &myPlayer = *MyPlayer;
 
-	int v1 = r == 0 ? 1 : -1;
-	int v2 = r == 1 ? 1 : -1;
-	int v3 = r == 2 ? 1 : -1;
-	int v4 = r == 3 ? 1 : -1;
+    int plusStat = rng.generateRnd(4);
 
-	Player &myPlayer = *MyPlayer;
+    int minusStat;
+    do {
+        minusStat = rng.generateRnd(4);
+    } while (minusStat == plusStat);
 
-	ModifyPlrStr(myPlayer, v1);
-	ModifyPlrMag(myPlayer, v2);
-	ModifyPlrDex(myPlayer, v3);
-	ModifyPlrVit(myPlayer, v4);
+    switch (plusStat) {
+    case 0: ModifyPlrStr(myPlayer, 2); break;
+    case 1: ModifyPlrMag(myPlayer, 2); break;
+    case 2: ModifyPlrDex(myPlayer, 2); break;
+    case 3: ModifyPlrVit(myPlayer, 2); break;
+    }
 
-	CheckStats(myPlayer);
-	CalcPlrInv(myPlayer, true);
-	RedrawEverything();
+    switch (minusStat) {
+    case 0: ModifyPlrStr(myPlayer, -1); break;
+    case 1: ModifyPlrMag(myPlayer, -1); break;
+    case 2: ModifyPlrDex(myPlayer, -1); break;
+    case 3: ModifyPlrVit(myPlayer, -1); break;
+    }
 
-	InitDiabloMsg(EMSG_SHRINE_TAINTED2);
+    CheckStats(myPlayer);
+    CalcPlrInv(myPlayer, true);
+    RedrawEverything();
+
+    InitDiabloMsg(EMSG_SHRINE_TAINTED2);
 }
 
 /**
@@ -3025,7 +3036,7 @@ void OperateShrine(Player &player, Object &shrine, SfxID sType)
 		OperateShrineThaumaturgic(rng, player);
 		break;
 	case ShrineFascinating:
-		OperateShrineCostOfWisdom(player, SpellID::Firebolt, EMSG_SHRINE_FASCINATING);
+		OperateShrineCostOfWisdom(player, MagicType::Fire, SpellID::Firebolt, EMSG_SHRINE_FASCINATING);
 		break;
 	case ShrineCryptic:
 		OperateShrineCryptic(player);
@@ -3043,7 +3054,7 @@ void OperateShrine(Player &player, Object &shrine, SfxID sType)
 		OperateShrineHoly(player);
 		break;
 	case ShrineSacred:
-		OperateShrineCostOfWisdom(player, SpellID::ChargedBolt, EMSG_SHRINE_SACRED);
+		OperateShrineCostOfWisdom(player, MagicType::Lightning, SpellID::ChargedBolt, EMSG_SHRINE_SACRED);
 		break;
 	case ShrineSpiritual:
 		OperateShrineSpiritual(rng, player);
@@ -3064,7 +3075,7 @@ void OperateShrine(Player &player, Object &shrine, SfxID sType)
 		OperateShrineSecluded(player);
 		break;
 	case ShrineOrnate:
-		OperateShrineCostOfWisdom(player, SpellID::HolyBolt, EMSG_SHRINE_ORNATE);
+		OperateShrineCostOfWisdom(player, MagicType::Magic, SpellID::HolyBolt, EMSG_SHRINE_ORNATE);
 		break;
 	case ShrineGlimmering:
 		OperateShrineGlimmering(player);
@@ -3620,16 +3631,7 @@ unsigned int Object::GetId() const
 
 bool Object::IsDisabled() const
 {
-	if (!*GetOptions().Gameplay.disableCripplingShrines) {
-		return false;
-	}
-	if (IsAnyOf(_otype, _object_id::OBJ_GOATSHRINE, _object_id::OBJ_CAULDRON)) {
-		return true;
-	}
-	if (!IsShrine()) {
-		return false;
-	}
-	return IsAnyOf(static_cast<shrine_type>(_oVar1), shrine_type::ShrineFascinating, shrine_type::ShrineOrnate, shrine_type::ShrineSacred, shrine_type::ShrineMurphys);
+	return false;
 }
 
 Object *FindObjectAtPosition(Point position, bool considerLargeObjects)

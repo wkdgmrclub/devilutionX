@@ -129,7 +129,6 @@ struct {
 	bool randomizeQuests = false;
 	bool showItemLabels = false;
 	bool autoRefillBelt = false;
-	bool disableCripplingShrines = false;
 	uint8_t numHealPotionPickup = 0;
 	uint8_t numFullHealPotionPickup = 0;
 	uint8_t numManaPotionPickup = 0;
@@ -168,7 +167,6 @@ void ReadSettings(FILE *in, uint8_t version) // NOLINT(readability-identifier-le
 		DemoSettings.randomizeQuests = ReadByte(in) != 0;
 		DemoSettings.showItemLabels = ReadByte(in) != 0;
 		DemoSettings.autoRefillBelt = ReadByte(in) != 0;
-		DemoSettings.disableCripplingShrines = ReadByte(in) != 0;
 		DemoSettings.numHealPotionPickup = ReadByte(in);
 		DemoSettings.numFullHealPotionPickup = ReadByte(in);
 		DemoSettings.numManaPotionPickup = ReadByte(in);
@@ -196,8 +194,7 @@ void ReadSettings(FILE *in, uint8_t version) // NOLINT(readability-identifier-le
 	         { _("Auto Equip Jewelry"), DemoSettings.autoEquipJewelry },
 	         { _("Randomize Quests"), DemoSettings.randomizeQuests },
 	         { _("Show Item Labels"), DemoSettings.showItemLabels },
-	         { _("Auto Refill Belt"), DemoSettings.autoRefillBelt },
-	         { _("Disable Crippling Shrines"), DemoSettings.disableCripplingShrines } }) {
+	         { _("Auto Refill Belt"), DemoSettings.autoRefillBelt }, }) {
 		fmt::format_to(std::back_inserter(message), "\n{}={:d}", key, value);
 	}
 	for (const auto &[key, value] : std::initializer_list<std::pair<std::string_view, uint8_t>> {
@@ -233,7 +230,6 @@ void WriteSettings(FILE *out)
 	WriteByte(out, static_cast<uint8_t>(*options.Gameplay.randomizeQuests));
 	WriteByte(out, static_cast<uint8_t>(*options.Gameplay.showItemLabels));
 	WriteByte(out, static_cast<uint8_t>(*options.Gameplay.autoRefillBelt));
-	WriteByte(out, static_cast<uint8_t>(*options.Gameplay.disableCripplingShrines));
 	WriteByte(out, *options.Gameplay.numHealPotionPickup);
 	WriteByte(out, *options.Gameplay.numFullHealPotionPickup);
 	WriteByte(out, *options.Gameplay.numManaPotionPickup);
@@ -618,7 +614,6 @@ void OverrideOptions()
 	options.Gameplay.randomizeQuests.SetValue(DemoSettings.randomizeQuests);
 	options.Gameplay.showItemLabels.SetValue(DemoSettings.showItemLabels);
 	options.Gameplay.autoRefillBelt.SetValue(DemoSettings.autoRefillBelt);
-	options.Gameplay.disableCripplingShrines.SetValue(DemoSettings.disableCripplingShrines);
 	options.Gameplay.numHealPotionPickup.SetValue(DemoSettings.numHealPotionPickup);
 	options.Gameplay.numFullHealPotionPickup.SetValue(DemoSettings.numFullHealPotionPickup);
 	options.Gameplay.numManaPotionPickup.SetValue(DemoSettings.numManaPotionPickup);
