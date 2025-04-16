@@ -608,6 +608,8 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean showMonsterType;
 	/** @brief Displays item labels for items on the ground.  */
 	OptionEntryBoolean showItemLabels;
+	/** @brief Displays nearby items as blue diamonds on the map.  */
+	OptionEntryBoolean showAutomapItems;
 	/** @brief Refill belt from inventory, or rather, use potions/scrolls from inventory first when belt item is consumed.  */
 	OptionEntryBoolean autoRefillBelt;
 	/** @brief Locally disable clicking on shrines which permanently cripple character. */
