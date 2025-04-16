@@ -612,8 +612,6 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean showAutomapItems;
 	/** @brief Refill belt from inventory, or rather, use potions/scrolls from inventory first when belt item is consumed.  */
 	OptionEntryBoolean autoRefillBelt;
-	/** @brief Locally disable clicking on shrines which permanently cripple character. */
-	OptionEntryBoolean disableCripplingShrines;
 	/** @brief Spell hotkeys instantly cast the spell. */
 	OptionEntryBoolean quickCast;
 	/** @brief Number of Healing potions to pick up automatically */
