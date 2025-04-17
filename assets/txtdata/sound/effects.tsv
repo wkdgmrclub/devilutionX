@@ -8,8 +8,8 @@ WarriorDeath	Misc	sfx\misc\dead.wav
 ShootBow2	Misc,Hellfire	sfx\misc\sting1.wav
 ShootFireballBow	Misc,Hellfire	sfx\misc\fballbow.wav
 QuestDone	Stream	sfx\misc\questdon.wav
-BarrelExpload	Misc	sfx\items\urnpop3.wav
-BarrelBreak	Misc	sfx\items\urnpop2.wav
+BarrelExpload	Misc,Hellfire	sfx\items\urnpop3.wav
+BarrelBreak	Misc,Hellfire	sfx\items\urnpop2.wav
 PodExpload	Misc,Hellfire	sfx\items\podpop8.wav
 PodPop	Misc,Hellfire	sfx\items\podpop5.wav
 UrnExpload	Misc,Hellfire	sfx\items\urnpop3.wav

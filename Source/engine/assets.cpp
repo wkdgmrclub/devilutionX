@@ -77,8 +77,6 @@ bool FindMpqFile(std::string_view filename, MpqArchive **archive, uint32_t *file
 	// Iterate over archives in reverse order to prefer files from high priority archives
 	for (auto rit = MpqArchives.rbegin(); rit != MpqArchives.rend(); ++rit) {
 		int priority = rit->first;
-		if (!gbIsHellfire && priority >= 8000 && priority < 9000)
-			continue;
 		if (rit->second->GetFileNumber(fileHash, *fileNumber)) {
 			*archive = rit->second.get();
 			return true;
@@ -446,8 +444,8 @@ void LoadGameArchives()
 		gbIsHellfire = true;
 	if (!HasHellfireMpq)
 		InsertCDDlg("hellfire.mpq");
-	LoadMPQ(paths, "hfbard.mpq", 8110);
-	LoadMPQ(paths, "hfbarb.mpq", 8120);
+	LoadMPQ(paths, "hfbard.mpq", 610);
+	LoadMPQ(paths, "hfbarb.mpq", 620);
 #endif
 	if (gbIsHellfire)
 		LoadHellfireArchives();
@@ -463,10 +461,10 @@ void LoadHellfireArchives()
 	const bool hasVoice = FileExists(*hellfire_data_path + "sfx/hellfire/cowsut1.wav")
 	    || FileExists(*hellfire_data_path + "sfx/hellfire/cowsut1.mp3");
 #else // !UNPACKED_MPQS
-	LoadMPQ(paths, "hellfire.mpq", 8000);
-	const bool hasMonk = LoadMPQ(paths, "hfmonk.mpq", 8100);
-	const bool hasMusic = LoadMPQ(paths, "hfmusic.mpq", 8200);
-	const bool hasVoice = LoadMPQ(paths, "hfvoice.mpq", 8500);
+	LoadMPQ(paths, "hellfire.mpq", 500);
+	const bool hasMonk = LoadMPQ(paths, "hfmonk.mpq", 600);
+	const bool hasMusic = LoadMPQ(paths, "hfmusic.mpq", 700);
+	const bool hasVoice = LoadMPQ(paths, "hfvoice.mpq", 800);
 #endif
 
 	if (!hasMonk || !hasMusic || !hasVoice)
