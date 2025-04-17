@@ -47,7 +47,7 @@ OBJ_TORCHL	wtorch4	5	8				Animated,MissilesPassThrough	1	9	96
 OBJ_TORCHR	wtorch3	5	8				Animated,MissilesPassThrough	1	9	96	
 OBJ_TORCHL2	wtorch1	5	8				Animated,MissilesPassThrough	1	9	96	
 OBJ_TORCHR2	wtorch2	5	8				Animated,MissilesPassThrough	1	9	96	
-OBJ_SARC	sarc	1	4				Solid,MissilesPassThrough,Light,Trap	1	5	128	Bottom,Middle
+OBJ_SARC	l5sarco	1	4				Solid,MissilesPassThrough,Light,Trap	1	5	128	Bottom,Middle
 OBJ_FLAMEHOLE	flame1	0	0				MissilesPassThrough,Light	1	20	96	
 OBJ_FLAMELVR	lever	0	0				Solid,MissilesPassThrough,Light,Trap	1	2	96	Bottom
 OBJ_WATER	miniwatr	0	0				Animated,Solid,Light	1	10	64	
@@ -57,7 +57,7 @@ OBJ_TRAPR	traphole	1	24				MissilesPassThrough,Light	2	0	64
 OBJ_BOOKSHELF	bshelf	0	0				Solid,Light	1	0	96	
 OBJ_WEAPRACK	weapstnd	0	0				Solid,Light	1	0	96	
 OBJ_BARREL	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	9	96	Bottom,Middle
-OBJ_BARRELEX	urn	1	15				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
+OBJ_BARRELEX	urnexpld	1	15				Solid,MissilesPassThrough,Light,Breakable	1	10	96	Bottom,Middle
 OBJ_SHRINEL	lshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
 OBJ_SHRINER	rshrineg	0	0		THEME_SHRINE		Light	1	11	128	Bottom,Middle
 OBJ_SKELBOOK	book1	0	0		THEME_SKELROOM		Solid,MissilesPassThrough,Light	4	0	96	Bottom,Middle

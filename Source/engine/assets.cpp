@@ -425,7 +425,7 @@ void LoadGameArchives()
 	hellfire_data_path = FindUnpackedMpqData(paths, "hellfire");
 	if (hellfire_data_path)
 		gbIsHellfire = true;
-	if (forceHellfire && !hellfire_data_path)
+	if (!hellfire_data_path)
 		InsertCDDlg("hellfire");
 #else // !UNPACKED_MPQS
 	if (!LoadMPQ(paths, "DIABDAT.MPQ", MainMpqPriority)) {
@@ -444,7 +444,7 @@ void LoadGameArchives()
 
 	if (HasHellfireMpq)
 		gbIsHellfire = true;
-	if (forceHellfire && !HasHellfireMpq)
+	if (!HasHellfireMpq)
 		InsertCDDlg("hellfire.mpq");
 	LoadMPQ(paths, "hfbard.mpq", 8110);
 	LoadMPQ(paths, "hfbarb.mpq", 8120);

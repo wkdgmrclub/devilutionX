@@ -153,32 +153,14 @@ set(devilutionx_assets
   lua/inspect.lua
   lua/mods/clock/init.lua
   lua/repl_prelude.lua
-  monsters/balrog/megaa1.wav
-  monsters/balrog/megaa2.wav
-  monsters/balrog/megad1.wav
-  monsters/balrog/megad2.wav
-  monsters/balrog/megah1.wav
-  monsters/balrog/megah2.wav
-  monsters/balrog/megas1.wav
-  monsters/balrog/megas2.wav
-  monsters/byclps/biclopa1.wav
-  monsters/byclps/biclopa2.wav
-  monsters/byclps/biclopd1.wav
-  monsters/byclps/biclopd2.wav
-  monsters/byclps/bicloph1.wav
-  monsters/byclps/bicloph2.wav
-  monsters/byclps/byclpsa.cl2
-  monsters/byclps/byclpsd.cl2
-  monsters/byclps/byclpsh.cl2
-  monsters/byclps/byclpsn.cl2
-  monsters/byclps/byclpsw.cl2
+  monsters/mega/megaa1.wav
+  monsters/mega/megaa2.wav
+  monsters/mega/megah1.wav
+  monsters/mega/megah2.wav
+  monsters/mega/megas1.wav
+  monsters/mega/megas2.wav
   monsters/gargoyle/gargoa1.wav
   monsters/gargoyle/gargoa2.wav
-  monsters/spider/spidera.cl2
-  monsters/spider/spiderd.cl2
-  monsters/spider/spiderh.cl2
-  monsters/spider/spidern.cl2
-  monsters/spider/spiderw.cl2
   monsters/wolf/wolfa1.wav
   monsters/wolf/wolfa2.wav
   monsters/wolf/wolfd1.wav
@@ -189,14 +171,9 @@ set(devilutionx_assets
   nlevels/cutl6w.clx
   nlevels/l5data/cornerstone.dun
   nlevels/l5data/uberroom.dun
-  objects/barrelex.cel
-  objects/sarc.cel
-  objects/urn.cel
   plrgfx/warrior/whu/whufm.trn
   plrgfx/warrior/whu/whulm.trn
   plrgfx/warrior/whu/whuqm.trn
-  sfx/items/barlfire.wav
-  sfx/items/barrel.wav
   sfx/items/chest.wav
   sfx/items/flipaxe.wav
   sfx/items/fliplarm.wav
