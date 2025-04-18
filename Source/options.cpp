@@ -526,12 +526,12 @@ std::vector<OptionEntryBase *> AudioOptions::GetEntries()
 }
 
 OptionEntryResolution::OptionEntryResolution()
-    : OptionEntryListBase("", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI, N_("Resolution"), N_("Affect the game's internal resolution and determine your view area. Note: This can differ from screen resolution, when Upscaling, Integer Scaling or Fit to Screen is used."))
+    : OptionEntryListBase("", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::RecreateUI | OptionEntryFlags::Invisible, N_("Resolution"), N_("Affect the game's internal resolution and determine your view area. Note: This can differ from screen resolution, when Upscaling, Integer Scaling or Fit to Screen is used."))
 {
 }
 void OptionEntryResolution::LoadFromIni(std::string_view category)
 {
-	size_ = { ini->getInt(category, "Width", DEFAULT_WIDTH), ini->getInt(category, "Height", DEFAULT_HEIGHT) };
+	size_ = { DEFAULT_WIDTH, DEFAULT_HEIGHT };
 }
 void OptionEntryResolution::SaveToIni(std::string_view category) const
 {
