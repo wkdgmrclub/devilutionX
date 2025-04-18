@@ -22,7 +22,7 @@
 #include "utils/language.h"
 
 namespace devilution {
-
+/*
 namespace {
 
 constexpr int BarWidth = 307;
@@ -49,8 +49,9 @@ void DrawEndCap(const Surface &out, Point point, int idx, const ColorGradient &g
 	out.SetPixel({ point.x, point.y + 2 }, gradient[idx]);
 	out.SetPixel({ point.x, point.y + 3 }, gradient[idx / 2]);
 }
+*/
 
-void OptionExperienceBarChanged()
+/* void OptionExperienceBarChanged()
 {
 	if (!gbRunGame)
 		return;
@@ -58,25 +59,25 @@ void OptionExperienceBarChanged()
 		InitXPBar();
 	else
 		FreeXPBar();
-}
+} */
 
-const auto OptionChangeHandler = (GetOptions().Gameplay.experienceBar.SetValueChangedCallback(OptionExperienceBarChanged), true);
+// const auto OptionChangeHandler = (GetOptions().Gameplay.experienceBar.SetValueChangedCallback(OptionExperienceBarChanged), true);
 
-} // namespace
+//} namespace
 
-void InitXPBar()
+/* void InitXPBar()
 {
 	if (*GetOptions().Gameplay.experienceBar) {
 		xpbarArt = LoadClx("data\\xpbar.clx");
 	}
-}
+} */
 
-void FreeXPBar()
+/* void FreeXPBar()
 {
 	xpbarArt = std::nullopt;
-}
+} */
 
-void DrawXPBar(const Surface &out)
+/* void DrawXPBar(const Surface &out)
 {
 	if (!*GetOptions().Gameplay.experienceBar || ChatFlag)
 		return;
@@ -117,9 +118,9 @@ void DrawXPBar(const Surface &out)
 
 	// End pixels appear gradually
 	DrawEndCap(out, position + Displacement { static_cast<int>(fullBar), 0 }, static_cast<int>(fade), SilverGradient);
-}
+} */
 
-bool CheckXPBarInfo()
+/* bool CheckXPBarInfo()
 {
 	if (!*GetOptions().Gameplay.experienceBar)
 		return false;
@@ -155,6 +156,6 @@ bool CheckXPBarInfo()
 	AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} to Level {:d}")), FormatInteger(nextExperienceThreshold - player._pExperience), charLevel + 1));
 
 	return true;
-}
+} */
 
 } // namespace devilution

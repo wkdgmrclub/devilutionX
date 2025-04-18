@@ -1408,9 +1408,9 @@ void ValidatePlayer()
 	// This lets us catch cases where someone is editing experience directly through memory modification and reset their experience back to the expected cap.
 	if (myPlayer._pExperience > myPlayer.getNextExperienceThreshold()) {
 		myPlayer._pExperience = myPlayer.getNextExperienceThreshold();
-		if (*GetOptions().Gameplay.experienceBar) {
+		/* if (*GetOptions().Gameplay.experienceBar) {
 			RedrawEverything();
-		}
+		} */
 	}
 
 	int gt = 0;
@@ -2381,9 +2381,9 @@ void Player::_addExperience(uint32_t experience, int levelDelta)
 	// ensure we only add enough experience to reach the max experience cap so we don't overflow
 	_pExperience += std::min(clampedExp, maxExperience - _pExperience);
 
-	if (*GetOptions().Gameplay.experienceBar) {
+	/* if (*GetOptions().Gameplay.experienceBar) {
 		RedrawEverything();
-	}
+	} */
 
 	// Increase player level if applicable
 	while (!isMaxCharacterLevel() && _pExperience >= getNextExperienceThreshold()) {
