@@ -518,7 +518,8 @@ void InitGameInfo()
 	sgGameInitInfo.versionPatch = PROJECT_VERSION_PATCH;
 	const Options &options = GetOptions();
 	sgGameInitInfo.nTickRate = *options.Gameplay.tickRate;
-	sgGameInitInfo.bRunInTown = *options.Gameplay.runInTown ? 1 : 0;
+	// sgGameInitInfo.bRunInTown = *options.Gameplay.runInTown ? 1 : 0;
+	sgGameInitInfo.bRunInTown = 0;
 	sgGameInitInfo.bTheoQuest = *options.Gameplay.theoQuest ? 1 : 0;
 	sgGameInitInfo.bCowQuest = *options.Gameplay.cowQuest ? 1 : 0;
 	sgGameInitInfo.bFriendlyFire = *options.Gameplay.friendlyFire ? 1 : 0;
