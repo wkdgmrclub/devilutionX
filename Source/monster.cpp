@@ -1342,9 +1342,57 @@ void ShrinkLeaderPacksize(const Monster &monster)
 	}
 }
 
+void PlayMonsterTypeEffect(const CMonster &monType, MonsterSound mode, Point position)
+{
+	if (MyPlayer->pLvlLoad != 0 || !gbSndInited || !gbSoundOn || gbBufferMsgs != 0)
+		return;
+
+	int sndIdx = GenerateRnd(2);
+	TSnd *snd = monType.sounds[static_cast<int>(mode)][sndIdx].get();
+	if (snd == nullptr || snd->isPlaying())
+		return;
+
+	int lVolume = 0, lPan = 0;
+	if (!CalculateSoundPosition(position, &lVolume, &lPan))
+		return;
+
+	snd_play_snd(snd, lVolume, lPan);
+}
+
 void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
+
+	if (monster.type().type == MT_DIABLO) {
+		if (monster.var1 < 140)
+			return;
+
+		if (monster.var1 == 140) {
+			SpawnItem(monster, monster.position.tile, true);
+			AddMonsterType(MT_NBLACK, PLACE_SCATTER);
+
+			auto &altAnim = LevelMonsterTypes[GetMonsterTypeIndex(MT_NBLACK)].getAnimData(MonsterGraphic::Death);
+			monster.animInfo.setNewAnimation(
+			    altAnim.spritesForDirection(monster.direction),
+			    altAnim.frames,
+			    altAnim.rate);
+
+			PlayMonsterTypeEffect(LevelMonsterTypes[GetMonsterTypeIndex(MT_NBLACK)], MonsterSound::Death, monster.position.tile);
+
+			return;
+		}
+
+		if (monster.var1 == 160) {
+			PlaySFX(SfxID::SpellApocalypse);
+			dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+			monster.isInvalid = true;
+			M_UpdateRelations(monster);
+			return;
+		}
+
+		return;
+	}
+
 	if (monster.animInfo.isLastFrame()) {
 		if (monster.isUnique())
 			AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
@@ -1353,7 +1401,6 @@ void MonsterDeath(Monster &monster)
 
 		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
 		monster.isInvalid = true;
-
 		M_UpdateRelations(monster);
 	}
 }
