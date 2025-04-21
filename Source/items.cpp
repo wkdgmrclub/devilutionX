@@ -968,6 +968,9 @@ int SaveItemPower(const Player &player, Item &item, ItemPower &power)
 		item._iPLHP -= portion;
 		item._iPLMana += portion;
 	} break;
+	case IPL_NOHEALMON: {
+		item._iFlags |= ItemSpecialEffect::NoHealOnMonsters;
+	} break;
 	default:
 		break;
 	}

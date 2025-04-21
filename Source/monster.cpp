@@ -1084,7 +1084,7 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 			M_StartHit(monster, player, mdam);
 	}
 
-	if ((monster.flags & MFLAG_LIFESTEAL) != 0)
+	if ((monster.flags & MFLAG_LIFESTEAL) != 0 && (monster.flags & MFLAG_NOHEAL) == 0)
 		monster.hitPoints += dam;
 	if (player._pHitPoints >> 6 <= 0) {
 		if (gbIsHellfire)
@@ -1261,8 +1261,12 @@ void MonsterHeal(Monster &monster)
 	if (monster.animInfo.currentFrame == 0) {
 		monster.flags &= ~MFLAG_LOCK_ANIMATION;
 		monster.flags |= MFLAG_ALLOW_SPECIAL;
-		if (monster.var1 + monster.hitPoints < monster.maxHitPoints) {
-			monster.hitPoints = monster.var1 + monster.hitPoints;
+		if ((monster.flags & MFLAG_NOHEAL) == 0) {
+			if (monster.var1 + monster.hitPoints < monster.maxHitPoints) {
+				monster.hitPoints = monster.var1 + monster.hitPoints;
+			} else {
+				monster.hitPoints = monster.maxHitPoints;
+			}
 		} else {
 			monster.hitPoints = monster.maxHitPoints;
 			monster.flags &= ~MFLAG_ALLOW_SPECIAL;
@@ -1368,7 +1372,7 @@ void MonsterDeath(Monster &monster)
 			return;
 
 		if (monster.var1 == 140) {
-			SpawnItem(monster, monster.position.tile, true);
+			SpawnLoot(monster, true);
 			AddMonsterType(MT_NBLACK, PLACE_SCATTER);
 
 			auto &altAnim = LevelMonsterTypes[GetMonsterTypeIndex(MT_NBLACK)].getAnimData(MonsterGraphic::Death);
@@ -2022,13 +2026,15 @@ void ScavengerAi(Monster &monster)
 			StartEating(monster);
 			if (gbIsHellfire) {
 				int mMaxHP = monster.maxHitPoints;
-				monster.hitPoints += mMaxHP / 8;
+				if ((monster.flags & MFLAG_NOHEAL) == 0)
+					monster.hitPoints += mMaxHP / 8;
 				if (monster.hitPoints > monster.maxHitPoints)
 					monster.hitPoints = monster.maxHitPoints;
 				if (monster.goalVar3 <= 0 || monster.hitPoints == monster.maxHitPoints)
 					dCorpse[monster.position.tile.x][monster.position.tile.y] = 0;
 			} else {
-				monster.hitPoints += 64;
+				if ((monster.flags & MFLAG_NOHEAL) == 0)
+					monster.hitPoints += 64;
 			}
 			int targetHealth = monster.maxHitPoints;
 			if (!gbIsHellfire)
@@ -2141,9 +2147,11 @@ void FallenAi(Monster &monster)
 			return;
 		}
 		StartSpecialStand(monster, monster.direction);
-		if (monster.maxHitPoints - (2 * monster.intelligence + 2) >= monster.hitPoints)
-			monster.hitPoints += 2 * monster.intelligence + 2;
-		else
+		if (monster.maxHitPoints - (2 * monster.intelligence + 2) >= monster.hitPoints) {
+			if ((monster.flags & MFLAG_NOHEAL) == 0) {
+				monster.hitPoints += 2 * monster.intelligence + 2;
+			}
+		} else
 			monster.hitPoints = monster.maxHitPoints;
 		int rad = 2 * monster.intelligence + 4;
 		for (int y = -rad; y <= rad; y++) {

@@ -267,8 +267,11 @@ bool MonsterMHit(const Player &player, int monsterId, int mindam, int maxdam, in
 	if (&player == MyPlayer)
 		ApplyMonsterDamage(damageType, monster, dam);
 
-	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::NoHealOnMonsters))
+	// MFLAG_NOHEAL should only be set from Missles originating from Bows
+	if ((t == MissileID::FireArrow || t == MissileID::Arrow || t == MissileID::LightningArrow)
+	    && HasAnyOf(player._pIFlags, ItemSpecialEffect::NoHealOnMonsters)) {
 		monster.flags |= MFLAG_NOHEAL;
+	}
 
 	if (monster.hitPoints >> 6 <= 0) {
 		M_StartKill(monster, player);
