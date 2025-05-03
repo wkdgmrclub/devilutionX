@@ -289,7 +289,7 @@ bool Plr2PlrMHit(const Player &player, int p, int mindam, int maxdam, int dist, 
 
 	*blocked = false;
 
-	if (target.isOnArenaLevel() && target._pmode == PM_WALK_SIDEWAYS)
+	if (target._pmode == PM_WALK_SIDEWAYS)
 		return false;
 
 	if (target._pInvincible) {
