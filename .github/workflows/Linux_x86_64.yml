@@ -22,65 +22,63 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-    - name: Create Build Environment
-      run: Packaging/nix/debian-host-prep.sh
+      - name: Create Build Environment
+        run: Packaging/nix/debian-host-prep.sh
 
-    - name: Cache CMake build folder
-      uses: actions/cache@v3
-      with:
-        path: build
-        key: ${{ github.workflow }}-v2-${{ github.sha }}
-        restore-keys: ${{ github.workflow }}-v2-
+      - name: Cache CMake build folder
+        uses: actions/cache@v3
+        with:
+          path: build
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-build-
 
-    - name: Build
-      working-directory: ${{github.workspace}}
-      shell: bash
-      env:
-        CMAKE_BUILD_TYPE: ${{github.event_name == 'release' && 'Release' || 'RelWithDebInfo'}}
-      # We set DEVILUTIONX_SYSTEM_LIBFMT=OFF because its soversion changes frequently.
-      # We set DEVILUTIONX_SYSTEM_LIBSODIUM=OFF because its soversion changes frequently.
-      # We set DEVILUTIONX_SYSTEM_SIMPLEINI=OFF because we require v4.19+, still missing from many distributions.
-      # We set DEVILUTIONX_SYSTEM_BZIP2=OFF because Fedora and Debian do not agree on how to link it.
-      run: |
-        cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=${{env.CMAKE_BUILD_TYPE}} -DCMAKE_INSTALL_PREFIX=/usr -DCPACK=ON \
-          -DDISCORD_INTEGRATION=ON -DBUILD_TESTING=OFF -DDEVILUTIONX_SYSTEM_LIBFMT=OFF \
-          -DDEVILUTIONX_SYSTEM_LIBSODIUM=OFF -DDEVILUTIONX_SYSTEM_SIMPLEINI=OFF -DDEVILUTIONX_SYSTEM_BZIP2=OFF && \
-        cmake --build build -j $(getconf _NPROCESSORS_ONLN) --target package
+      - name: Configure and Build
+        env:
+          CMAKE_BUILD_TYPE: ${{ github.event_name == 'release' && 'Release' || 'RelWithDebInfo' }}
+        run: |
+          cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=/usr -DCPACK=ON \
+            -DDISCORD_INTEGRATION=ON -DBUILD_TESTING=OFF -DDEVILUTIONX_SYSTEM_LIBFMT=OFF \
+            -DDEVILUTIONX_SYSTEM_LIBSODIUM=OFF -DDEVILUTIONX_SYSTEM_SIMPLEINI=OFF -DDEVILUTIONX_SYSTEM_BZIP2=OFF
+          cmake --build build -j $(nproc) --target package
 
-    - name: Package
-      run: Packaging/nix/LinuxReleasePackaging.sh && mv devilutionx.tar.xz devilutionx-x86_64-linux-gnu.tar.xz
+      - name: Package
+        run: |
+          Packaging/nix/LinuxReleasePackaging.sh
+          mv devilutionx.tar.xz devilutionx-x86_64-linux-gnu.tar.xz
 
-    - name: Package AppImage
-      run: Packaging/nix/AppImage.sh && mv devilutionx.appimage devilutionx-x86_64-linux-gnu.appimage
+      - name: Package AppImage
+        run: |
+          Packaging/nix/AppImage.sh
+          mv devilutionx.appimage devilutionx-x86_64-linux-gnu.appimage
 
-    - name: Upload Package
-      if: ${{ !env.ACT }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: devilutionx-x86_64-linux-gnu.tar.xz
-        path: devilutionx-x86_64-linux-gnu.tar.xz
+      - name: Upload Package Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devilutionx-x86_64-linux-gnu.tar.xz
+          path: devilutionx-x86_64-linux-gnu.tar.xz
 
-    - name: Upload AppImage
-      if: ${{ !env.ACT }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: devilutionx-x86_64-linux-gnu.appimage
-        path: devilutionx-x86_64-linux-gnu.appimage
+      - name: Upload AppImage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devilutionx-x86_64-linux-gnu.appimage
+          path: devilutionx-x86_64-linux-gnu.appimage
 
-    - name: Update Release
-      if: ${{ github.event_name == 'release' && !env.ACT }}
-      uses: svenstaro/upload-release-action@v2
-      with:
-        file: devilutionx-x86_64-linux-gnu.*
-        file_glob: true
-        overwrite: true
+      - name: Upload to GitHub Release
+        if: github.event_name == 'release'
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: devilutionx-x86_64-linux-gnu.*
+          file_glob: true
+          overwrite: true
 
-    - name: Clean up artifacts
-      run: rm -rf build/_CPack_Packages build/package build/*.deb build/*.rpm build/*.appimage build/*.tar.xz
+      - name: Clean up artifacts
+        run: rm -rf build/_CPack_Packages build/package build/*.deb build/*.rpm build/*.appimage build/*.tar.xz
