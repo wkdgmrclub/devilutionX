@@ -1747,7 +1747,7 @@ bool AiPlanPath(Monster &monster)
 	}
 
 	bool clear = LineClear(
-	    [&monster](Point position) { return IsTileAvailable(monster, position); },
+	    [&monster](Point position) { return (IsTileWalkable(position) && IsTileSafe(monster, position)); },
 	    monster.position.tile,
 	    monster.enemyPosition);
 	if (!clear || (monster.pathCount >= 5 && monster.pathCount < 8)) {
