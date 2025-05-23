@@ -984,6 +984,9 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, Missil
 
 	Player &player = Players[pnum];
 
+	if (player._pmode == PM_WALK_SIDEWAYS)
+		return false;
+
 	if (player._pHitPoints >> 6 <= 0) {
 		return false;
 	}
