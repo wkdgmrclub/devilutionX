@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include <expected.hpp>
+
 #include "cursor.h"
 #include "textdat.h"
 
@@ -334,6 +336,10 @@ extern std::vector<MonsterData> MonstersData;
 extern const _monster_id MonstConvTbl[];
 extern std::vector<UniqueMonsterData> UniqueMonstersData;
 
+tl::expected<_monster_id, std::string> ParseMonsterId(std::string_view value);
+tl::expected<MonsterAIID, std::string> ParseAiId(std::string_view value);
+tl::expected<monster_resistance, std::string> ParseMonsterResistance(std::string_view value);
+tl::expected<UniqueMonsterPack, std::string> ParseUniqueMonsterPack(std::string_view value);
 void LoadMonsterData();
 
 /**

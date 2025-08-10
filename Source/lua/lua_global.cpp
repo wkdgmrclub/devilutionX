@@ -16,6 +16,7 @@
 #include "lua/modules/i18n.hpp"
 #include "lua/modules/items.hpp"
 #include "lua/modules/log.hpp"
+#include "lua/modules/monsters.hpp"
 #include "lua/modules/player.hpp"
 #include "lua/modules/render.hpp"
 #include "lua/modules/towners.hpp"
@@ -267,6 +268,7 @@ void LuaInitialize()
 	    "devilutionx.items", LuaItemModule(lua),
 	    "devilutionx.log", LuaLogModule(lua),
 	    "devilutionx.audio", LuaAudioModule(lua),
+	    "devilutionx.monsters", LuaMonstersModule(lua),
 	    "devilutionx.player", LuaPlayerModule(lua),
 	    "devilutionx.render", LuaRenderModule(lua),
 	    "devilutionx.towners", LuaTownersModule(lua),
@@ -295,6 +297,10 @@ void LuaShutdown()
 
 void LuaEvent(std::string_view name)
 {
+	if (!CurrentLuaState.has_value()) {
+		return;
+	}
+
 	const auto trigger = CurrentLuaState->events.traverse_get<std::optional<sol::object>>(name, "trigger");
 	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) {
 		LogError("events.{}.trigger is not a function", name);
