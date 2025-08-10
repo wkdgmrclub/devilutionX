@@ -578,6 +578,8 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean showHealthValues;
 	/** @brief Display current/max mana values on mana globe. */
 	OptionEntryBoolean showManaValues;
+	/** @brief Enable the multiplayer party information display */
+	OptionEntryBoolean showMultiplayerPartyInfo;
 	/** @brief Show enemy health at the top of the screen. */
 	OptionEntryBoolean enemyHealthBar;
 	/** @brief Displays item info in a floating box when hovering over an ite. */

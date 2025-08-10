@@ -42,6 +42,7 @@
 #include "panels/charpanel.hpp"
 #include "panels/console.hpp"
 #include "panels/mainpanel.hpp"
+#include "panels/partypanel.hpp"
 #include "panels/spell_book.hpp"
 #include "panels/spell_icons.hpp"
 #include "panels/spell_list.hpp"
@@ -996,7 +997,11 @@ void CloseCharPanel()
 	if (IsInspectingPlayer()) {
 		InspectPlayer = MyPlayer;
 		RedrawEverything();
-		InitDiabloMsg(_("Stopped inspecting players."));
+
+		if (InspectingFromPartyPanel)
+			InspectingFromPartyPanel = false;
+		else
+			InitDiabloMsg(_("Stopped inspecting players."));
 	}
 }
 
@@ -1106,6 +1111,7 @@ tl::expected<void, std::string> InitMainPanel()
 		pManaBuff.emplace(88, 88);
 		pLifeBuff.emplace(88, 88);
 
+		RETURN_IF_ERROR(LoadPartyPanel());
 		RETURN_IF_ERROR(LoadCharPanel());
 		RETURN_IF_ERROR(LoadLargeSpellIcons());
 		{
@@ -1463,6 +1469,7 @@ void FreeControlPan()
 	pQLogCel = std::nullopt;
 	GoldBoxBuffer = std::nullopt;
 	FreeMainPanel();
+	FreePartyPanel();
 	FreeCharPanel();
 	FreeModifierHints();
 }
@@ -1513,6 +1520,12 @@ void DrawInfoBox(const Surface &out)
 			InfoString = std::string_view(target._pName);
 			AddInfoBoxString(fmt::format(fmt::runtime(_("{:s}, Level: {:d}")), target.getClassName(), target.getCharacterLevel()));
 			AddInfoBoxString(fmt::format(fmt::runtime(_("Hit Points {:d} of {:d}")), target._pHitPoints >> 6, target._pMaxHP >> 6));
+		}
+		if (PortraitIdUnderCursor != -1) {
+			InfoColor = UiFlags::ColorWhitegold;
+			auto &target = Players[PortraitIdUnderCursor];
+			InfoString = std::string_view(target._pName);
+			AddInfoBoxString(_("Right click to inspect"));
 		}
 	}
 	if (!InfoString.empty())
