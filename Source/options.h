@@ -116,8 +116,6 @@ enum class OptionEntryFlags : uint8_t {
 	RecreateUI = 1 << 5,
 	/** @brief diablo.mpq must be present. */
 	NeedDiabloMpq = 1 << 6,
-	/** @brief hellfire.mpq must be present. */
-	NeedHellfireMpq = 1 << 7,
 };
 use_enum_as_flags(OptionEntryFlags);
 
@@ -580,8 +578,12 @@ struct GameplayOptions : OptionCategoryBase {
 	OptionEntryBoolean showHealthValues;
 	/** @brief Display current/max mana values on mana globe. */
 	OptionEntryBoolean showManaValues;
+	/** @brief Enable the multiplayer party information display */
+	OptionEntryBoolean showMultiplayerPartyInfo;
 	/** @brief Show enemy health at the top of the screen. */
 	OptionEntryBoolean enemyHealthBar;
+	/** @brief Displays item info in a floating box when hovering over an ite. */
+	OptionEntryBoolean floatingInfoBox;
 	/** @brief Automatically pick up gold when walking over it. */
 	OptionEntryBoolean autoGoldPickup;
 	/** @brief Auto-pickup elixirs */
@@ -832,6 +834,7 @@ struct ModOptions : OptionCategoryBase {
 	std::vector<OptionEntryBase *> GetEntries() override;
 	void AddModEntry(const std::string &modName);
 	void RemoveModEntry(const std::string &modName);
+	void SetHellfireEnabled(bool enableHellfire);
 
 private:
 	struct ModEntry {
@@ -868,6 +871,7 @@ struct Options {
 	{
 		return {
 			&Language,
+			&Mods,
 			&GameMode,
 			&StartUp,
 			&Graphics,
@@ -880,7 +884,6 @@ struct Options {
 			&Chat,
 			&Keymapper,
 			&Padmapper,
-			&Mods,
 		};
 	}
 };
