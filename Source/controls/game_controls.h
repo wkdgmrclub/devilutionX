@@ -21,7 +21,6 @@ enum GameActionType : uint8_t {
 	GameActionType_TOGGLE_SPELL_BOOK,
 	GameActionType_TOGGLE_QUEST_LOG,
 	GameActionType_SEND_KEY,
-	GameActionType_MOVE_AUTOMAP,
 };
 
 struct GameActionSendKey {

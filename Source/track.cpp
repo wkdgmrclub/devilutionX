@@ -7,13 +7,11 @@
 
 #include <SDL.h>
 
-#include "automap.h"
 #include "controls/control_mode.hpp"
 #include "controls/game_controls.h"
 #include "controls/plrctrls.h"
 #include "cursor.h"
 #include "engine/point.hpp"
-#include "options.h"
 #include "player.h"
 #include "stores.h"
 
@@ -119,18 +117,6 @@ void RepeatPlayerAction()
 	case PlayerActionType::Walk:
 		RepeatWalk(myPlayer);
 		break;
-	case PlayerActionType::MoveAutomap: {
-		const auto &padmapper = GetOptions().Padmapper;
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Up")))
-			AutomapUp();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Down")))
-			AutomapDown();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Left")))
-			AutomapLeft();
-		if (IsControllerButtonComboPressed(padmapper.ButtonComboForAction("Automap Move Right")))
-			AutomapRight();
-		break;
-	}
 	case PlayerActionType::None:
 		break;
 	}
