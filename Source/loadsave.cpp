@@ -32,9 +32,11 @@
 #include "menu.h"
 #include "missiles.h"
 #include "monster.h"
+#include "monsters/validation.hpp"
 #include "mpq/mpq_common.hpp"
 #include "pfile.h"
 #include "playerdat.hpp"
+#include "plrmsg.h"
 #include "qol/stash.h"
 #include "stores.h"
 #include "utils/algorithm/container.hpp"
@@ -126,6 +128,11 @@ public:
 	{
 		return m_buffer_ != nullptr
 		    && m_size_ >= (m_cur_ + size);
+	}
+
+	size_t Size()
+	{
+		return m_size_;
 	}
 
 	template <typename T>
@@ -413,7 +420,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	// Only read spell levels for learnable spells
 	for (int i = 0; i < static_cast<int>(SpellID::LAST); i++) {
 		auto spl = static_cast<SpellID>(i);
-		if (GetSpellData(spl).sBookLvl != -1)
+		if (GetSpellBookLevel(spl) != -1)
 			player._pSplLvl[i] = file.NextLE<uint8_t>();
 		else
 			file.Skip<uint8_t>();
@@ -623,7 +630,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 
 bool gbSkipSync = false;
 
-void LoadMonster(LoadHelper *file, Monster &monster, MonsterConversionData *monsterConversionData = nullptr)
+[[nodiscard]] bool LoadMonster(LoadHelper *file, Monster &monster, MonsterConversionData *monsterConversionData = nullptr)
 {
 	monster.levelType = file->NextLE<int32_t>();
 	monster.mode = static_cast<MonsterMode>(file->NextLE<int32_t>());
@@ -730,6 +737,54 @@ void LoadMonster(LoadHelper *file, Monster &monster, MonsterConversionData *mons
 
 	if (monster.mode == MonsterMode::Petrified)
 		monster.animInfo.isPetrified = true;
+
+	if (monster.isUnique()) {
+		// check if the unique monster is still valid (it could no longer be valid e.g. because the loaded mods changed and the unique monsters changed as a consequence)
+		const bool valid = IsUniqueMonsterValid(monster);
+		if (!valid) {
+			LogWarn("Unique monster no longer valid, skipping it.");
+			return false;
+		}
+	}
+
+	return true;
+}
+
+void LoadMonsters(LoadHelper &file, ankerl::unordered_dense::set<unsigned> &removedMonsterIds, const bool applyLight, LevelConversionData *levelConversionData)
+{
+	for (unsigned &monsterId : ActiveMonsters)
+		monsterId = file.NextBE<uint32_t>();
+
+	for (size_t i = 0; i < ActiveMonsterCount;) {
+		Monster &monster = Monsters[ActiveMonsters[i]];
+		MonsterConversionData *monsterConversionData = nullptr;
+		if (levelConversionData != nullptr)
+			monsterConversionData = &levelConversionData->monsterConversionData[ActiveMonsters[i]];
+		const bool valid = LoadMonster(&file, monster, monsterConversionData);
+		if (!valid) {
+			Monsters[ActiveMonsters[i]] = {};
+			removedMonsterIds.insert(ActiveMonsters[i]);
+			for (size_t j = i + 1; j < ActiveMonsterCount; j++) {
+				ActiveMonsters[j - 1] = ActiveMonsters[j];
+			}
+			--ActiveMonsterCount;
+			continue;
+		}
+
+		if (applyLight && monster.isUnique() && monster.lightId != NO_LIGHT)
+			Lights[monster.lightId].isInvalid = false;
+
+		i++;
+	}
+
+	for (const unsigned removedMonsterId : removedMonsterIds) {
+		for (size_t i = 0; i < ActiveMonsterCount; i++) {
+			Monster &activeMonster = Monsters[ActiveMonsters[i]];
+			if ((activeMonster.flags & MFLAG_TARGETS_MONSTER) != 0 && activeMonster.enemy == removedMonsterId) {
+				activeMonster.flags |= MFLAG_NO_ENEMY;
+			}
+		}
+	}
 }
 
 /**
@@ -765,7 +820,7 @@ void LoadMissile(LoadHelper *file)
 	missile.position.start.y = file->NextLE<int32_t>();
 	missile.position.traveled.deltaX = file->NextLE<int32_t>();
 	missile.position.traveled.deltaY = file->NextLE<int32_t>();
-	missile._mimfnum = file->NextLE<int32_t>();
+	missile.setFrameGroupRaw(file->NextLE<int32_t>());
 	missile._mispllvl = file->NextLE<int32_t>();
 	missile._miDelFlag = file->NextBool32();
 	missile._miAnimType = static_cast<MissileGraphicID>(file->NextLE<uint8_t>());
@@ -1535,7 +1590,7 @@ void SaveMissile(SaveHelper *file, const Missile &missile)
 	file->WriteLE<int32_t>(missile.position.start.y);
 	file->WriteLE<int32_t>(missile.position.traveled.deltaX);
 	file->WriteLE<int32_t>(missile.position.traveled.deltaY);
-	file->WriteLE<int32_t>(missile._mimfnum);
+	file->WriteLE<int32_t>(missile.getFrameGroupRaw());
 	file->WriteLE<int32_t>(missile._mispllvl);
 	file->WriteLE<uint32_t>(missile._miDelFlag ? 1 : 0);
 	file->WriteLE<uint8_t>(static_cast<uint8_t>(missile._miAnimType));
@@ -1938,18 +1993,11 @@ tl::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionDa
 	auto savedItemCount = file.NextBE<uint32_t>();
 	ActiveObjectCount = file.NextBE<int32_t>();
 
+	ankerl::unordered_dense::set<unsigned> removedMonsterIds;
+
 	if (leveltype != DTYPE_TOWN) {
-		for (unsigned &monsterId : ActiveMonsters)
-			monsterId = file.NextBE<uint32_t>();
-		for (size_t i = 0; i < ActiveMonsterCount; i++) {
-			Monster &monster = Monsters[ActiveMonsters[i]];
-			MonsterConversionData *monsterConversionData = nullptr;
-			if (levelConversionData != nullptr)
-				monsterConversionData = &levelConversionData->monsterConversionData[ActiveMonsters[i]];
-			LoadMonster(&file, monster, monsterConversionData);
-			if (monster.isUnique() && monster.lightId != NO_LIGHT)
-				Lights[monster.lightId].isInvalid = false;
-		}
+		LoadMonsters(file, removedMonsterIds, true, levelConversionData);
+
 		if (!gbSkipSync) {
 			for (size_t i = 0; i < ActiveMonsterCount; i++)
 				RETURN_IF_ERROR(SyncMonsterAnim(Monsters[ActiveMonsters[i]]));
@@ -1979,7 +2027,12 @@ tl::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionDa
 	if (leveltype != DTYPE_TOWN) {
 		for (int j = 0; j < MAXDUNY; j++) {
 			for (int i = 0; i < MAXDUNX; i++) // NOLINT(modernize-loop-convert)
+			{
 				dMonster[i][j] = file.NextBE<int32_t>();
+				if (dMonster[i][j] > 0 && removedMonsterIds.contains(std::abs(dMonster[i][j]) - 1)) {
+					dMonster[i][j] = 0;
+				}
+			}
 		}
 		for (int j = 0; j < MAXDUNY; j++) {
 			for (int i = 0; i < MAXDUNX; i++) // NOLINT(modernize-loop-convert)
@@ -2020,6 +2073,21 @@ tl::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionDa
 
 const int DiabloItemSaveSize = 368;
 const int HellfireItemSaveSize = 372;
+
+bool IsStashSizeValid(size_t stashSize, uint32_t pages, uint32_t itemCount)
+{
+	const size_t itemSize = (gbIsHellfire ? HellfireItemSaveSize : DiabloItemSaveSize);
+
+	const size_t expectedSize = sizeof(uint8_t)
+	    + sizeof(uint32_t)
+	    + sizeof(uint32_t)
+	    + (sizeof(uint32_t) + 10 * 10 * sizeof(uint16_t)) * pages
+	    + sizeof(uint32_t)
+	    + itemSize * itemCount
+	    + sizeof(uint32_t);
+
+	return stashSize == expectedSize;
+}
 
 } // namespace
 
@@ -2078,7 +2146,7 @@ tl::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter)
 
 void RemoveInvalidItem(Item &item)
 {
-	bool isInvalid = !IsItemAvailable(item.IDidx) || !IsUniqueAvailable(item._iUid);
+	bool isInvalid = !IsItemAvailable(item.IDidx) || item._iUid >= static_cast<int>(UniqueItems.size());
 
 	if (!gbIsHellfire) {
 		isInvalid = isInvalid || (item._itype == ItemType::Staff && GetSpellStaffLevel(item._iSpell) == -1);
@@ -2321,8 +2389,10 @@ void LoadStash()
 		return;
 
 	auto version = file.NextLE<uint8_t>();
-	if (version > StashVersion)
+	if (version > StashVersion) {
+		EventPlrMsg(_("Stash version invalid. If you attempt to access your stash, data will be overwritten!!"), UiFlags::ColorRed);
 		return;
+	}
 
 	Stash.gold = file.NextLE<uint32_t>();
 
@@ -2337,6 +2407,11 @@ void LoadStash()
 	}
 
 	auto itemCount = file.NextLE<uint32_t>();
+	if (!IsStashSizeValid(file.Size(), pages, itemCount)) {
+		Stash = {};
+		EventPlrMsg(_("Stash size invalid. If you attempt to access your stash, data will be overwritten!!"), UiFlags::ColorRed);
+		return;
+	}
 	Stash.stashList.resize(itemCount);
 	for (unsigned i = 0; i < itemCount; i++) {
 		LoadAndValidateItemData(file, Stash.stashList[i]);
@@ -2435,13 +2510,13 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	for (int &monstkill : MonsterKillCounts)
 		monstkill = file.NextBE<int32_t>();
 
+	ankerl::unordered_dense::set<unsigned> removedMonsterIds;
+
 	// skip ahead for vanilla save compatibility (Related to bugfix where MonsterKillCounts[MaxMonsters] was changed to MonsterKillCounts[NUM_MTYPES]
 	file.Skip(4 * (MaxMonsters - NUM_MTYPES));
 	if (leveltype != DTYPE_TOWN) {
-		for (unsigned &monsterId : ActiveMonsters)
-			monsterId = file.NextBE<uint32_t>();
-		for (size_t i = 0; i < ActiveMonsterCount; i++)
-			LoadMonster(&file, Monsters[ActiveMonsters[i]]);
+		LoadMonsters(file, removedMonsterIds, false, nullptr);
+
 		for (size_t i = 0; i < ActiveMonsterCount; i++)
 			SyncPackSize(Monsters[ActiveMonsters[i]]);
 		// Skip ActiveMissiles
@@ -2502,7 +2577,12 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	if (leveltype != DTYPE_TOWN) {
 		for (int j = 0; j < MAXDUNY; j++) {
 			for (int i = 0; i < MAXDUNX; i++) // NOLINT(modernize-loop-convert)
+			{
 				dMonster[i][j] = file.NextBE<int32_t>();
+				if (dMonster[i][j] > 0 && removedMonsterIds.contains(std::abs(dMonster[i][j]) - 1)) {
+					dMonster[i][j] = 0;
+				}
+			}
 		}
 		for (int j = 0; j < MAXDUNY; j++) {
 			for (int i = 0; i < MAXDUNX; i++) // NOLINT(modernize-loop-convert)
