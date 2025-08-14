@@ -2223,13 +2223,13 @@ void InitPadmapActions()
 	    nullptr,
 	    []() { return CanPlayerTakeAction() && !InGameMenu(); });
 	options.Padmapper.AddAction(
-	    "Toggle Automap",
+	    "ToggleAutomap",
 	    N_("Toggle automap"),
 	    N_("Toggles if automap is displayed."),
 	    ControllerButton_BUTTON_LEFTSTICK,
 	    DoAutoMap);
 	options.Padmapper.AddAction(
-	    "Automap Move Up",
+	    "AutomapMoveUp",
 	    N_("Automap Move Up"),
 	    N_("Moves the automap up when active."),
 	    ControllerButton_NONE,
@@ -2245,7 +2245,7 @@ void InitPadmapActions()
 		    LastPlayerAction = PlayerActionType::None;
 	    });
 	options.Padmapper.AddAction(
-	    "Automap Move Down",
+	    "AutomapMoveDown",
 	    N_("Automap Move Down"),
 	    N_("Moves the automap down when active."),
 	    ControllerButton_NONE,
@@ -2261,7 +2261,7 @@ void InitPadmapActions()
 		    LastPlayerAction = PlayerActionType::None;
 	    });
 	options.Padmapper.AddAction(
-	    "Automap Move Left",
+	    "AutomapMoveLeft",
 	    N_("Automap Move Left"),
 	    N_("Moves the automap left when active."),
 	    ControllerButton_NONE,
@@ -2277,7 +2277,7 @@ void InitPadmapActions()
 		    LastPlayerAction = PlayerActionType::None;
 	    });
 	options.Padmapper.AddAction(
-	    "Automap Move Right",
+	    "AutomapMoveRight",
 	    N_("Automap Move Right"),
 	    N_("Moves the automap right when active."),
 	    ControllerButton_NONE,
