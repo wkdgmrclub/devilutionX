@@ -2233,25 +2233,25 @@ void InitPadmapActions()
 	    N_("Automap Move Up"),
 	    N_("Moves the automap up when active."),
 	    ControllerButton_NONE,
-		[] {});
+	    [] {});
 	options.Padmapper.AddAction(
 	    "AutomapMoveDown",
 	    N_("Automap Move Down"),
 	    N_("Moves the automap down when active."),
 	    ControllerButton_NONE,
-		[] {});
+	    [] {});
 	options.Padmapper.AddAction(
 	    "AutomapMoveLeft",
 	    N_("Automap Move Left"),
 	    N_("Moves the automap left when active."),
 	    ControllerButton_NONE,
-		[] {});
+	    [] {});
 	options.Padmapper.AddAction(
 	    "AutomapMoveRight",
 	    N_("Automap Move Right"),
 	    N_("Moves the automap right when active."),
 	    ControllerButton_NONE,
-		[] {});
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MouseUp",
 	    N_("Move mouse up"),
