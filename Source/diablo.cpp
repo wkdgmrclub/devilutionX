@@ -1841,21 +1841,21 @@ void InitKeymapActions()
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
-	    "Item Highlighting",
+	    "ItemHighlighting",
 	    N_("Item highlighting"),
 	    N_("Show/hide items on ground."),
 	    SDLK_LALT,
 	    [] { HighlightKeyPressed(true); },
 	    [] { HighlightKeyPressed(false); });
 	options.Keymapper.AddAction(
-	    "Toggle Item Highlighting",
+	    "ToggleItemHighlighting",
 	    N_("Toggle item highlighting"),
 	    N_("Permanent show/hide items on ground."),
 	    SDLK_RCTRL,
 	    nullptr,
 	    [] { ToggleItemLabelHighlight(); });
 	options.Keymapper.AddAction(
-	    "Toggle Automap",
+	    "ToggleAutomap",
 	    N_("Toggle automap"),
 	    N_("Toggles if automap is displayed."),
 	    SDLK_TAB,
@@ -1923,7 +1923,7 @@ void InitKeymapActions()
 		    i + 1);
 	}
 	options.Keymapper.AddAction(
-	    "Hide Info Screens",
+	    "HideInfoScreens",
 	    N_("Hide Info Screens"),
 	    N_("Hide all info screens."),
 	    SDLK_SPACE,
@@ -1958,13 +1958,13 @@ void InitKeymapActions()
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
-	    "Pause Game",
+	    "PauseGame",
 	    N_("Pause Game"),
 	    N_("Pauses the game."),
 	    'P',
 	    diablo_pause_game);
 	options.Keymapper.AddAction(
-	    "Pause Game (Alternate)",
+	    "PauseGameAlternate",
 	    N_("Pause Game (Alternate)"),
 	    N_("Pauses the game."),
 	    SDLK_PAUSE,
@@ -2427,21 +2427,21 @@ void InitPadmapActions()
 	    nullptr,
 	    [&]() { return !gbIsMultiplayer && gbValidSaveFile && !IsPlayerInStore() && IsGameRunning(); });
 	options.Padmapper.AddAction(
-	    "Item Highlighting",
+	    "ItemHighlighting",
 	    N_("Item highlighting"),
 	    N_("Show/hide items on ground."),
 	    ControllerButton_NONE,
 	    [] { HighlightKeyPressed(true); },
 	    [] { HighlightKeyPressed(false); });
 	options.Padmapper.AddAction(
-	    "Toggle Item Highlighting",
+	    "ToggleItemHighlighting",
 	    N_("Toggle item highlighting"),
 	    N_("Permanent show/hide items on ground."),
 	    ControllerButton_NONE,
 	    nullptr,
 	    [] { ToggleItemLabelHighlight(); });
 	options.Padmapper.AddAction(
-	    "Hide Info Screens",
+	    "HideInfoScreens",
 	    N_("Hide Info Screens"),
 	    N_("Hide all info screens."),
 	    ControllerButton_NONE,
@@ -2476,7 +2476,7 @@ void InitPadmapActions()
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Padmapper.AddAction(
-	    "Pause Game",
+	    "PauseGame",
 	    N_("Pause Game"),
 	    N_("Pauses the game."),
 	    ControllerButton_NONE,
