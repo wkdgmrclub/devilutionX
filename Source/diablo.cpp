@@ -47,7 +47,7 @@
 #include "headless_mode.hpp"
 #include "help.h"
 #include "hwcursor.hpp"
-#include "init.h"
+#include "init.hpp"
 #include "inv.h"
 #include "levels/drlg_l1.h"
 #include "levels/drlg_l2.h"
@@ -60,7 +60,7 @@
 #include "levels/trigs.h"
 #include "lighting.h"
 #include "loadsave.h"
-#include "lua/lua.hpp"
+#include "lua/lua_global.hpp"
 #include "menu.h"
 #include "minitext.h"
 #include "missiles.h"
@@ -72,6 +72,7 @@
 #include "options.h"
 #include "panels/console.hpp"
 #include "panels/info_box.hpp"
+#include "panels/partypanel.hpp"
 #include "panels/spell_book.hpp"
 #include "panels/spell_list.hpp"
 #include "pfile.h"
@@ -120,7 +121,6 @@ namespace devilution {
 uint32_t DungeonSeeds[NUMLEVELS];
 std::optional<uint32_t> LevelSeeds[NUMLEVELS];
 Point MousePosition;
-bool gbRunGame;
 bool gbRunGameResult;
 bool ReturnToMainMenu;
 /** Enable updating of player character, set to false once Diablo dies */
@@ -139,7 +139,7 @@ std::vector<std::string> DebugCmdsFromCommandLine;
 GameLogicStep gGameLogicStep = GameLogicStep::None;
 
 /** This and the following mouse variables are for handling in-game click-and-hold actions */
-MouseActionType LastMouseButtonAction = MouseActionType::None;
+PlayerActionType LastPlayerAction = PlayerActionType::None;
 
 // Controller support: Actions to run after updating the cursor state.
 // Defined in SourceX/controls/plctrls.cpp.
@@ -179,7 +179,7 @@ void StartGame(interface_mode uMsg)
 	InitLevelCursor();
 	sgnTimeoutCurs = CURSOR_NONE;
 	sgbMouseDown = CLICK_NONE;
-	LastMouseButtonAction = MouseActionType::None;
+	LastPlayerAction = PlayerActionType::None;
 }
 
 void FreeGame()
@@ -224,7 +224,7 @@ bool ProcessInput()
 #endif
 		CheckCursMove();
 		plrctrls_after_check_curs_move();
-		RepeatMouseAction();
+		RepeatPlayerAction();
 	}
 
 	return true;
@@ -244,7 +244,7 @@ void LeftMouseCmd(bool bShift)
 		if (pcursmonst != -1)
 			NetSendCmdLocParam1(true, CMD_TALKXY, cursPosition, pcursmonst);
 		if (pcursitem == -1 && pcursmonst == -1 && PlayerUnderCursor == nullptr) {
-			LastMouseButtonAction = MouseActionType::Walk;
+			LastPlayerAction = PlayerActionType::Walk;
 			NetSendCmdLoc(MyPlayerId, true, CMD_WALKXY, cursPosition);
 		}
 		return;
@@ -255,21 +255,21 @@ void LeftMouseCmd(bool bShift)
 	if (pcursitem != -1 && pcurs == CURSOR_HAND && !bShift) {
 		NetSendCmdLocParam1(true, invflag ? CMD_GOTOGETITEM : CMD_GOTOAGETITEM, cursPosition, pcursitem);
 	} else if (ObjectUnderCursor != nullptr && !ObjectUnderCursor->IsDisabled() && (!bShift || (bNear && ObjectUnderCursor->_oBreak == 1))) {
-		LastMouseButtonAction = MouseActionType::OperateObject;
+		LastPlayerAction = PlayerActionType::OperateObject;
 		NetSendCmdLoc(MyPlayerId, true, pcurs == CURSOR_DISARM ? CMD_DISARMXY : CMD_OPOBJXY, cursPosition);
 	} else if (myPlayer.UsesRangedWeapon()) {
 		if (bShift) {
-			LastMouseButtonAction = MouseActionType::Attack;
+			LastPlayerAction = PlayerActionType::Attack;
 			NetSendCmdLoc(MyPlayerId, true, CMD_RATTACKXY, cursPosition);
 		} else if (pcursmonst != -1) {
 			if (CanTalkToMonst(Monsters[pcursmonst])) {
 				NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
 			} else {
-				LastMouseButtonAction = MouseActionType::AttackMonsterTarget;
+				LastPlayerAction = PlayerActionType::AttackMonsterTarget;
 				NetSendCmdParam1(true, CMD_RATTACKID, pcursmonst);
 			}
 		} else if (PlayerUnderCursor != nullptr && !myPlayer.friendlyMode) {
-			LastMouseButtonAction = MouseActionType::AttackPlayerTarget;
+			LastPlayerAction = PlayerActionType::AttackPlayerTarget;
 			NetSendCmdParam1(true, CMD_RATTACKPID, PlayerUnderCursor->getId());
 		}
 	} else {
@@ -278,23 +278,23 @@ void LeftMouseCmd(bool bShift)
 				if (CanTalkToMonst(Monsters[pcursmonst])) {
 					NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
 				} else {
-					LastMouseButtonAction = MouseActionType::Attack;
+					LastPlayerAction = PlayerActionType::Attack;
 					NetSendCmdLoc(MyPlayerId, true, CMD_SATTACKXY, cursPosition);
 				}
 			} else {
-				LastMouseButtonAction = MouseActionType::Attack;
+				LastPlayerAction = PlayerActionType::Attack;
 				NetSendCmdLoc(MyPlayerId, true, CMD_SATTACKXY, cursPosition);
 			}
 		} else if (pcursmonst != -1) {
-			LastMouseButtonAction = MouseActionType::AttackMonsterTarget;
+			LastPlayerAction = PlayerActionType::AttackMonsterTarget;
 			NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
 		} else if (PlayerUnderCursor != nullptr && !myPlayer.friendlyMode) {
-			LastMouseButtonAction = MouseActionType::AttackPlayerTarget;
+			LastPlayerAction = PlayerActionType::AttackPlayerTarget;
 			NetSendCmdParam1(true, CMD_ATTACKPID, PlayerUnderCursor->getId());
 		}
 	}
 	if (!bShift && pcursitem == -1 && ObjectUnderCursor == nullptr && pcursmonst == -1 && PlayerUnderCursor == nullptr) {
-		LastMouseButtonAction = MouseActionType::Walk;
+		LastPlayerAction = PlayerActionType::Walk;
 		NetSendCmdLoc(MyPlayerId, true, CMD_WALKXY, cursPosition);
 	}
 }
@@ -318,7 +318,7 @@ bool TryOpenDungeonWithMouse()
 
 void LeftMouseDown(uint16_t modState)
 {
-	LastMouseButtonAction = MouseActionType::None;
+	LastPlayerAction = PlayerActionType::None;
 
 	if (gmenu_left_mouse(true))
 		return;
@@ -417,7 +417,7 @@ void LeftMouseUp(uint16_t modState)
 
 void RightMouseDown(bool isShiftHeld)
 {
-	LastMouseButtonAction = MouseActionType::None;
+	LastPlayerAction = PlayerActionType::None;
 
 	if (gmenu_is_active() || sgnTimeoutCurs != CURSOR_NONE || PauseMode == 2 || MyPlayer->_pInvincible) {
 		return;
@@ -446,6 +446,8 @@ void RightMouseDown(bool isShiftHeld)
 	if (pcursinvitem != -1 && UseInvItem(pcursinvitem))
 		return;
 	if (pcursstashitem != StashStruct::EmptyCell && UseStashItem(pcursstashitem))
+		return;
+	if (DidRightClickPartyPortrait())
 		return;
 	if (pcurs == CURSOR_HAND) {
 		CheckPlrSpell(isShiftHeld);
@@ -520,7 +522,7 @@ void PressKey(SDL_Keycode vkey, uint16_t modState)
 	// Disallow player from accessing escape menu during the frames before the death message appears
 	if (vkey == SDLK_ESCAPE && MyPlayer->_pHitPoints > 0) {
 		if (!PressEscKey()) {
-			LastMouseButtonAction = MouseActionType::None;
+			LastPlayerAction = PlayerActionType::None;
 			gamemenu_on();
 		}
 		return;
@@ -681,11 +683,11 @@ void HandleMouseButtonDown(Uint8 button, uint16_t modState)
 void HandleMouseButtonUp(Uint8 button, uint16_t modState)
 {
 	if (sgbMouseDown == CLICK_LEFT && button == SDL_BUTTON_LEFT) {
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		sgbMouseDown = CLICK_NONE;
 		LeftMouseUp(modState);
 	} else if (sgbMouseDown == CLICK_RIGHT && button == SDL_BUTTON_RIGHT) {
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		sgbMouseDown = CLICK_NONE;
 	} else {
 		KeymapperRelease(static_cast<SDL_Keycode>(button | KeymapperMouseButtonMask));
@@ -695,6 +697,19 @@ void HandleMouseButtonUp(Uint8 button, uint16_t modState)
 [[maybe_unused]] void LogUnhandledEvent(const char *name, int value)
 {
 	LogVerbose("Unhandled SDL event: {} {}", name, value);
+}
+
+void PrepareForFadeIn()
+{
+	if (HeadlessMode) return;
+	BlackPalette();
+
+	// Render the game to the buffer(s) with a fully black palette.
+	// Palette fade-in will gradually make it visible.
+	RedrawEverything();
+	while (IsRedrawEverything()) {
+		DrawAndBlit();
+	}
 }
 
 void GameEventHandler(const SDL_Event &event, uint16_t modState)
@@ -811,17 +826,9 @@ void GameEventHandler(const SDL_Event &event, uint16_t modState)
 			nthread_ignore_mutex(true);
 			PaletteFadeOut(8);
 			sound_stop();
-			ShowProgress(GetCustomEvent(event.type));
+			ShowProgress(GetCustomEvent(event));
 
-			RedrawEverything();
-			if (!HeadlessMode) {
-				while (IsRedrawEverything()) {
-					// In direct rendering mode with double/triple buffering, we need
-					// to prepare all buffers before fading in.
-					DrawAndBlit();
-				}
-			}
-
+			PrepareForFadeIn();
 			LoadPWaterPalette();
 			if (gbRunGame)
 				PaletteFadeIn(8);
@@ -847,15 +854,7 @@ void RunGameLoop(interface_mode uMsg)
 	gbProcessPlayers = IsDiabloAlive(true);
 	gbRunGameResult = true;
 
-	RedrawEverything();
-	if (!HeadlessMode) {
-		while (IsRedrawEverything()) {
-			// In direct rendering mode with double/triple buffering, we need
-			// to prepare all buffers before fading in.
-			DrawAndBlit();
-		}
-	}
-
+	PrepareForFadeIn();
 	LoadPWaterPalette();
 	PaletteFadeIn(8);
 	InitBackbufferState();
@@ -1308,17 +1307,22 @@ tl::expected<void, std::string> LoadLvlGFX()
 	};
 
 	switch (leveltype) {
-	case DTYPE_TOWN:
-		if (gbIsHellfire) {
-			return loadAll(
-			    "nlevels\\towndata\\town.cel",
-			    "nlevels\\towndata\\town.til",
-			    "levels\\towndata\\towns");
+	case DTYPE_TOWN: {
+		auto cel = LoadFileInMemWithStatus("nlevels\\towndata\\town.cel");
+		if (!cel.has_value()) {
+			ASSIGN_OR_RETURN(pDungeonCels, LoadFileInMemWithStatus("levels\\towndata\\town.cel"));
+		} else {
+			pDungeonCels = std::move(*cel);
 		}
-		return loadAll(
-		    "levels\\towndata\\town.cel",
-		    "levels\\towndata\\town.til",
-		    "levels\\towndata\\towns");
+		auto til = LoadFileInMemWithStatus<MegaTile>("nlevels\\towndata\\town.til");
+		if (!til.has_value()) {
+			ASSIGN_OR_RETURN(pMegaTiles, LoadFileInMemWithStatus<MegaTile>("levels\\towndata\\town.til"));
+		} else {
+			pMegaTiles = std::move(*til);
+		}
+		ASSIGN_OR_RETURN(pSpecialCels, LoadCelWithStatus("levels\\towndata\\towns", SpecialCelWidth));
+		return {};
+	}
 	case DTYPE_CATHEDRAL:
 		return loadAll(
 		    "levels\\l1data\\l1.cel",
@@ -1363,7 +1367,7 @@ tl::expected<void, std::string> LoadAllGFX()
 	IncProgress();
 	RETURN_IF_ERROR(InitObjectGFX());
 	IncProgress();
-	RETURN_IF_ERROR(InitMissileGFX(gbIsHellfire));
+	RETURN_IF_ERROR(InitMissileGFX());
 	IncProgress();
 	return {};
 }
@@ -1534,7 +1538,7 @@ void HelpKeyPressed()
 		InfoString = StringOrView {};
 		AddInfoBoxString(_("No help available")); /// BUGFIX: message isn't displayed
 		AddInfoBoxString(_("while in stores"));
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 	} else {
 		CloseInventory();
 		CloseCharPanel();
@@ -1591,6 +1595,11 @@ void CharacterSheetKeyPressed()
 	ToggleCharPanel();
 }
 
+void PartyPanelSideToggleKeyPressed()
+{
+	PartySidePanelOpen = !PartySidePanelOpen;
+}
+
 void QuestLogKeyPressed()
 {
 	if (IsPlayerInStore())
@@ -1629,7 +1638,7 @@ void DisplaySpellsKeyPressed()
 	} else {
 		SpellSelectFlag = false;
 	}
-	LastMouseButtonAction = MouseActionType::None;
+	LastPlayerAction = PlayerActionType::None;
 }
 
 void SpellBookKeyPressed()
@@ -1703,6 +1712,20 @@ bool CanAutomapBeToggledOff()
 
 	return false;
 }
+
+void OptionLanguageCodeChanged()
+{
+	UnloadFonts();
+	LanguageInitialize();
+	LoadLanguageArchive();
+	effects_cleanup_sfx();
+	if (gbRunGame)
+		sound_init();
+	else
+		ui_sound_init();
+}
+
+const auto OptionChangeHandlerLanguage = (GetOptions().Language.code.SetValueChangedCallback(OptionLanguageCodeChanged), true);
 
 } // namespace
 
@@ -1862,6 +1885,14 @@ void InitKeymapActions()
 	    N_("Open Character screen."),
 	    'C',
 	    CharacterSheetKeyPressed,
+	    nullptr,
+	    CanPlayerTakeAction);
+	options.Keymapper.AddAction(
+	    "Party",
+	    N_("Party"),
+	    N_("Open side Party panel."),
+	    'Y',
+	    PartyPanelSideToggleKeyPressed,
 	    nullptr,
 	    CanPlayerTakeAction);
 	options.Keymapper.AddAction(
@@ -2064,12 +2095,12 @@ void InitPadmapActions()
 	    ControllerButton_BUTTON_B,
 	    [] {
 		    ControllerActionHeld = GameActionType_PRIMARY_ACTION;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 		    PerformPrimaryAction();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 	    },
 	    CanPlayerTakeAction);
 	options.Padmapper.AddAction(
@@ -2079,12 +2110,12 @@ void InitPadmapActions()
 	    ControllerButton_BUTTON_Y,
 	    [] {
 		    ControllerActionHeld = GameActionType_SECONDARY_ACTION;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 		    PerformSecondaryAction();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 	    },
 	    CanPlayerTakeAction);
 	options.Padmapper.AddAction(
@@ -2094,12 +2125,12 @@ void InitPadmapActions()
 	    ControllerButton_BUTTON_X,
 	    [] {
 		    ControllerActionHeld = GameActionType_CAST_SPELL;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 		    PerformSpellAction();
 	    },
 	    [] {
 		    ControllerActionHeld = GameActionType_NONE;
-		    LastMouseButtonAction = MouseActionType::None;
+		    LastPlayerAction = PlayerActionType::None;
 	    },
 	    []() { return CanPlayerTakeAction() && !InGameMenu(); });
 	options.Padmapper.AddAction(
@@ -2233,11 +2264,35 @@ void InitPadmapActions()
 	    nullptr,
 	    []() { return CanPlayerTakeAction() && !InGameMenu(); });
 	options.Padmapper.AddAction(
-	    "Toggle Automap",
+	    "ToggleAutomap",
 	    N_("Toggle automap"),
 	    N_("Toggles if automap is displayed."),
 	    ControllerButton_BUTTON_LEFTSTICK,
 	    DoAutoMap);
+	options.Padmapper.AddAction(
+	    "AutomapMoveUp",
+	    N_("Automap Move Up"),
+	    N_("Moves the automap up when active."),
+	    ControllerButton_NONE,
+	    [] {});
+	options.Padmapper.AddAction(
+	    "AutomapMoveDown",
+	    N_("Automap Move Down"),
+	    N_("Moves the automap down when active."),
+	    ControllerButton_NONE,
+	    [] {});
+	options.Padmapper.AddAction(
+	    "AutomapMoveLeft",
+	    N_("Automap Move Left"),
+	    N_("Moves the automap left when active."),
+	    ControllerButton_NONE,
+	    [] {});
+	options.Padmapper.AddAction(
+	    "AutomapMoveRight",
+	    N_("Automap Move Right"),
+	    N_("Moves the automap right when active."),
+	    ControllerButton_NONE,
+	    [] {});
 	options.Padmapper.AddAction(
 	    "MouseUp",
 	    N_("Move mouse up"),
@@ -2271,7 +2326,7 @@ void InitPadmapActions()
 	auto leftMouseUp = [] {
 		ControllerButtonCombo standGroundCombo = GetOptions().Padmapper.ButtonComboForAction("StandGround");
 		bool standGround = StandToggle || IsControllerButtonComboPressed(standGroundCombo);
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		sgbMouseDown = CLICK_NONE;
 		LeftMouseUp(standGround ? KMOD_SHIFT : KMOD_NONE);
 	};
@@ -2292,12 +2347,12 @@ void InitPadmapActions()
 	auto rightMouseDown = [] {
 		ControllerButtonCombo standGroundCombo = GetOptions().Padmapper.ButtonComboForAction("StandGround");
 		bool standGround = StandToggle || IsControllerButtonComboPressed(standGroundCombo);
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		sgbMouseDown = CLICK_RIGHT;
 		RightMouseDown(standGround);
 	};
 	auto rightMouseUp = [] {
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		sgbMouseDown = CLICK_NONE;
 	};
 	options.Padmapper.AddAction(
@@ -2331,7 +2386,7 @@ void InitPadmapActions()
 	auto toggleGameMenu = [] {
 		bool inMenu = gmenu_is_active();
 		PressEscKey();
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 		PadHotspellMenuActive = false;
 		PadMenuNavigatorActive = false;
 		if (!inMenu)
@@ -2716,7 +2771,7 @@ bool TryIconCurs()
 		if (IsWallSpell(spellID)) {
 			Direction sd = GetDirection(myPlayer.position.tile, cursPosition);
 			NetSendCmdLocParam4(true, CMD_SPELLXYD, cursPosition, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), static_cast<uint16_t>(sd), spellFrom);
-		} else if (pcursmonst != -1) {
+		} else if (pcursmonst != -1 && leveltype != DTYPE_TOWN) {
 			NetSendCmdParam4(true, CMD_SPELLID, pcursmonst, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
 		} else if (PlayerUnderCursor != nullptr && !myPlayer.friendlyMode) {
 			NetSendCmdParam4(true, CMD_SPELLPID, PlayerUnderCursor->getId(), static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
@@ -2744,7 +2799,7 @@ void diablo_pause_game()
 			PauseMode = 2;
 			sound_stop();
 			qtextflag = false;
-			LastMouseButtonAction = MouseActionType::None;
+			LastPlayerAction = PlayerActionType::None;
 		}
 
 		RedrawEverything();
@@ -2775,7 +2830,7 @@ void diablo_focus_pause()
 	if (!GameWasAlreadyPaused) {
 		PauseMode = 2;
 		sound_stop();
-		LastMouseButtonAction = MouseActionType::None;
+		LastPlayerAction = PlayerActionType::None;
 	}
 
 	SVidMute();
@@ -3091,7 +3146,7 @@ tl::expected<void, std::string> LoadGameLevelSetLevel(bool firstflag, lvl_entry 
 #if !defined(USE_SDL1) && !defined(__vita__)
 		InitVirtualGamepadGFX();
 #endif
-		RETURN_IF_ERROR(InitMissileGFX(gbIsHellfire));
+		RETURN_IF_ERROR(InitMissileGFX());
 		IncProgress();
 	}
 	InitCorpses();
@@ -3152,7 +3207,7 @@ tl::expected<void, std::string> LoadGameLevelStandardLevel(bool firstflag, lvl_e
 
 		IncProgress();
 
-		RETURN_IF_ERROR(InitMissileGFX(gbIsHellfire));
+		RETURN_IF_ERROR(InitMissileGFX());
 
 		IncProgress();
 		IncProgress();
@@ -3206,7 +3261,7 @@ void LoadGameLevelCrypt()
 void LoadGameLevelCalculateCursor()
 {
 	// Recalculate mouse selection of entities after level change/load
-	LastMouseButtonAction = MouseActionType::None;
+	LastPlayerAction = PlayerActionType::None;
 	sgbMouseDown = CLICK_NONE;
 	ResetItemlabelHighlighted(); // level changed => item changed
 	pcursmonst = -1;             // ensure pcurstemp is set to a valid value
@@ -3231,7 +3286,7 @@ tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	IncProgress();
 
 	RETURN_IF_ERROR(LoadLvlGFX());
-	SetDungeonMicros();
+	SetDungeonMicros(pDungeonCels, MicroTileLen);
 	ClearClxDrawCache();
 
 	IncProgress();

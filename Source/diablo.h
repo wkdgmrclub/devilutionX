@@ -51,7 +51,7 @@ enum class GameLogicStep : uint8_t {
 	ProcessMissilesTown,
 };
 
-enum class MouseActionType : uint8_t {
+enum class PlayerActionType : uint8_t {
 	None,
 	Walk,
 	Spell,
@@ -66,7 +66,7 @@ enum class MouseActionType : uint8_t {
 extern uint32_t DungeonSeeds[NUMLEVELS];
 extern DVL_API_FOR_TEST std::optional<uint32_t> LevelSeeds[NUMLEVELS];
 extern Point MousePosition;
-extern DVL_API_FOR_TEST bool gbRunGame;
+
 extern bool gbRunGameResult;
 extern bool ReturnToMainMenu;
 extern bool gbProcessPlayers;
@@ -79,7 +79,7 @@ extern clicktype sgbMouseDown;
 extern uint16_t gnTickDelay;
 extern char gszProductName[64];
 
-extern MouseActionType LastMouseButtonAction;
+extern PlayerActionType LastPlayerAction;
 
 void InitKeymapActions();
 void SetCursorPos(Point position);

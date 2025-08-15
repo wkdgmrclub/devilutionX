@@ -1,3 +1,5 @@
+include(functions/trim_retired_files)
+
 if(NOT DEFINED DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY)
   set(DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/assets")
 endif()
@@ -151,12 +153,7 @@ set(devilutionx_assets
   lua/devilutionx/events.lua
   lua/inspect.lua
   lua/mods/clock/init.lua
-  lua/mods/Hellfire/init.lua
   lua/repl_prelude.lua
-  nlevels/cutl5w.clx
-  nlevels/cutl6w.clx
-  nlevels/l5data/cornerstone.dun
-  nlevels/l5data/uberroom.dun
   plrgfx/warrior/whu/whufm.trn
   plrgfx/warrior/whu/whulm.trn
   plrgfx/warrior/whu/whuqm.trn
@@ -179,18 +176,14 @@ set(devilutionx_assets
   txtdata/sound/effects.tsv
   txtdata/spells/spelldat.tsv
   ui_art/diablo.pal
-  ui_art/hellfire.pal
   ui_art/creditsw.clx
   ui_art/dvl_but_sml.clx
   ui_art/dvl_lrpopup.clx
-  ui_art/hf_titlew.clx
-  ui_art/mainmenuw.clx
-  ui_art/supportw.clx)
+  ui_art/mainmenuw.clx)
 
 if(NOT UNPACKED_MPQS)
   list(APPEND devilutionx_assets
-    data/inv/objcurs-widths.txt
-    data/inv/objcurs2-widths.txt)
+    data/inv/objcurs-widths.txt)
 endif()
 
 if(NOT USE_SDL1 AND NOT VITA)
@@ -214,7 +207,7 @@ if(APPLE)
 else()
   # Copy assets to the build assets subdirectory. This serves two purposes:
   # - If smpq is installed, devilutionx.mpq is built from these files.
-  # - If smpq is not installed, the game will load the assets directly from this directoy.
+  # - If smpq is not installed, the game will load the assets directly from this directory.
   foreach(asset_file ${devilutionx_assets})
     set(src "${CMAKE_CURRENT_SOURCE_DIR}/assets/${asset_file}")
     set(dst "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}/${asset_file}")
@@ -233,6 +226,11 @@ else()
     endforeach()
   endif()
 
+  add_trim_command(
+    ROOT_FOLDER "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}"
+    CURRENT_FILES ${DEVILUTIONX_MPQ_FILES})
+  add_custom_target(devilutionx_trim_assets DEPENDS "${TRIM_COMMAND_OUTPUT}")
+
   if(BUILD_ASSETS_MPQ)
     set(DEVILUTIONX_MPQ "${CMAKE_CURRENT_BINARY_DIR}/devilutionx.mpq")
     add_custom_command(
@@ -241,12 +239,14 @@ else()
       COMMAND ${CMAKE_COMMAND} -E remove -f "${DEVILUTIONX_MPQ}"
       COMMAND ${SMPQ} -A -M 1 -C BZIP2 -c "${DEVILUTIONX_MPQ}" ${DEVILUTIONX_MPQ_FILES}
       WORKING_DIRECTORY "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}"
-      DEPENDS ${DEVILUTIONX_OUTPUT_ASSETS_FILES} ${devilutionx_lang_targets} ${devilutionx_lang_files}
+      DEPENDS ${TRIM_COMMAND_BYPRODUCT} ${DEVILUTIONX_OUTPUT_ASSETS_FILES} ${devilutionx_lang_targets} ${devilutionx_lang_files}
       VERBATIM)
     add_custom_target(devilutionx_mpq DEPENDS "${DEVILUTIONX_MPQ}")
+    add_dependencies(devilutionx_mpq devilutionx_trim_assets)
     add_dependencies(libdevilutionx devilutionx_mpq)
   else()
     add_custom_target(devilutionx_copied_assets DEPENDS ${DEVILUTIONX_OUTPUT_ASSETS_FILES} ${devilutionx_lang_targets})
+    add_dependencies(devilutionx_copied_assets devilutionx_trim_assets)
     add_dependencies(libdevilutionx devilutionx_copied_assets)
   endif()
 endif()

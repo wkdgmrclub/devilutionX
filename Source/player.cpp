@@ -36,6 +36,7 @@
 #include "loadsave.h"
 #include "minitext.h"
 #include "missiles.h"
+#include "monster.h"
 #include "nthread.h"
 #include "objects.h"
 #include "options.h"
@@ -358,6 +359,7 @@ void InitLevelChange(Player &player)
 {
 	Player &myPlayer = *MyPlayer;
 
+	RemoveEnemyReferences(player);
 	RemovePlrMissiles(player);
 	player.pManaShield = false;
 	player.wReflections = 0;
@@ -1443,7 +1445,7 @@ void ValidatePlayer()
 	}
 
 	uint64_t msk = 0;
-	for (int b = static_cast<int8_t>(SpellID::Firebolt); b < MAX_SPELLS; b++) {
+	for (size_t b = static_cast<size_t>(SpellID::Firebolt); b < SpellsData.size(); b++) {
 		if (GetSpellBookLevel((SpellID)b) != -1) {
 			msk |= GetSpellBitmask(static_cast<SpellID>(b));
 			if (myPlayer._pSplLvl[b] > MaxSpellLevel)
@@ -2039,6 +2041,56 @@ Player *PlayerAtPosition(Point position, bool ignoreMovingPlayers /*= false*/)
 	return &Players[std::abs(playerIndex) - 1];
 }
 
+ClxSprite GetPlayerPortraitSprite(Player &player)
+{
+	bool inDungeon = (player.plrlevel != 0);
+
+	const HeroClass cls = GetPlayerSpriteClass(player._pClass);
+	const PlayerWeaponGraphic animWeaponId = GetPlayerWeaponGraphic(player_graphic::Stand, static_cast<PlayerWeaponGraphic>(player._pgfxnum & 0xF));
+
+	const char *path = PlayersSpriteData[static_cast<std::size_t>(cls)].classPath;
+
+	const char *szCel;
+	if (!inDungeon)
+		szCel = "st";
+	else
+		szCel = "as";
+
+	player_graphic graphic = player_graphic::Stand;
+	if (player._pHitPoints <= 0) {
+		if (animWeaponId == PlayerWeaponGraphic::Unarmed) {
+			szCel = "dt";
+			graphic = player_graphic::Death;
+		}
+	}
+
+	char prefix[3] = { CharChar[static_cast<std::size_t>(cls)], ArmourChar[player._pgfxnum >> 4], WepChar[static_cast<std::size_t>(animWeaponId)] };
+	char pszName[256];
+	*fmt::format_to(pszName, R"(plrgfx\{0}\{1}\{1}{2})", path, std::string_view(prefix, 3), szCel) = 0;
+
+	std::string spritePath { pszName };
+	// Check to see if the sprite has updated.
+	if (player.PartyInfoSpriteLocations[inDungeon] != spritePath) {
+		// The sprite has changed so store the new location
+		player.PartyInfoSpriteLocations[inDungeon] = spritePath;
+
+		player.PartyInfoSprites[inDungeon] = std::nullopt;
+
+		// And now load the new sprite and store it
+		const uint16_t animationWidth = GetPlayerSpriteWidth(cls, graphic, animWeaponId);
+		player.PartyInfoSprites[inDungeon] = LoadCl2Sheet(pszName, animationWidth);
+	}
+
+	ClxSpriteList spriteList = (*player.PartyInfoSprites[inDungeon])[static_cast<size_t>(Direction::South)];
+	return spriteList[(graphic == player_graphic::Stand) ? 0 : spriteList.numSprites() - 1];
+}
+
+bool IsPlayerUnarmed(Player &player)
+{
+	const PlayerWeaponGraphic animWeaponId = GetPlayerWeaponGraphic(player_graphic::Stand, static_cast<PlayerWeaponGraphic>(player._pgfxnum & 0xF));
+	return animWeaponId == PlayerWeaponGraphic::Unarmed;
+}
+
 void LoadPlrGFX(Player &player, player_graphic graphic)
 {
 	if (HeadlessMode)
@@ -2139,6 +2191,12 @@ void InitPlayerGFX(Player &player)
 void ResetPlayerGFX(Player &player)
 {
 	player.AnimInfo.sprites = std::nullopt;
+
+	if (!gbRunGame) {
+		player.PartyInfoSprites[0] = std::nullopt;
+		player.PartyInfoSprites[1] = std::nullopt;
+	}
+
 	for (PlayerAnimationData &animData : player.AnimationData) {
 		animData.sprites = std::nullopt;
 	}
@@ -2811,16 +2869,10 @@ void SyncPlrKill(Player &player, DeathReason deathReason)
 
 void RemovePlrMissiles(const Player &player)
 {
-	if (leveltype != DTYPE_TOWN && &player == MyPlayer) {
-		Monster &golem = Monsters[MyPlayerId];
-		if (golem.position.tile.x != 1 || golem.position.tile.y != 0) {
-			KillMyGolem();
-			AddCorpse(golem.position.tile, golem.type().corpseId, golem.direction);
-			int mx = golem.position.tile.x;
-			int my = golem.position.tile.y;
-			dMonster[mx][my] = 0;
-			golem.isInvalid = true;
-			DeleteMonsterList();
+	if (leveltype != DTYPE_TOWN) {
+		Monster *golem;
+		while ((golem = FindGolemForPlayer(player)) != nullptr) {
+			KillGolem(*golem);
 		}
 	}
 
@@ -2865,7 +2917,7 @@ StartNewLvl(Player &player, interface_mode fom, int lvl)
 		player._pmode = PM_NEWLVL;
 		player._pInvincible = true;
 		SDL_Event event;
-		event.type = CustomEventToSdlEvent(fom);
+		CustomEventToSdlEvent(event, fom);
 		SDL_PushEvent(&event);
 		if (gbIsMultiplayer) {
 			NetSendCmdParam2(true, CMD_NEWLVL, fom, lvl);
@@ -2891,7 +2943,7 @@ void RestartTownLvl(Player &player)
 	if (&player == MyPlayer) {
 		player._pInvincible = true;
 		SDL_Event event;
-		event.type = CustomEventToSdlEvent(WM_DIABRETOWN);
+		CustomEventToSdlEvent(event, WM_DIABRETOWN);
 		SDL_PushEvent(&event);
 	}
 }
@@ -2916,7 +2968,7 @@ void StartWarpLvl(Player &player, size_t pidx)
 		player._pmode = PM_NEWLVL;
 		player._pInvincible = true;
 		SDL_Event event;
-		event.type = CustomEventToSdlEvent(WM_DIABWARPLVL);
+		CustomEventToSdlEvent(event, WM_DIABWARPLVL);
 		SDL_PushEvent(&event);
 	}
 }
@@ -3136,21 +3188,21 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 				myPlayer.Say(HeroSpeech::ICantDoThat);
 				break;
 			}
-			LastMouseButtonAction = MouseActionType::None;
+			LastPlayerAction = PlayerActionType::None;
 		}
 		return;
 	}
 
 	const int spellFrom = 0;
 	if (IsWallSpell(spellID)) {
-		LastMouseButtonAction = MouseActionType::Spell;
+		LastPlayerAction = PlayerActionType::Spell;
 		Direction sd = GetDirection(myPlayer.position.tile, cursPosition);
 		NetSendCmdLocParam4(true, CMD_SPELLXYD, cursPosition, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), static_cast<uint16_t>(sd), spellFrom);
 	} else if (pcursmonst != -1 && !isShiftHeld) {
-		LastMouseButtonAction = MouseActionType::SpellMonsterTarget;
+		LastPlayerAction = PlayerActionType::SpellMonsterTarget;
 		NetSendCmdParam4(true, CMD_SPELLID, pcursmonst, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
 	} else if (PlayerUnderCursor != nullptr && !isShiftHeld && !myPlayer.friendlyMode) {
-		LastMouseButtonAction = MouseActionType::SpellPlayerTarget;
+		LastPlayerAction = PlayerActionType::SpellPlayerTarget;
 		NetSendCmdParam4(true, CMD_SPELLPID, PlayerUnderCursor->getId(), static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
 	} else {
 		Point targetedTile = cursPosition;
@@ -3163,7 +3215,7 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 				targetedTile = myPlayer.position.temp + relativeMove;
 			}
 		}
-		LastMouseButtonAction = MouseActionType::Spell;
+		LastPlayerAction = PlayerActionType::Spell;
 		NetSendCmdLocParam3(true, CMD_SPELLXY, targetedTile, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
 	}
 }

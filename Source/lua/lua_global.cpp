@@ -1,9 +1,10 @@
-#include "lua/lua.hpp"
+#include "lua/lua_global.hpp"
 
 #include <optional>
 #include <string_view>
 
 #include <ankerl/unordered_dense.h>
+#include <sol/debug.hpp>
 #include <sol/sol.hpp>
 
 #include <config.h>
@@ -15,6 +16,7 @@
 #include "lua/modules/i18n.hpp"
 #include "lua/modules/items.hpp"
 #include "lua/modules/log.hpp"
+#include "lua/modules/monsters.hpp"
 #include "lua/modules/player.hpp"
 #include "lua/modules/render.hpp"
 #include "lua/modules/towners.hpp"
@@ -227,6 +229,14 @@ void LuaReloadActiveMods()
 		handler();
 	}
 
+	// Reload game data (this can probably be done later in the process to avoid having to reload it)
+	LoadPlayerDataFiles();
+	LoadSpellData();
+	LoadMissileData();
+	LoadMonsterData();
+	LoadItemData();
+	LoadObjectData();
+
 	LuaEvent("LoadModsComplete");
 }
 
@@ -258,6 +268,7 @@ void LuaInitialize()
 	    "devilutionx.items", LuaItemModule(lua),
 	    "devilutionx.log", LuaLogModule(lua),
 	    "devilutionx.audio", LuaAudioModule(lua),
+	    "devilutionx.monsters", LuaMonstersModule(lua),
 	    "devilutionx.player", LuaPlayerModule(lua),
 	    "devilutionx.render", LuaRenderModule(lua),
 	    "devilutionx.towners", LuaTownersModule(lua),
@@ -286,6 +297,10 @@ void LuaShutdown()
 
 void LuaEvent(std::string_view name)
 {
+	if (!CurrentLuaState.has_value()) {
+		return;
+	}
+
 	const auto trigger = CurrentLuaState->events.traverse_get<std::optional<sol::object>>(name, "trigger");
 	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) {
 		LogError("events.{}.trigger is not a function", name);
