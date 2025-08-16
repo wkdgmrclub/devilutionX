@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include <ankerl/unordered_dense.h>
+#include <fmt/format.h>
 #include <magic_enum/magic_enum.hpp>
 
 #include "cursor.h"
@@ -22,7 +23,7 @@
 template <>
 struct magic_enum::customize::enum_range<devilution::_monster_id> {
 	static constexpr int min = devilution::MT_INVALID;
-	static constexpr int max = devilution::NUM_MTYPES;
+	static constexpr int max = devilution::NUM_DEFAULT_MTYPES;
 };
 
 namespace devilution {
@@ -213,16 +214,36 @@ const _monster_id MonstConvTbl[] = {
 	MT_LRDSAYTR,
 };
 
+namespace {
+
+/** Contains the mapping between monster ID strings and indices, used for parsing additional monster data. */
+ankerl::unordered_dense::map<std::string, int16_t> AdditionalMonsterIdStringsToIndices;
+
+} // namespace
+
 tl::expected<_monster_id, std::string> ParseMonsterId(std::string_view value)
 {
 	const std::optional<_monster_id> enumValueOpt = magic_enum::enum_cast<_monster_id>(value);
 	if (enumValueOpt.has_value()) {
 		return enumValueOpt.value();
 	}
+	const auto findIt = AdditionalMonsterIdStringsToIndices.find(std::string(value));
+	if (findIt != AdditionalMonsterIdStringsToIndices.end()) {
+		return static_cast<_monster_id>(findIt->second);
+	}
 	return tl::make_unexpected("Unknown enum value");
 }
 
 namespace {
+
+tl::expected<_monster_id, std::string> ParseMonsterIdIfNotEmpty(std::string_view value)
+{
+	if (value.empty()) {
+		return MT_INVALID;
+	}
+
+	return ParseMonsterId(value);
+}
 
 tl::expected<MonsterAvailability, std::string> ParseMonsterAvailability(std::string_view value)
 {
@@ -331,6 +352,17 @@ tl::expected<SelectionRegion, std::string> ParseSelectionRegion(std::string_view
 	return tl::make_unexpected("Unknown enum value");
 }
 
+tl::expected<uint16_t, std::string> ParseMonsterTreasure(std::string_view value)
+{
+	// TODO: Replace this hack with proper parsing.
+
+	if (value.empty()) return 0;
+	if (value == "None") return T_NODROP;
+	if (value == "Uniq(SKCROWN)") return Uniq(UITEM_SKCROWN);
+	if (value == "Uniq(CLEAVER)") return Uniq(UITEM_CLEAVER);
+	return tl::make_unexpected("Invalid value. NOTE: Parser is incomplete");
+}
+
 } // namespace
 
 tl::expected<UniqueMonsterPack, std::string> ParseUniqueMonsterPack(std::string_view value)
@@ -341,29 +373,45 @@ tl::expected<UniqueMonsterPack, std::string> ParseUniqueMonsterPack(std::string_
 	return tl::make_unexpected("Unknown enum value");
 }
 
-namespace {
-
-void LoadMonstDat()
+void LoadMonstDatFromFile(DataFile &dataFile, const std::string_view filename)
 {
-	const std::string_view filename = "txtdata\\monsters\\monstdat.tsv";
-	DataFile dataFile = DataFile::loadOrDie(filename);
 	dataFile.skipHeaderOrDie(filename);
 
-	MonstersData.clear();
-	MonstersData.reserve(dataFile.numRecords());
-	ankerl::unordered_dense::map<std::string, size_t> spritePathToId;
+	MonstersData.reserve(MonstersData.size() + dataFile.numRecords());
+
 	for (DataFileRecord record : dataFile) {
+		if (MonstersData.size() >= static_cast<size_t>(NUM_MAX_MTYPES)) {
+			DisplayFatalErrorAndExit(_("Loading Monster Data Failed"), fmt::format(fmt::runtime(_("Could not add a monster, since the maximum monster type number of {} has already been reached.")), static_cast<size_t>(NUM_MAX_MTYPES)));
+		}
+
 		RecordReader reader { record, filename };
-		MonsterData &monster = MonstersData.emplace_back();
-		reader.advance(); // Skip the first column (monster ID).
+
+		std::string monsterId;
+		reader.readString("_monster_id", monsterId);
+		const std::optional<_monster_id> monsterIdEnumValueOpt = magic_enum::enum_cast<_monster_id>(monsterId);
+
+		if (!monsterIdEnumValueOpt.has_value()) {
+			const size_t monsterIndex = MonstersData.size();
+			const auto [it, inserted] = AdditionalMonsterIdStringsToIndices.emplace(monsterId, static_cast<int16_t>(monsterIndex));
+			if (!inserted) {
+				DisplayFatalErrorAndExit(_("Loading Monster Data Failed"), fmt::format(fmt::runtime(_("A monster type already exists for ID \"{}\".")), monsterId));
+			}
+		}
+
+		// for hardcoded monsters, use their predetermined slot; for non-hardcoded ones, use the slots after that
+		MonsterData &monster = monsterIdEnumValueOpt.has_value() ? MonstersData[monsterIdEnumValueOpt.value()] : MonstersData.emplace_back();
+
 		reader.readString("name", monster.name);
 		{
 			std::string assetsSuffix;
 			reader.readString("assetsSuffix", assetsSuffix);
-			const auto [it, inserted] = spritePathToId.emplace(assetsSuffix, spritePathToId.size());
-			if (inserted)
-				MonsterSpritePaths.push_back(it->first);
-			monster.spriteId = static_cast<uint16_t>(it->second);
+			const auto findIt = std::find(MonsterSpritePaths.begin(), MonsterSpritePaths.end(), assetsSuffix);
+			if (findIt != MonsterSpritePaths.end()) {
+				monster.spriteId = static_cast<uint16_t>(findIt - MonsterSpritePaths.begin());
+			} else {
+				monster.spriteId = static_cast<uint16_t>(MonsterSpritePaths.size());
+				MonsterSpritePaths.push_back(std::string(assetsSuffix));
+			}
 		}
 		reader.readString("soundSuffix", monster.soundSuffix);
 		reader.readString("trnFile", monster.trnFile);
@@ -395,20 +443,25 @@ void LoadMonstDat()
 		reader.readEnumList("resistance", monster.resistance, ParseMonsterResistance);
 		reader.readEnumList("resistanceHell", monster.resistanceHell, ParseMonsterResistance);
 		reader.readEnumList("selectionRegion", monster.selectionRegion, ParseSelectionRegion);
-
-		// treasure
-		// TODO: Replace this hack with proper parsing once items have been migrated to data files.
-		reader.read("treasure", monster.treasure, [](std::string_view value) -> tl::expected<uint16_t, std::string> {
-			if (value.empty()) return 0;
-			if (value == "None") return T_NODROP;
-			if (value == "Uniq(SKCROWN)") return Uniq(UITEM_SKCROWN);
-			if (value == "Uniq(CLEAVER)") return Uniq(UITEM_CLEAVER);
-			return tl::make_unexpected("Invalid value. NOTE: Parser is incomplete");
-		});
+		reader.read("treasure", monster.treasure, ParseMonsterTreasure);
 
 		reader.readInt("exp", monster.exp);
 	}
 	MonstersData.shrink_to_fit();
+}
+
+namespace {
+
+void LoadMonstDat()
+{
+	const std::string_view filename = "txtdata\\monsters\\monstdat.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	MonstersData.clear();
+	AdditionalMonsterIdStringsToIndices.clear();
+	MonstersData.resize(NUM_DEFAULT_MTYPES); // ensure the hardcoded monster type slots are filled
+	LoadMonstDatFromFile(dataFile, filename);
+
+	LuaEvent("MonsterDataLoaded");
 }
 
 void LoadUniqueMonstDat()

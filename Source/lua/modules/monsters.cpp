@@ -5,6 +5,7 @@
 #include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "data/file.hpp"
 #include "lua/metadoc.hpp"
 #include "monstdat.h"
 #include "utils/language.h"
@@ -13,6 +14,12 @@
 namespace devilution {
 
 namespace {
+
+void AddMonsterDataFromTsv(const std::string_view path)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadMonstDatFromFile(dataFile, path);
+}
 
 void AddUniqueMonsterData(const std::string_view type, const std::string_view name, const std::string_view trn, const uint8_t level, const uint16_t maxHp, const std::string_view ai, const uint8_t intelligence, const uint8_t minDamage, const uint8_t maxDamage, const std::string_view resistance, const std::string_view monsterPack, const std::optional<uint8_t> customToHit, const std::optional<uint8_t> customArmorClass)
 {
@@ -70,6 +77,7 @@ void AddUniqueMonsterData(const std::string_view type, const std::string_view na
 sol::table LuaMonstersModule(sol::state_view &lua)
 {
 	sol::table table = lua.create_table();
+	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);
 	LuaSetDocFn(table, "addUniqueMonsterData", "(type: string, name: string, trn: string, level: number, maxHp: number, ai: string, intelligence: number, minDamage: number, maxDamage: number, resistance: string, monsterPack: string, customToHit: number = nil, customArmorClass: number = nil)", AddUniqueMonsterData);
 	return table;
 }
