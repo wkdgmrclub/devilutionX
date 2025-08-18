@@ -2,8 +2,11 @@
 
 #include <string_view>
 
+#include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "data/file.hpp"
+#include "itemdat.h"
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
@@ -451,6 +454,12 @@ void RegisterItemSpecialEffectHfEnum(sol::state_view &lua)
 	    });
 }
 
+void AddUniqueItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadUniqueItemDatFromFile(dataFile, path, baseMappingId);
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -467,6 +476,8 @@ sol::table LuaItemModule(sol::state_view &lua)
 	RegisterItemSpecialEffectHfEnum(lua);
 
 	sol::table table = lua.create_table();
+
+	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
 
 	return table;
 }

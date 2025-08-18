@@ -9,10 +9,14 @@
 #include <string_view>
 #include <vector>
 
+#include <ankerl/unordered_dense.h>
+
 #include "objdat.h"
 #include "spelldat.h"
 
 namespace devilution {
+
+class DataFile;
 
 /** @todo add missing values and apply */
 enum _item_indexes : int16_t { // TODO defines all indexes in AllItemsList
@@ -637,13 +641,16 @@ struct UniqueItem {
 	uint8_t UINumPL;
 	int UIValue;
 	ItemPower powers[6];
+	int32_t mappingId;
 };
 
 extern DVL_API_FOR_TEST std::vector<ItemData> AllItemsList;
 extern std::vector<PLStruct> ItemPrefixes;
 extern std::vector<PLStruct> ItemSuffixes;
 extern DVL_API_FOR_TEST std::vector<UniqueItem> UniqueItems;
+extern ankerl::unordered_dense::map<int32_t, int32_t> UniqueItemMappingIdsToIndices;
 
+void LoadUniqueItemDatFromFile(DataFile &dataFile, std::string_view filename, int32_t baseMappingId);
 void LoadItemData();
 
 } // namespace devilution

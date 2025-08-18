@@ -10,10 +10,12 @@
 #include <vector>
 
 #include <expected.hpp>
+#include <fmt/format.h>
 
 #include "data/file.hpp"
 #include "data/iterators.hpp"
 #include "data/record_reader.hpp"
+#include "lua/lua_global.hpp"
 #include "spelldat.h"
 #include "utils/str_cat.hpp"
 
@@ -24,6 +26,9 @@ std::vector<ItemData> AllItemsList;
 
 /** Contains the data related to each unique item ID. */
 std::vector<UniqueItem> UniqueItems;
+
+/** Contains unique item mapping IDs, with unique item indices assigned to them. This is used for loading saved games. */
+ankerl::unordered_dense::map<int32_t, int32_t> UniqueItemMappingIdsToIndices;
 
 /** Contains the data related to each item prefix. */
 std::vector<PLStruct> ItemPrefixes;
@@ -559,14 +564,14 @@ void ReadItemPower(RecordReader &reader, std::string_view fieldName, ItemPower &
 	reader.readOptionalInt(StrCat(fieldName, ".value2"), power.param2);
 }
 
-void LoadUniqueItemDat()
+} // namespace
+
+void LoadUniqueItemDatFromFile(DataFile &dataFile, std::string_view filename, int32_t baseMappingId)
 {
-	const std::string_view filename = "txtdata\\items\\unique_itemdat.tsv";
-	DataFile dataFile = DataFile::loadOrDie(filename);
 	dataFile.skipHeaderOrDie(filename);
 
-	UniqueItems.clear();
-	UniqueItems.reserve(dataFile.numRecords());
+	int32_t currentMappingId = baseMappingId;
+	UniqueItems.reserve(UniqueItems.size() + dataFile.numRecords());
 	for (DataFileRecord record : dataFile) {
 		RecordReader reader { record, filename };
 		UniqueItem &item = UniqueItems.emplace_back();
@@ -583,8 +588,30 @@ void LoadUniqueItemDat()
 				break;
 			ReadItemPower(reader, StrCat("power", i), item.powers[item.UINumPL++]);
 		}
+
+		item.mappingId = currentMappingId;
+		const auto [it, inserted] = UniqueItemMappingIdsToIndices.emplace(item.mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
+		if (!inserted) {
+			DisplayFatalErrorAndExit("Adding Unique Item Failed", fmt::format("A unique item already exists for mapping ID {}.", item.mappingId));
+		}
+
+		++currentMappingId;
 	}
 	UniqueItems.shrink_to_fit();
+}
+
+namespace {
+
+void LoadUniqueItemDat()
+{
+	const std::string_view filename = "txtdata\\items\\unique_itemdat.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+
+	UniqueItems.clear();
+	UniqueItemMappingIdsToIndices.clear();
+	LoadUniqueItemDatFromFile(dataFile, filename, 0);
+
+	LuaEvent("UniqueItemDataLoaded");
 }
 
 void LoadItemAffixesDat(std::string_view filename, std::vector<PLStruct> &out)
