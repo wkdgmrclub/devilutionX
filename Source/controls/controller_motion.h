@@ -8,9 +8,9 @@
 #include "./controller.h"
 
 namespace devilution {
+// Returns true if gamepad aiming is currently active (right stick or padmapped mouse).
+bool IsGamepadAimActive();
 
-// Whether we're currently simulating the mouse with SELECT + D-Pad.
-extern bool SimulatingMouseWithPadmapper;
 
 // Raw axis values.
 extern float leftStickXUnscaled, leftStickYUnscaled, rightStickXUnscaled, rightStickYUnscaled;

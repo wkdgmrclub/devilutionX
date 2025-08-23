@@ -495,6 +495,13 @@ bool IsStandingGround()
 
 void Interact()
 {
+	if (IsGamepadAimActive()) {
+		const Player &myPlayer = *MyPlayer;
+		NetSendCmdLoc(MyPlayerId, true, myPlayer.UsesRangedWeapon() ? CMD_RATTACKXY : CMD_SATTACKXY, cursPosition);
+		LastPlayerAction = PlayerActionType::Attack;
+		return;
+	}
+
 	if (leveltype == DTYPE_TOWN && pcursmonst != -1) {
 		NetSendCmdLocParam1(true, CMD_TALKXY, Towners[pcursmonst].position, pcursmonst);
 		return;
@@ -1642,7 +1649,7 @@ bool ContinueSimulatedMouseEvent(const SDL_Event &event, const ControllerButtonE
 		return true;
 	}
 
-	return SimulatingMouseWithPadmapper || IsSimulatedMouseClickBinding(gamepadEvent);
+	return IsGamepadAimActive() || IsSimulatedMouseClickBinding(gamepadEvent);
 }
 
 std::string_view ControlTypeToString(ControlTypes controlType)
@@ -1735,12 +1742,15 @@ void DetectInputMethod(const SDL_Event &event, const ControllerButtonEvent &game
 	if (newControlDevice != ControlDevice) {
 		ControlDevice = newControlDevice;
 
-#ifndef USE_SDL1
-		if (ControlDevice != ControlTypes::KeyboardAndMouse) {
-			if (IsHardwareCursor())
-				SetHardwareCursor(CursorInfo::UnknownCursor());
-		} else {
-			ResetCursor();
+		#ifndef USE_SDL1
+		// Prevent cursor hiding and device/mode swap while gamepad aiming is active
+		if (!IsGamepadAimActive()) {
+			if (ControlDevice != ControlTypes::KeyboardAndMouse) {
+				if (IsHardwareCursor())
+					SetHardwareCursor(CursorInfo::UnknownCursor());
+			} else {
+				ResetCursor();
+			}
 		}
 		if (ControlDevice == ControlTypes::Gamepad) {
 			const GamepadLayout newGamepadLayout = GameController::getLayout(event);
@@ -1749,7 +1759,7 @@ void DetectInputMethod(const SDL_Event &event, const ControllerButtonEvent &game
 				GamepadType = newGamepadLayout;
 			}
 		}
-#endif
+		#endif
 	}
 
 	if (newControlMode != ControlMode) {
@@ -1974,6 +1984,11 @@ void UseBeltItem(BeltItemType type)
 
 void PerformPrimaryAction()
 {
+	if (IsGamepadAimActive()) {
+		Interact();
+		return;
+	}
+
 	if (SpellSelectFlag) {
 		SetSpell();
 		return;
@@ -2099,8 +2114,21 @@ void PerformSpellAction()
 	if (pcurs > CURSOR_HAND)
 		NewCursor(CURSOR_HAND);
 
-	const Player &myPlayer = *MyPlayer;
+	Player &myPlayer = *MyPlayer;
 	const SpellID spl = myPlayer._pRSpell;
+
+	// Controller aiming: always cast at cursor position and turn player
+	if (IsGamepadAimActive()) {
+		// Turn player to face cursor
+		Direction newDir = GetDirection(myPlayer.position.tile, cursPosition);
+		myPlayer._pdir = newDir;
+		// Set spell target
+		cursPosition = cursPosition;
+		CheckPlrSpell(false);
+		LastPlayerAction = PlayerActionType::Spell;
+		return;
+	}
+
 	if ((PlayerUnderCursor == nullptr && (spl == SpellID::Resurrect || spl == SpellID::HealOther))
 	    || (ObjectUnderCursor == nullptr && spl == SpellID::TrapDisarm)) {
 		myPlayer.Say(HeroSpeech::ICantCastThatHere);
@@ -2190,6 +2218,20 @@ void PerformSecondaryAction()
 
 	if (!MyPlayer->HoldItem.isEmpty() && !TryDropItem())
 		return;
+
+	if (pcurs == CURSOR_TELEKINESIS
+	    || pcurs == CURSOR_IDENTIFY
+	    || pcurs == CURSOR_REPAIR
+	    || pcurs == CURSOR_RECHARGE
+	    || pcurs == CURSOR_DISARM
+	    || pcurs == CURSOR_OIL
+	    || pcurs == CURSOR_RESURRECT
+	    || pcurs == CURSOR_TELEPORT
+	    || pcurs == CURSOR_HEALOTHER) {
+		TryIconCurs();
+		return;
+	}
+
 	if (pcurs > CURSOR_HAND)
 		NewCursor(CURSOR_HAND);
 
