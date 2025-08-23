@@ -103,7 +103,6 @@ bool IsPressedForMovement(ControllerButton button)
 	    && !(SpellSelectFlag && TriggersQuickSpellAction(button));
 }
 
-
 void SetGamepadAimActive(bool value)
 {
 	if (GamepadAimActive == value)
@@ -295,9 +294,9 @@ void SimulateRightStickWithPadmapper(ControllerButtonEvent ctrlEvent)
 	const bool downTriggered = actionName == "MouseDown";
 	const bool leftTriggered = actionName == "MouseLeft";
 	const bool rightTriggered = actionName == "MouseRight";
-		if (!upTriggered && !downTriggered && !leftTriggered && !rightTriggered) {
-			return;
-		}
+	if (!upTriggered && !downTriggered && !leftTriggered && !rightTriggered) {
+		return;
+	}
 
 	const bool upActive = (upTriggered && !ctrlEvent.up) || (!upTriggered && PadmapperIsActionActive("MouseUp"));
 	const bool downActive = (downTriggered && !ctrlEvent.up) || (!downTriggered && PadmapperIsActionActive("MouseDown"));

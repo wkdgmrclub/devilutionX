@@ -128,7 +128,8 @@ int GetDistance(Point destination, int maxDistance)
 
 	int8_t walkpath[MaxPathLengthPlayer];
 	Player &myPlayer = *MyPlayer;
-	const int steps = FindPath(CanStep, [&myPlayer](Point position) { return PosOkPlayer(myPlayer, position); }, myPlayer.position.future, destination, walkpath, std::min<size_t>(maxDistance, MaxPathLengthPlayer));
+	const int steps = FindPath(
+	    CanStep, [&myPlayer](Point position) { return PosOkPlayer(myPlayer, position); }, myPlayer.position.future, destination, walkpath, std::min<size_t>(maxDistance, MaxPathLengthPlayer));
 	if (steps > maxDistance)
 		return 0;
 
@@ -1752,7 +1753,7 @@ void DetectInputMethod(const SDL_Event &event, const ControllerButtonEvent &game
 	if (newControlDevice != ControlDevice) {
 		ControlDevice = newControlDevice;
 
-		#ifndef USE_SDL1
+#ifndef USE_SDL1
 		// Prevent cursor hiding and device/mode swap while gamepad aiming is active
 		if (!IsGamepadAimActive()) {
 			if (ControlDevice != ControlTypes::KeyboardAndMouse) {
@@ -1769,7 +1770,7 @@ void DetectInputMethod(const SDL_Event &event, const ControllerButtonEvent &game
 				GamepadType = newGamepadLayout;
 			}
 		}
-		#endif
+#endif
 	}
 
 	if (newControlMode != ControlMode) {
@@ -2277,7 +2278,7 @@ void QuickCast(size_t slot)
 	const SpellType spellType = myPlayer._pSplTHotKey[slot];
 
 	if (!IsGamepadAimActive) {
-	    UpdateSpellTarget(spell);
+		UpdateSpellTarget(spell);
 	}
 
 	CheckPlrSpell(false, spell, spellType);
