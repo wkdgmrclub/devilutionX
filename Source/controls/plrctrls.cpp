@@ -1,5 +1,3 @@
-#include "controls/plrctrls.h"
-
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -17,6 +15,7 @@
 #endif
 #include "controls/control_mode.hpp"
 #include "controls/game_controls.h"
+#include "controls/plrctrls.h"
 #include "controls/touch/gamepad.h"
 #include "cursor.h"
 #include "doom.h"
@@ -411,10 +410,14 @@ void CheckPlayerNearby()
 
 void FindActor()
 {
-	if (leveltype != DTYPE_TOWN)
+	if (leveltype != DTYPE_TOWN) {
 		CheckMonstersNearby();
-	else
+		// Always prefer monsters for spell casting if a monster is targeted
+		if (pcursmonst != -1)
+			cursPosition = Monsters[pcursmonst].position.tile;
+	} else {
 		CheckTownersNearby();
+	}
 
 	if (gbIsMultiplayer)
 		CheckPlayerNearby();
@@ -477,6 +480,13 @@ void FindTrigger()
 	CheckTrigForce();
 	CheckTown();
 	CheckRportal();
+}
+
+void PreferMonsterTarget()
+{
+	if (ControlMode == ControlTypes::Gamepad && pcursmonst != -1 && (ObjectUnderCursor != nullptr || pcursitem != -1)) {
+		cursPosition = Monsters[pcursmonst].position.tile;
+	}
 }
 
 bool IsStandingGround()
@@ -1948,6 +1958,7 @@ void plrctrls_after_check_curs_move()
 		FindActor();
 		FindItemOrObject();
 		FindTrigger();
+		PreferMonsterTarget();
 	}
 }
 
@@ -2018,31 +2029,30 @@ void PerformPrimaryAction()
 	Interact();
 }
 
-bool SpellHasActorTarget()
+bool SpellHasActorTarget(SpellID spell)
 {
-	const SpellID spl = MyPlayer->_pRSpell;
-	if (spl == SpellID::TownPortal || spl == SpellID::Teleport)
+	if (spell == SpellID::TownPortal || spell == SpellID::Teleport)
 		return false;
-
-	if (IsWallSpell(spl) && pcursmonst != -1) {
-		cursPosition = Monsters[pcursmonst].position.tile;
-	}
 
 	return PlayerUnderCursor != nullptr || pcursmonst != -1;
 }
 
 void UpdateSpellTarget(SpellID spell)
 {
-	if (SpellHasActorTarget())
+	// For wall spells, if a monster is targeted, always set cursPosition to the monster's tile
+	if (IsWallSpell(spell) && pcursmonst != -1) {
+		cursPosition = Monsters[pcursmonst].position.tile;
+		return;
+	}
+
+	if (SpellHasActorTarget(spell))
 		return;
 
 	PlayerUnderCursor = nullptr;
 	pcursmonst = -1;
 
 	const Player &myPlayer = *MyPlayer;
-
 	const int range = spell == SpellID::Teleport ? 4 : 1;
-
 	cursPosition = myPlayer.position.future + Displacement(myPlayer._pdir) * range;
 }
 
@@ -2236,10 +2246,15 @@ void PerformSecondaryAction()
 		NewCursor(CURSOR_HAND);
 
 	if (pcursitem != -1) {
-		NetSendCmdLocParam1(true, CMD_GOTOAGETITEM, cursPosition, pcursitem);
+		// Use item's actual position for interaction
+		const Item &item = Items[pcursitem];
+		NetSendCmdLocParam1(true, CMD_GOTOAGETITEM, item.position, pcursitem);
+		return;
 	} else if (ObjectUnderCursor != nullptr) {
-		NetSendCmdLoc(MyPlayerId, true, CMD_OPOBJXY, cursPosition);
+		// Use object's actual position for interaction
+		NetSendCmdLoc(MyPlayerId, true, CMD_OPOBJXY, ObjectUnderCursor->position);
 		LastPlayerAction = PlayerActionType::OperateObject;
+		return;
 	} else {
 		if (pcursmissile != nullptr) {
 			MakePlrPath(myPlayer, pcursmissile->position.tile, true);
@@ -2261,8 +2276,8 @@ void QuickCast(size_t slot)
 	const SpellID spell = myPlayer._pSplHotKey[slot];
 	const SpellType spellType = myPlayer._pSplTHotKey[slot];
 
-	if (ControlMode != ControlTypes::KeyboardAndMouse) {
-		UpdateSpellTarget(spell);
+	if (!IsGamepadAimActive) {
+	    UpdateSpellTarget(spell);
 	}
 
 	CheckPlrSpell(false, spell, spellType);
