@@ -341,6 +341,7 @@ public:
 	uint64_t _pAblSpells;
 	/** @brief Bitmask of spells available via scrolls */
 	uint64_t _pScrlSpells;
+	uint64_t _pRuneSpells;
 	SpellFlag _pSpellFlags;
 	SpellID _pSplHotKey[NumHotkeys];
 	SpellType _pSplTHotKey[NumHotkeys];
@@ -410,6 +411,8 @@ public:
 
 	void CalcScrolls();
 
+	void CalcRunes();
+
 	bool CanUseItem(const Item &item) const;
 
 	bool CanCleave()
@@ -460,8 +463,9 @@ public:
 	 * @brief Remove an item from player inventory
 	 * @param iv invList index of item to be removed
 	 * @param calcScrolls If true, CalcScrolls() gets called after removing item
+	 * @param calcRunes If true, CalcRunes() gets called after removing item
 	 */
-	void RemoveInvItem(int iv, bool calcScrolls = true);
+	void RemoveInvItem(int iv, bool calcScrolls = true, bool calcRunes = true);
 
 	/**
 	 * @brief Returns the network identifier for this player

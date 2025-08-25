@@ -2894,6 +2894,7 @@ void CalcPlrInv(Player &player, bool loadgfx)
 			item.updateRequiredStatsCacheForPlayer(player);
 		}
 		player.CalcScrolls();
+		player.CalcRunes();
 		if (IsStashOpen) {
 			// If stash is open, ensure the items are displayed correctly
 			Stash.RefreshItemStatFlags();
@@ -3118,6 +3119,16 @@ void GetItemAttrs(Item &item, _item_indexes itemData, int lvl)
 	item._iMiscId = baseItemData.iMiscId;
 	item._iSpell = baseItemData.iSpell;
 	item._iMagical = ITEM_QUALITY_NORMAL;
+	if (item._iMiscId == IMISC_RUNEF)
+		item._iSpell = SpellID::RuneOfFire;
+	else if (item._iMiscId == IMISC_RUNEL)
+		item._iSpell = SpellID::RuneOfLight;
+	else if (item._iMiscId == IMISC_GR_RUNEL)
+		item._iSpell = SpellID::RuneOfNova;
+	else if (item._iMiscId == IMISC_GR_RUNEF)
+		item._iSpell = SpellID::RuneOfImmolation;
+	else if (item._iMiscId == IMISC_RUNES)
+		item._iSpell = SpellID::RuneOfStone;
 	item._ivalue = baseItemData.iValue;
 	item._iIvalue = baseItemData.iValue;
 	item._iDurability = baseItemData.iDurability;
