@@ -1534,7 +1534,10 @@ void Player::CalcRunes()
 	_pRuneSpells = 0;
 	for (const Item &item : InventoryAndBeltPlayerItemsRange { *this }) {
 		if (item.isRune() && item._iStatFlag) {
-			_pRuneSpells |= GetSpellBitmask(item._iSpell);
+			for (SpellID spell : { SpellID::RuneOfFire, SpellID::RuneOfLight, SpellID::RuneOfNova, SpellID::RuneOfImmolation, SpellID::RuneOfStone }) {
+				if (item.isRuneOf(spell))
+					_pRuneSpells |= GetSpellBitmask(spell);
+			}
 		}
 	}
 	EnsureValidReadiedSpell(*this);
