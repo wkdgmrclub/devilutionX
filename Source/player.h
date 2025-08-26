@@ -463,9 +463,8 @@ public:
 	 * @brief Remove an item from player inventory
 	 * @param iv invList index of item to be removed
 	 * @param calcScrolls If true, CalcScrolls() gets called after removing item
-	 * @param calcRunes If true, CalcRunes() gets called after removing item
 	 */
-	void RemoveInvItem(int iv, bool calcScrolls = true, bool calcRunes = true);
+	void RemoveInvItem(int iv, bool calcScrolls = true);
 
 	/**
 	 * @brief Returns the network identifier for this player

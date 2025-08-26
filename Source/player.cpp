@@ -1550,7 +1550,7 @@ bool Player::CanUseItem(const Item &item) const
 	    && _pDexterity >= item._iMinDex;
 }
 
-void Player::RemoveInvItem(int iv, bool calcScrolls, bool calcRunes)
+void Player::RemoveInvItem(int iv, bool calcScrolls)
 {
 	if (this == MyPlayer) {
 		// Locate the first grid index containing this item and notify remote clients
@@ -1592,8 +1592,6 @@ void Player::RemoveInvItem(int iv, bool calcScrolls, bool calcRunes)
 
 	if (calcScrolls) {
 		CalcScrolls();
-	}
-	if (calcRunes) {
 		CalcRunes();
 	}
 }
