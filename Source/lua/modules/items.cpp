@@ -2,8 +2,11 @@
 
 #include <string_view>
 
+#include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "data/file.hpp"
+#include "itemdat.h"
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
@@ -343,7 +346,6 @@ void RegisterItemIndexEnum(sol::state_view &lua)
 	        { "RuneOfStone", IDI_RUNEOFSTONE },
 	        { "SorcererDiablo", IDI_SORCERER_DIABLO },
 	        { "ArenaPotion", IDI_ARENAPOT },
-	        { "Last", IDI_LAST },
 	        { "None", IDI_NONE },
 	    });
 }
@@ -451,6 +453,18 @@ void RegisterItemSpecialEffectHfEnum(sol::state_view &lua)
 	    });
 }
 
+void AddItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadItemDatFromFile(dataFile, path, baseMappingId);
+}
+
+void AddUniqueItemDataFromTsv(const std::string_view path, const int32_t baseMappingId)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LoadUniqueItemDatFromFile(dataFile, path, baseMappingId);
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -467,6 +481,9 @@ sol::table LuaItemModule(sol::state_view &lua)
 	RegisterItemSpecialEffectHfEnum(lua);
 
 	sol::table table = lua.create_table();
+
+	LuaSetDocFn(table, "addItemDataFromTsv", "(path: string, baseMappingId: number)", AddItemDataFromTsv);
+	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
 
 	return table;
 }

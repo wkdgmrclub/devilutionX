@@ -27,12 +27,9 @@ jobs:
     container: amigadev/crosstools:m68k-amigaos-gcc10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: ccache
-        uses: hendrikmuhs/ccache-action@v1.2
 
       - name: Run prep.sh script
         run: ./Packaging/amiga/prep.sh

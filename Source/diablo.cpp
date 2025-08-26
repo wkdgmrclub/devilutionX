@@ -2666,6 +2666,8 @@ int DiabloMain(int argc, char **argv)
 	// Finally load game data
 	LoadGameArchives();
 
+	LoadTextData();
+
 	// Load dynamic data before we go into the menu as we need to initialise player characters in memory pretty early.
 	LoadPlayerDataFiles();
 
@@ -2675,6 +2677,7 @@ int DiabloMain(int argc, char **argv)
 	LoadMonsterData();
 	LoadItemData();
 	LoadObjectData();
+	LoadQuestData();
 
 	DiabloInit();
 #ifdef __UWP__
