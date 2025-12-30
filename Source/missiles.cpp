@@ -289,14 +289,11 @@ bool Plr2PlrMHit(const Player &player, int p, int mindam, int maxdam, int dist, 
 
 	*blocked = false;
 
-	if (target.isOnArenaLevel() && target._pmode == PM_WALK_SIDEWAYS)
-		return false;
-
 	if (target._pInvincible) {
 		return false;
 	}
 
-	if (mtype == MissileID::HolyBolt) {
+	if (mtype == MissileID::HolyBolt && !player.isOnArenaLevel()) {
 		return false;
 	}
 
@@ -1112,6 +1109,22 @@ bool PlayerMHit(int pnum, Monster *monster, int dist, int mind, int maxd, Missil
 
 	if (player._pHitPoints >> 6 > 0) {
 		StartPlrHit(player, dam, false);
+
+		// Arena Holy Bolt knockback: enable knockback from Holy Bolt against players in arena
+		if (player.isOnArenaLevel() && mtype == MissileID::HolyBolt && monster != nullptr) {
+			if (player._pmode != PM_GOTHIT)
+				StartPlrHit(player, 0, true);
+
+			Direction knockbackDir = GetDirection(monster->position.tile, player.position.tile);
+			Point newPosition = player.position.tile + knockbackDir;
+			if (PosOkPlayer(player, newPosition)) {
+				player.position.tile = newPosition;
+				FixPlayerLocation(player, player._pdir);
+				FixPlrWalkTags(player);
+				dPlayer[newPosition.x][newPosition.y] = player.getId() + 1;
+				SetPlayerOld(player);
+			}
+		}
 	}
 
 	return true;

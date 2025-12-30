@@ -204,7 +204,8 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 			// Combining Fastest Attack with any other attack speed modifier skips over the fourth frame, reducing the effectiveness of Fastest Attack.
 			// Faster Attack makes up for this by also skipping the sixth frame so this case only applies when using Quick or Fast Attack modifiers.
 			skippedAnimationFrames = 3;
-		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestAttack)) {
+		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestAttack)
+		    || player.isOnArenaLevel() && player._pClass == HeroClass::Warrior) {
 			skippedAnimationFrames = 4;
 		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FasterAttack)) {
 			skippedAnimationFrames = 3;
@@ -219,7 +220,8 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 			skippedAnimationFrames = 2;
 		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastAttack)) {
 			skippedAnimationFrames = 1;
-		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestAttack)) {
+		} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestAttack)
+		    || player.isOnArenaLevel() && player._pClass == HeroClass::Warrior) {
 			// Fastest Attack is skipped if Fast or Faster Attack is also specified, because both skip the frame that triggers Fastest Attack skipping.
 			skippedAnimationFrames = 2;
 		}
@@ -246,7 +248,8 @@ void StartRangeAttack(Player &player, Direction d, WorldTileCoord cx, WorldTileC
 		if (includesFirstFrame && HasAnyOf(player._pIFlags, ItemSpecialEffect::QuickAttack | ItemSpecialEffect::FastAttack)) {
 			skippedAnimationFrames += 1;
 		}
-		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastAttack)) {
+		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastAttack)
+		    || player.isOnArenaLevel() && player._pClass == HeroClass::Rogue) {
 			skippedAnimationFrames += 1;
 		}
 	}
@@ -301,10 +304,18 @@ void StartSpell(Player &player, Direction d, WorldTileCoord cx, WorldTileCoord c
 	if (!isValid)
 		return;
 
+	int8_t skippedAnimationFrames = 0;
+	// Arena Fast Cast
+	if (player.isOnArenaLevel() && (player._pClass == HeroClass::Rogue)) {
+		skippedAnimationFrames = 4;
+	} else if (player.isOnArenaLevel() && player._pClass == HeroClass::Warrior) {
+		skippedAnimationFrames = 6;
+	}
+
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
 	if (player._pmode == PM_SPELL)
 		animationFlags = static_cast<AnimationDistributionFlags>(animationFlags | AnimationDistributionFlags::RepeatedAction);
-	NewPlrAnim(player, GetPlayerGraphicForSpell(player.queuedSpell.spellId), d, animationFlags, 0, player._pSFNum);
+	NewPlrAnim(player, GetPlayerGraphicForSpell(player.queuedSpell.spellId), d, animationFlags, skippedAnimationFrames, player._pSFNum);
 
 	PlaySfxLoc(GetSpellData(player.queuedSpell.spellId).sSFX, player.position.tile);
 
@@ -401,6 +412,8 @@ void InitLevelChange(Player &player)
 	RemovePlrMissiles(player);
 	player.pManaShield = false;
 	player.wReflections = 0;
+	player.arenaLastStunTime = 0;
+	player.arenaStunHitCount = 0;
 	if (&player != MyPlayer) {
 		// share info about your manashield when another player joins the level
 		if (myPlayer.pManaShield)
@@ -763,6 +776,11 @@ bool PlrHitPlr(Player &attacker, Player &target)
 	int blkper = target.GetBlockChance() - (attacker._pLevel * 2);
 	blkper = clamp(blkper, 0, 100);
 
+	// Arena balance: cap block chance at 75%
+	if (target.isOnArenaLevel() && blkper > 75) {
+		blkper = 75;
+	}
+
 	if (hit >= hper) {
 		return false;
 	}
@@ -797,10 +815,69 @@ bool PlrHitPlr(Player &attacker, Player &target)
 		}
 		RedrawComponent(PanelDrawComponent::Health);
 	}
+
+	// Arena steal effects: enable all mana/life steal against players in arena
+	if (target.isOnArenaLevel()) {
+		int stealAmount = 0;
+
+		// Mana steal effects
+		if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealMana3 | ItemSpecialEffect::StealMana5) && HasNoneOf(attacker._pIFlags, ItemSpecialEffect::NoMana)) {
+			if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealMana3)) {
+				stealAmount = 3 * dam / 100;
+			}
+			if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealMana5)) {
+				stealAmount = 5 * dam / 100;
+			}
+			attacker._pMana += stealAmount;
+			if (attacker._pMana > attacker._pMaxMana) {
+				attacker._pMana = attacker._pMaxMana;
+			}
+			attacker._pManaBase += stealAmount;
+			if (attacker._pManaBase > attacker._pMaxManaBase) {
+				attacker._pManaBase = attacker._pMaxManaBase;
+			}
+			RedrawComponent(PanelDrawComponent::Mana);
+		}
+
+		// Life steal effects
+		if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealLife3 | ItemSpecialEffect::StealLife5)) {
+			if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealLife3)) {
+				stealAmount = 3 * dam / 100;
+			}
+			if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::StealLife5)) {
+				stealAmount = 5 * dam / 100;
+			}
+			attacker._pHitPoints += stealAmount;
+			if (attacker._pHitPoints > attacker._pMaxHP) {
+				attacker._pHitPoints = attacker._pMaxHP;
+			}
+			attacker._pHPBase += stealAmount;
+			if (attacker._pHPBase > attacker._pMaxHPBase) {
+				attacker._pHPBase = attacker._pMaxHPBase;
+			}
+			RedrawComponent(PanelDrawComponent::Health);
+		}
+	}
 	if (&attacker == MyPlayer) {
 		NetSendCmdDamage(true, target.getId(), skdam, DamageType::Physical);
 	}
 	StartPlrHit(target, skdam, false);
+
+	// Arena knockback: enable knockback against players in arena
+	if (target.isOnArenaLevel() && HasAnyOf(attacker._pIFlags, ItemSpecialEffect::Knockback)) {
+		if (target._pmode != PM_GOTHIT)
+			StartPlrHit(target, 0, true);
+
+		Direction knockbackDir = GetDirection(attacker.position.tile, target.position.tile);
+		Point newPosition = target.position.tile + knockbackDir;
+		if (PosOkPlayer(target, newPosition)) {
+			target.position.tile = newPosition;
+			FixPlayerLocation(target, target._pdir);
+			FixPlrWalkTags(target);
+			dPlayer[newPosition.x][newPosition.y] = target.getId() + 1;
+			SetPlayerOld(target);
+		}
+	}
 
 	return true;
 }
@@ -2376,6 +2453,8 @@ void CreatePlayer(Player &player, HeroClass c)
 	player.pManaShield = false;
 	player.pDamAcFlags = ItemSpecialEffectHf::None;
 	player.wReflections = 0;
+	player.arenaLastStunTime = 0;
+	player.arenaStunHitCount = 0;
 
 	InitDungMsgs(player);
 	CreatePlrItems(player);
@@ -2510,6 +2589,8 @@ void InitPlayer(Player &player, bool firstTime)
 		player.queuedSpell.spellType = player._pRSplType;
 		player.pManaShield = false;
 		player.wReflections = 0;
+		player.arenaLastStunTime = 0;
+		player.arenaStunHitCount = 0;
 	}
 
 	if (player.isOnActiveLevel()) {
@@ -2632,7 +2713,8 @@ void StartPlrBlock(Player &player, Direction dir)
 	PlaySfxLoc(IS_ISWORD, player.position.tile);
 
 	int8_t skippedAnimationFrames = 0;
-	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastBlock)) {
+	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastBlock)
+	    || player.isOnArenaLevel()) {
 		skippedAnimationFrames = (player._pBFrames - 2); // ISPL_FASTBLOCK means we cancel the animation if frame 2 was shown
 	}
 
@@ -2656,6 +2738,32 @@ void FixPlrWalkTags(const Player &player)
 	}
 }
 
+bool CanPlayerBeStunnedInArena(Player &player)
+{
+	if (!player.isOnArenaLevel())
+		return true; // Normal stun rules apply outside arena
+
+	const uint32_t currentTime = SDL_GetTicks();
+	const uint32_t stunCooldown = 1000;   // 1 second cooldown
+	const uint8_t maxHitsPerCooldown = 1; // can only be stunned once per second
+
+	// Check if enough time has passed since last stun
+	if (currentTime - player.arenaLastStunTime >= stunCooldown) {
+		// Reset hit counter after cooldown period
+		player.arenaStunHitCount = 0;
+	}
+
+	// Check if player has been hit too many times recently
+	if (player.arenaStunHitCount >= maxHitsPerCooldown) {
+		return false; // Player is immune to stun
+	}
+
+	// Allow stun and increment hit counter
+	player.arenaStunHitCount++;
+	player.arenaLastStunTime = currentTime;
+	return true;
+}
+
 void StartPlrHit(Player &player, int dam, bool forcehit)
 {
 	if (player._pInvincible && player._pHitPoints == 0 && &player == MyPlayer) {
@@ -2674,10 +2782,16 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 		return;
 	}
 
+	// Arena stun resistance - check if player can be stunned
+	if (!CanPlayerBeStunnedInArena(player)) {
+		return; // Player is immune to stun in arena
+	}
+
 	Direction pd = player._pdir;
 
 	int8_t skippedAnimationFrames = 0;
-	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestHitRecovery)) {
+	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestHitRecovery)
+	    || player.isOnArenaLevel()) {
 		skippedAnimationFrames = 3;
 	} else if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FasterHitRecovery)) {
 		skippedAnimationFrames = 2;
@@ -2690,7 +2804,21 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 	NewPlrAnim(player, player_graphic::Hit, pd, AnimationDistributionFlags::None, skippedAnimationFrames);
 
 	player._pmode = PM_GOTHIT;
-	FixPlayerLocation(player, pd);
+
+	// Fix southward walking escape bug: use position.old to return to the original tile
+	if (player.isWalking()) {
+		player.position.tile = player.position.old;
+		player.position.future = player.position.old;
+		if (&player == MyPlayer) {
+			ViewPosition = player.position.tile;
+		}
+		ChangeLightXY(player.lightId, player.position.tile);
+		ChangeVisionXY(player.getId(), player.position.tile);
+		player._pdir = pd;
+	} else {
+		FixPlayerLocation(player, pd);
+	}
+
 	FixPlrWalkTags(player);
 	dPlayer[player.position.tile.x][player.position.tile.y] = player.getId() + 1;
 	SetPlayerOld(player);

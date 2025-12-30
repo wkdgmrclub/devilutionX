@@ -378,6 +378,10 @@ struct Player {
 	uint16_t wReflections;
 	ItemSpecialEffectHf pDamAcFlags;
 
+	// Arena stun resistance tracking
+	uint32_t arenaLastStunTime;
+	uint8_t arenaStunHitCount;
+
 	void CalcScrolls();
 
 	bool CanUseItem(const Item &item) const;
