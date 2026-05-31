@@ -97,6 +97,11 @@ local events = {
   ---Called when Player gains experience.
   OnPlayerGainExperience = CreateEvent(),
   __doc_OnPlayerGainExperience = "Called when Player gains experience.",
+
+  ---Called just before the current level is saved and unloaded (level exit, warp, or player death).
+  ---All monsters and items are still accessible. Drop or recall anything before this returns.
+  OnLevelExit = CreateEvent(),
+  __doc_OnLevelExit = "Called just before the current level is saved and unloaded (level exit or player death). Monsters and items are still valid.",
 }
 
 ---Registers a custom event type with the given name.

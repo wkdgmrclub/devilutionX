@@ -518,6 +518,7 @@ int AllocateItem();
  * @return The index assigned to the item
  */
 uint8_t PlaceItemInWorld(Item &&item, WorldTilePosition position);
+bool ItemSpaceOk(Point position);
 Point GetSuperItemLoc(Point position);
 void GetItemAttrs(Item &item, _item_indexes itemData, int lvl);
 void SetupItem(Item &item);
@@ -590,6 +591,14 @@ void UpdateHellfireFlag(Item &item, const char *identifiedItemName);
 extern int MaxGold;
 
 extern int8_t ItemCAnimTbl[];
+extern const int ItemCAnimTblSize;
+
+/** Returns the anim/sound type index for an item cursor, safe for custom _iCurs values >= ItemCAnimTblSize. */
+inline int GetItemAnimIndex(int iCurs)
+{
+	return (iCurs >= 0 && iCurs < ItemCAnimTblSize) ? ItemCAnimTbl[iCurs] : 12;
+}
+
 extern SfxID ItemInvSnds[];
 
 } // namespace devilution

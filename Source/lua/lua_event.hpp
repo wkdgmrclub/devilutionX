@@ -21,7 +21,7 @@ void StoreOpened(std::string_view name);
 
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 void OnMonsterDeath(const Monster *monster);
-void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster);
+void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
@@ -29,6 +29,7 @@ void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
 void LoadModsComplete();
 void GameDrawComplete();
 void GameStart();
+void OnLevelExit();
 
 } // namespace lua
 

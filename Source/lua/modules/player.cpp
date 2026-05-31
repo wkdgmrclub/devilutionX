@@ -13,7 +13,9 @@
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
+#include "tables/itemdat.h"
 #include "tables/playerdat.hpp"
+#include "utils/utf8.hpp"
 
 namespace devilution {
 namespace {
@@ -113,6 +115,43 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "maxMana", "number",
 	    "Maximum mana (readonly)",
 	    [](Player &player) { return player._pMaxMana >> 6; });
+	LuaSetDocReadonlyProperty(playerType, "lightRadius", "integer",
+	    "Player's light radius in tiles (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pLightRad); });
+	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string) -> boolean",
+	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Returns true if placed successfully, false if inventory is full or item type not found.",
+	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name) -> bool {
+		    const auto it = ItemMappingIdsToIndices.find(mappingId);
+		    if (it == ItemMappingIdsToIndices.end()) return false;
+		    const auto itemIndex = static_cast<_item_indexes>(it->second);
+		    Item item {};
+		    GetItemAttrs(item, itemIndex, 1);
+		    SetupItem(item);
+		    item._iSeed = seed;
+		    item._iCreateInfo = 0;
+		    item._iIdentified = true;
+		    CopyUtf8(item._iName, name, sizeof(item._iName));
+		    CopyUtf8(item._iIName, name, sizeof(item._iIName));
+		    if (!AutoPlaceItemInInventory(player, item, true)) return false;
+		    CalcPlrInv(player, true);
+		    return true;
+	    });
+	LuaSetDocFn(playerType, "findScrollSeedOf", "(spellId: integer) -> integer|nil",
+	    "Return the _iSeed of the first scroll in inventory or belt matching the given spell ID, or nil if none found.",
+	    [](const Player &player, int spellIdInt) -> sol::optional<uint32_t> {
+		    const auto spellId = static_cast<SpellID>(spellIdInt);
+		    for (int i = 0; i < player._pNumInv; i++) {
+			    const Item &item = player.InvList[i];
+			    if (!item.isEmpty() && item._iMiscId == IMISC_SCROLL && item._iSpell == spellId)
+				    return item._iSeed;
+		    }
+		    for (int i = 0; i < MaxBeltItems; i++) {
+			    const Item &item = player.SpdList[i];
+			    if (!item.isEmpty() && item._iMiscId == IMISC_SCROLL && item._iSpell == spellId)
+				    return item._iSeed;
+		    }
+		    return sol::nullopt;
+	    });
 }
 } // namespace
 

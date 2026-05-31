@@ -129,6 +129,7 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0
 };
+const int ItemCAnimTblSize = static_cast<int>(std::size(ItemCAnimTbl));
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -2212,6 +2213,11 @@ StringOrView GetTranslatedItemName(const Item &item)
 {
 	const auto &baseItemData = AllItemsList[static_cast<size_t>(item.IDidx)];
 
+	// If _iName has been overridden by a mod (differs from the base item definition), use it directly.
+	if (std::string_view(item._iName) != std::string_view(baseItemData.iName)) {
+		return std::string(item._iName);
+	}
+
 	if (item._iCreateInfo == 0) {
 		return _(baseItemData.iName);
 	}
@@ -3733,7 +3739,7 @@ void SpawnTheodore(Point position, bool sendmsg)
 
 void RespawnItem(Item &item, bool flipFlag)
 {
-	const int it = ItemCAnimTbl[item._iCurs];
+	const int it = GetItemAnimIndex(item._iCurs);
 	item.setNewAnimation(flipFlag);
 	item._iRequest = false; // Item isn't being picked up by a player
 
@@ -3793,7 +3799,7 @@ void ProcessItems()
 				item.AnimInfo.currentFrame = 10;                                                     // Beginning of elevated frames
 		} else {
 			if (item.AnimInfo.currentFrame == (item.AnimInfo.numberOfFrames - 1) / 2)
-				PlaySfxLoc(ItemDropSnds[ItemCAnimTbl[item._iCurs]], item.position);
+				PlaySfxLoc(ItemDropSnds[GetItemAnimIndex(item._iCurs)], item.position);
 
 			if (item.AnimInfo.isLastFrame()) {
 				item.AnimInfo.currentFrame = item.AnimInfo.numberOfFrames - 1;
@@ -3814,7 +3820,7 @@ void FreeItemGFX()
 
 void GetItemFrm(Item &item)
 {
-	const int it = ItemCAnimTbl[item._iCurs];
+	const int it = GetItemAnimIndex(item._iCurs);
 	if (itemanims[it])
 		item.AnimInfo.sprites.emplace(*itemanims[it]);
 }
@@ -4806,7 +4812,7 @@ bool Item::isUsable() const
 
 void Item::setNewAnimation(bool showAnimation)
 {
-	const int8_t it = ItemCAnimTbl[_iCurs];
+	const int8_t it = static_cast<int8_t>(GetItemAnimIndex(_iCurs));
 	const int8_t numberOfFrames = ItemAnimLs[it];
 	const OptionalClxSpriteList sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
 	if (_iCurs != ICURS_MAGIC_ROCK)

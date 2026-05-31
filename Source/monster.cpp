@@ -3290,7 +3290,7 @@ bool PosOkMovingMissile(Point position)
 void MakeMonsterAlly(Monster &monster, const Player &player)
 {
 	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
-	monster.flags |= MFLAG_GOLEM;
+	monster.flags |= MFLAG_GOLEM | MFLAG_ALLY_SELECTABLE;
 	monster.golemToHit = naturalToHit;
 	monster.goalVar3 = static_cast<int8_t>(player.getId());
 	monster.goal = MonsterGoal::Normal;

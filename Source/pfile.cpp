@@ -4,6 +4,7 @@
  * Implementation of the save game encoding functionality.
  */
 #include "pfile.h"
+#include "lua/lua_event.hpp"
 
 #include <cstdint>
 #include <string>
@@ -790,6 +791,7 @@ void pfile_read_player_from_save(uint32_t saveNum, Player &player)
 
 void pfile_save_level()
 {
+	lua::OnLevelExit();
 	SaveWriter saveWriter = GetSaveWriter(gSaveNumber);
 	SaveLevel(saveWriter);
 }

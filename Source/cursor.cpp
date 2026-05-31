@@ -64,6 +64,7 @@ namespace {
 /** Cursor images CEL */
 OptionalOwnedClxSpriteList pCursCels;
 OptionalOwnedClxSpriteList pCursCels2;
+std::vector<OwnedClxSpriteList> customCursorSprites;
 
 OptionalOwnedClxSpriteList *HalfSizeItemSprites;
 OptionalOwnedClxSpriteList *HalfSizeItemSpritesRed;
@@ -74,7 +75,7 @@ bool IsValidMonsterForSelection(const Monster &monster)
 		return false;
 	if ((monster.flags & MFLAG_HIDDEN) != 0)
 		return false;
-	if (monster.isPlayerMinion())
+	if (monster.isPlayerMinion() && !(monster.flags & MFLAG_ALLY_SELECTABLE))
 		return false;
 	return true;
 }
@@ -456,12 +457,33 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
+	FreeCustomCursorSprites();
 	ClearCursor();
+}
+
+int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
+{
+	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
+	customCursorSprites.push_back(std::move(sprite));
+	return iCurs;
+}
+
+void FreeCustomCursorSprites()
+{
+	customCursorSprites.clear();
 }
 
 ClxSprite GetInvItemSprite(int cursId)
 {
 	assert(cursId > 0);
+	const int itemCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
+	if (itemCurs >= ItemCAnimTblSize) {
+		const size_t customIdx = static_cast<size_t>(itemCurs - ItemCAnimTblSize);
+		if (customIdx < customCursorSprites.size()) {
+			return customCursorSprites[customIdx][0];
+		}
+		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM));
+	}
 	const size_t numSprites = pCursCels->numSprites();
 	if (static_cast<size_t>(cursId) <= numSprites) {
 		return (*pCursCels)[cursId - 1];
@@ -479,11 +501,25 @@ Size GetInvItemSize(int cursId)
 
 ClxSprite GetHalfSizeItemSprite(int cursId)
 {
+	if (cursId >= ItemCAnimTblSize) {
+		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
+		if (customIdx < customCursorSprites.size()) {
+			return customCursorSprites[customIdx][0];
+		}
+		return (*HalfSizeItemSprites[0])[0];
+	}
 	return (*HalfSizeItemSprites[cursId])[0];
 }
 
 ClxSprite GetHalfSizeItemSpriteRed(int cursId)
 {
+	if (cursId >= ItemCAnimTblSize) {
+		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
+		if (customIdx < customCursorSprites.size()) {
+			return customCursorSprites[customIdx][0];
+		}
+		return (*HalfSizeItemSpritesRed[0])[0];
+	}
 	return (*HalfSizeItemSpritesRed[cursId])[0];
 }
 
@@ -865,7 +901,7 @@ bool CheckCursorActions(const Point currentTile, bool flipflag)
 		return true;
 
 	if (leveltype != DTYPE_TOWN) {
-		// Never select a monster if a target-player-only spell is selected
+		// Never select a monster if a target-player-only spell is selected.
 		if (IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT)) {
 			if (pcurstemp != -1 && TrySelectMonster(flipflag, currentTile, [](const Monster &monster) {
 				    if (!IsValidMonsterForSelection(monster))

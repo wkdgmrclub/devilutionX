@@ -734,6 +734,7 @@ uint8_t GetLevelForMultiplayer(const Player &player);
 bool IsValidLevelForMultiplayer(uint8_t level);
 bool IsValidLevel(uint8_t level, bool isSetLevel);
 void DeltaAddItem(int ii);
+void DeltaRegisterDroppedItem(int ii);
 void DeltaSaveLevel();
 void DeltaLoadLevel();
 /** @brief Clears last sent player command for the local player. This is used when a game tick changes. */

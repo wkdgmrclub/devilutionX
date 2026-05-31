@@ -57,6 +57,10 @@ void InitCursor();
 void FreeCursor();
 void ResetCursor();
 
+/** Registers a custom item cursor sprite for use by mod items. Returns the _iCurs value to assign. */
+int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite);
+void FreeCustomCursorSprites();
+
 struct Item;
 /**
  * @brief Use the item sprite as the cursor (or show the default hand cursor if the item isEmpty)

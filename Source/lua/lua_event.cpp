@@ -6,6 +6,7 @@
 
 #include <sol/sol.hpp>
 
+#include "inv.h"
 #include "lua/lua_global.hpp"
 #include "monster.h"
 #include "player.h"
@@ -92,9 +93,36 @@ void OnMonsterDeath(const Monster *monster)
 	CallLuaEvent("OnMonsterDeath", monster);
 }
 
-void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster)
+void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY)
 {
-	CallLuaEvent("OnSpellCast", player, spellId, spellType, targetMonster);
+	// For scroll casts, resolve which specific scroll item was used so Lua can
+	// distinguish between multiple scrolls of the same spell in inventory.
+	uint32_t scrollSeed = 0;
+	if (spellType == static_cast<int>(SpellType::Scroll) && player != nullptr) {
+		const int8_t spellFrom = player->queuedSpell.spellFrom;
+		if (spellFrom >= INVITEM_INV_FIRST && spellFrom <= INVITEM_INV_LAST) {
+			const Item &item = player->InvList[spellFrom - INVITEM_INV_FIRST];
+			if (!item.isEmpty()) scrollSeed = item._iSeed;
+		} else if (spellFrom >= INVITEM_BELT_FIRST && spellFrom <= INVITEM_BELT_LAST) {
+			const Item &item = player->SpdList[spellFrom - INVITEM_BELT_FIRST];
+			if (!item.isEmpty()) scrollSeed = item._iSeed;
+		}
+		// spellFrom == 0 (cast via spell selection): find first matching scroll.
+		if (scrollSeed == 0) {
+			const auto spellIdEnum = static_cast<SpellID>(spellId);
+			for (int i = 0; i < player->_pNumInv && scrollSeed == 0; i++) {
+				const Item &item = player->InvList[i];
+				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+					scrollSeed = item._iSeed;
+			}
+			for (int i = 0; i < MaxBeltItems && scrollSeed == 0; i++) {
+				const Item &item = player->SpdList[i];
+				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+					scrollSeed = item._iSeed;
+			}
+		}
+	}
+	CallLuaEvent("OnSpellCast", player, spellId, spellType, targetMonster, scrollSeed, targetX, targetY);
 }
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp)
@@ -117,6 +145,10 @@ void GameDrawComplete()
 void GameStart()
 {
 	CallLuaEvent("GameStart");
+}
+void OnLevelExit()
+{
+	CallLuaEvent("OnLevelExit");
 }
 
 } // namespace lua

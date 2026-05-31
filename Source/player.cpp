@@ -50,6 +50,7 @@
 #include "options.h"
 #include "player.h"
 #include "qol/autopickup.h"
+#include "tables/itemdat.h"
 #include "qol/stash.h"
 #include "spells.h"
 #include "stores.h"
@@ -1253,17 +1254,17 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 			break;
 		case ACTION_SPELL:
 			d = GetDirection(player.position.tile, { player.destParam1, player.destParam2 });
-			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr);
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr, player.destParam1, player.destParam2);
 			StartSpell(player, d, player.destParam1, player.destParam2);
 			break;
 		case ACTION_SPELLWALL:
-			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr);
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr, player.destParam1, player.destParam2);
 			StartSpell(player, static_cast<Direction>(player.destParam3), player.destParam1, player.destParam2);
 			player.tempDirection = static_cast<Direction>(player.destParam3);
 			break;
 		case ACTION_SPELLMON:
 			d = GetDirection(player.position.tile, monster->position.future);
-			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), monster);
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), monster, monster->position.future.x, monster->position.future.y);
 			StartSpell(player, d, monster->position.future.x, monster->position.future.y);
 			break;
 		case ACTION_SPELLPLR:
@@ -1537,7 +1538,8 @@ void Player::CalcScrolls()
 {
 	_pScrlSpells = 0;
 	for (const Item &item : InventoryAndBeltPlayerItemsRange { *this }) {
-		if (item.isScroll() && item._iStatFlag) {
+		if (item.isScroll() && item._iStatFlag
+		    && !AllItemsList[static_cast<size_t>(item.IDidx)].iSkipSpeedbook) {
 			_pScrlSpells |= GetSpellBitmask(item._iSpell);
 		}
 	}

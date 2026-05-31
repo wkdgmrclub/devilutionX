@@ -51,6 +51,7 @@ enum monster_flag : uint16_t {
 	MFLAG_NO_ENEMY        = 1 << 10,
 	MFLAG_BERSERK         = 1 << 11,
 	MFLAG_NOLIFESTEAL     = 1 << 12,
+	MFLAG_ALLY_SELECTABLE = 1 << 13,
 	// clang-format on
 };
 

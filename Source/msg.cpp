@@ -4,6 +4,7 @@
  * Implementation of function for sending and receiving network messages.
  */
 #include "msg.h"
+#include "lua/lua_event.hpp"
 
 #include <climits>
 #include <cmath>
@@ -2918,10 +2919,34 @@ void DeltaAddItem(int ii)
 	}
 }
 
+// Register an item that was dynamically dropped (not pre-generated) in the delta so
+// DeltaLoadItems re-spawns it when the player returns to this level.
+void DeltaRegisterDroppedItem(int ii)
+{
+	if (!gbIsMultiplayer)
+		return;
+
+	const uint8_t localLevel = GetLevelForMultiplayer(*MyPlayer);
+	DLevel &deltaLevel = GetDeltaLevel(localLevel);
+
+	for (TCmdPItem &delta : deltaLevel.item) {
+		if (delta.bCmd != CMD_INVALID)
+			continue;
+
+		delta.bCmd = TCmdPItem::DroppedItem;
+		delta.x = static_cast<uint8_t>(Items[ii].position.x);
+		delta.y = static_cast<uint8_t>(Items[ii].position.y);
+		PrepareItemForNetwork(Items[ii], delta);
+		return;
+	}
+}
+
 void DeltaSaveLevel()
 {
 	if (!gbIsMultiplayer)
 		return;
+
+	lua::OnLevelExit();
 
 	for (Player &player : Players) {
 		if (&player != MyPlayer)

@@ -6,10 +6,17 @@
 #include <fmt/format.h>
 #include <sol/sol.hpp>
 
+#include "crawl.hpp"
 #include "data/file.hpp"
 #include "engine/point.hpp"
+#include "engine/random.hpp"
+#include "levels/gendung.h"
+#include "levels/tile_properties.hpp"
+#include "lighting.h"
 #include "lua/metadoc.hpp"
 #include "monster.h"
+#include "msg.h"
+#include "multi.h"
 #include "player.h"
 #include "tables/monstdat.h"
 #include "utils/language.h"
@@ -31,6 +38,13 @@ void AddUniqueMonsterDataFromTsv(const std::string_view path)
 	LoadUniqueMonstDatFromFile(dataFile, path);
 }
 
+void InitPointUserType(sol::state_view &lua)
+{
+	sol::usertype<Point> pointType = lua.new_usertype<Point>(sol::no_constructor);
+	pointType["x"] = &Point::x;
+	pointType["y"] = &Point::y;
+}
+
 void InitMonsterUserType(sol::state_view &lua)
 {
 	sol::usertype<Monster> monsterType = lua.new_usertype<Monster>(sol::no_constructor);
@@ -43,6 +57,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Monster's unique ID (readonly)",
 	    [](const Monster &monster) {
 		    return static_cast<int>(reinterpret_cast<uintptr_t>(&monster));
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "typeId", "integer",
+	    "Monster type ID matching _monster_id constants (readonly)",
+	    [](const Monster &monster) {
+		    return static_cast<int>(monster.type().type);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "name", "string",
 	    "Monster's display name (readonly)",
@@ -69,10 +88,72 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster) {
 		    return monster.isUnique() || monster.type().type == MT_DIABLO;
 	    });
+	LuaSetDocReadonlyProperty(monsterType, "level", "integer",
+	    "Monster's effective level at the current game difficulty (readonly)",
+	    [](const Monster &monster) {
+		    return static_cast<int>(monster.level(static_cast<_difficulty>(sgGameInitInfo.nDifficulty)));
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "isAlly", "boolean",
+	    "Whether this monster is currently flagged as a player ally (MFLAG_ALLY_SELECTABLE) (readonly)",
+	    [](const Monster &monster) {
+		    return (monster.flags & MFLAG_ALLY_SELECTABLE) != 0;
+	    });
+	LuaSetDocFn(monsterType, "remove", "()",
+	    "Silently remove this monster from the level without triggering death effects, loot, or XP.",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    if (monster.lightId != NO_LIGHT) {
+			    AddUnLight(monster.lightId);
+			    monster.lightId = NO_LIGHT;
+		    }
+		    M_ClearSquares(monster);
+		    dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		    monster.isInvalid = true;
+		    // Remove from ActiveMonsters immediately so SaveLevel does not persist this monster.
+		    // (DeleteMonsterList normally runs next tick, but that is after pfile_save_level.)
+		    DeleteMonsterList();
+	    });
+	LuaSetDocFn(monsterType, "setHitPoints", "(hp: integer)",
+	    "Set this monster's current hit points (pass display value; stored as fixed-point internally).",
+	    [](const Monster &constMonster, int hp) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.hitPoints = hp << 6;
+	    });
 	LuaSetDocFn(monsterType, "makeAlly", "(player: Player)",
 	    "Make this monster fight as an ally for the given player (uses the same mechanism as Golem)",
 	    [](Monster &monster, const Player &player) {
 		    MakeMonsterAlly(monster, player);
+	    });
+	LuaSetDocFn(monsterType, "snapToPlayer", "(player: Player)",
+	    "Instantly move this monster to the nearest free tile adjacent to the player.",
+	    [](const Monster &constMonster, const Player &player) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    const Point targetPos = player.position.tile;
+		    // Search outward from the player tile for the nearest unoccupied walkable tile.
+		    // Multiple allies snapping in the same frame each get a unique tile because
+		    // occupyTile updates dMonster before the next snap runs.
+		    const auto freePos = Crawl(0, MaxCrawlRadius, [&](Displacement d) -> std::optional<Point> {
+			    const Point candidate = targetPos + d;
+			    if (dPlayer[candidate.x][candidate.y] != 0 || dMonster[candidate.x][candidate.y] != 0)
+				    return {};
+			    if (!IsTileWalkable(candidate))
+				    return {};
+			    return candidate;
+		    });
+		    if (!freePos) return;
+		    const Point snapPos = *freePos;
+		    M_ClearSquares(monster);
+		    dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		    monster.position.tile = snapPos;
+		    monster.position.future = snapPos;
+		    monster.position.old = snapPos;
+		    monster.occupyTile(snapPos, false);
+		    ChangeLightXY(monster.lightId, snapPos);
+	    });
+	LuaSetDocFn(monsterType, "distanceTo", "(player: Player) -> integer",
+	    "Returns the Chebyshev tile distance between this monster and the given player.",
+	    [](const Monster &monster, const Player &player) {
+		    return monster.position.tile.WalkingDistance(player.position.tile);
 	    });
 }
 
@@ -80,10 +161,57 @@ void InitMonsterUserType(sol::state_view &lua)
 
 sol::table LuaMonstersModule(sol::state_view &lua)
 {
+	InitPointUserType(lua);
 	InitMonsterUserType(lua);
 	sol::table table = lua.create_table();
 	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);
 	LuaSetDocFn(table, "addUniqueMonsterDataFromTsv", "(path: string)", AddUniqueMonsterDataFromTsv);
+	LuaSetDocFn(table, "spawnAt", "(typeId: integer, x: integer, y: integer) -> Monster|nil",
+	    "Spawn a monster of the given type ID at the given tile. Returns the new Monster or nil on failure.",
+	    [](int typeIdInt, int x, int y) -> Monster * {
+		    const auto type = static_cast<_monster_id>(typeIdInt);
+
+		    // Find existing level type index, or register the type for this level.
+		    size_t typeIndex = LevelMonsterTypeCount;
+		    for (size_t i = 0; i < LevelMonsterTypeCount; i++) {
+			    if (LevelMonsterTypes[i].type == type) {
+				    typeIndex = i;
+				    break;
+			    }
+		    }
+		    if (typeIndex == LevelMonsterTypeCount) {
+			    auto result = AddMonsterType(type, PLACE_SCATTER);
+			    if (!result) return nullptr;
+			    typeIndex = *result;
+			    // Load GFX for the newly registered type (no-op for already-loaded types).
+			    if (!InitAllMonsterGFX()) return nullptr;
+		    }
+
+		    if (ActiveMonsterCount >= MaxMonsters) return nullptr;
+		    if (!MyPlayer->isLevelOwnedByLocalClient()) return nullptr;
+
+		    const Point requestedPos { x, y };
+		    // InitializeSpawnedMonster asserts the given tile is free; find the nearest one.
+		    const auto freePos = Crawl(0, MaxCrawlRadius, [&requestedPos](Displacement displacement) -> std::optional<Point> {
+			    const Point candidate = requestedPos + displacement;
+			    if (dPlayer[candidate.x][candidate.y] != 0 || dMonster[candidate.x][candidate.y] != 0)
+				    return {};
+			    if (!IsTileWalkable(candidate))
+				    return {};
+			    return candidate;
+		    });
+		    if (!freePos) return nullptr;
+		    const Point spawnPos = *freePos;
+
+		    const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
+		    ActiveMonsterCount++;
+		    const uint32_t seed = GetLCGEngineState();
+		    InitializeSpawnedMonster(spawnPos, Direction::South, typeIndex, monsterIndex, seed, 0, 0);
+		    NetSendCmdSpawnMonster(spawnPos, Direction::South, static_cast<uint16_t>(typeIndex),
+		        static_cast<uint16_t>(monsterIndex), seed, 0, 0);
+
+		    return &Monsters[monsterIndex];
+	    });
 	return table;
 }
 
