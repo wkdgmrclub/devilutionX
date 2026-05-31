@@ -14,10 +14,14 @@ void MonsterDataLoaded();
 void UniqueMonsterDataLoaded();
 void ItemDataLoaded();
 void UniqueItemDataLoaded();
+void SpellDataLoaded();
+void PlayerDataLoaded();
 
 void StoreOpened(std::string_view name);
 
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
+void OnMonsterDeath(const Monster *monster);
+void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster);
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);

@@ -13,6 +13,7 @@
 
 #include <expected.hpp>
 
+#include "data/file.hpp"
 #include "sound_effect_enums.h"
 #include "utils/enum_traits.h"
 
@@ -272,6 +273,8 @@ inline const SpellData &GetSpellData(SpellID spellId)
 	return SpellsData[static_cast<std::underlying_type<SpellID>::type>(spellId)];
 }
 
+void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename);
+void RegisterDynamicSpellId(std::string_view name, SpellID id);
 void LoadSpellData();
 
 } // namespace devilution

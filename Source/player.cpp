@@ -1253,14 +1253,17 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 			break;
 		case ACTION_SPELL:
 			d = GetDirection(player.position.tile, { player.destParam1, player.destParam2 });
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr);
 			StartSpell(player, d, player.destParam1, player.destParam2);
 			break;
 		case ACTION_SPELLWALL:
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), nullptr);
 			StartSpell(player, static_cast<Direction>(player.destParam3), player.destParam1, player.destParam2);
 			player.tempDirection = static_cast<Direction>(player.destParam3);
 			break;
 		case ACTION_SPELLMON:
 			d = GetDirection(player.position.tile, monster->position.future);
+			lua::OnSpellCast(&player, static_cast<int>(player.queuedSpell.spellId), static_cast<int>(player.queuedSpell.spellType), monster);
 			StartSpell(player, d, monster->position.future.x, monster->position.future.y);
 			break;
 		case ACTION_SPELLPLR:

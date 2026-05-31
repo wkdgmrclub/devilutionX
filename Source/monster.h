@@ -538,6 +538,7 @@ void M_StartHit(Monster &monster, const Player &player, int dam);
 void StartMonsterDeath(Monster &monster, const Player &player, bool sendmsg);
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg);
 void KillGolem(Monster &golem);
+void MakeMonsterAlly(Monster &monster, const Player &player);
 void M_StartKill(Monster &monster, const Player &player);
 void M_SyncStartKill(Monster &monster, Point position, const Player &player);
 void M_UpdateRelations(const Monster &monster);

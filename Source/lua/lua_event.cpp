@@ -68,6 +68,14 @@ void UniqueItemDataLoaded()
 {
 	CallLuaEvent("UniqueItemDataLoaded");
 }
+void SpellDataLoaded()
+{
+	CallLuaEvent("SpellDataLoaded");
+}
+void PlayerDataLoaded()
+{
+	CallLuaEvent("PlayerDataLoaded");
+}
 
 void StoreOpened(std::string_view name)
 {
@@ -77,6 +85,16 @@ void StoreOpened(std::string_view name)
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType)
 {
 	CallLuaEvent("OnMonsterTakeDamage", monster, damage, damageType);
+}
+
+void OnMonsterDeath(const Monster *monster)
+{
+	CallLuaEvent("OnMonsterDeath", monster);
+}
+
+void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster)
+{
+	CallLuaEvent("OnSpellCast", player, spellId, spellType, targetMonster);
 }
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp)

@@ -3287,6 +3287,17 @@ bool PosOkMovingMissile(Point position)
 
 } // namespace
 
+void MakeMonsterAlly(Monster &monster, const Player &player)
+{
+	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
+	monster.flags |= MFLAG_GOLEM;
+	monster.golemToHit = naturalToHit;
+	monster.goalVar3 = static_cast<int8_t>(player.getId());
+	monster.goal = MonsterGoal::Normal;
+	monster.activeForTicks = UINT8_MAX;
+	UpdateEnemy(monster);
+}
+
 tl::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag placeflag)
 {
 	const size_t typeIndex = GetMonsterTypeIndex(type);
@@ -3995,6 +4006,8 @@ void M_StartHit(Monster &monster, const Player &player, int dam)
 
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 {
+	lua::OnMonsterDeath(&monster);
+
 	if (!monster.isPlayerMinion())
 		AddPlrMonstExper(monster.level(sgGameInitInfo.nDifficulty), monster.exp(sgGameInitInfo.nDifficulty), monster.whoHit);
 

@@ -6,13 +6,17 @@
 #include "tables/spelldat.h"
 
 #include <optional>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 
 #include <expected.hpp>
 
 #include "data/file.hpp"
 #include "data/iterators.hpp"
 #include "data/record_reader.hpp"
+#include "lua/lua_event.hpp"
+#include "panels/spell_icons.hpp"
 
 namespace devilution {
 
@@ -170,6 +174,13 @@ tl::expected<MissileID, std::string> ParseMissileId(std::string_view value)
 /** Data related to each spell ID. */
 std::vector<SpellData> SpellsData;
 
+std::unordered_map<std::string, SpellID> DynamicSpellIds;
+
+void RegisterDynamicSpellId(std::string_view name, SpellID id)
+{
+	DynamicSpellIds.emplace(std::string(name), id);
+}
+
 tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
 {
 	if (value == "Null") return SpellID::Null;
@@ -224,17 +235,15 @@ tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
 	if (value == "RuneOfNova") return SpellID::RuneOfNova;
 	if (value == "RuneOfImmolation") return SpellID::RuneOfImmolation;
 	if (value == "RuneOfStone") return SpellID::RuneOfStone;
+	const auto it = DynamicSpellIds.find(std::string(value));
+	if (it != DynamicSpellIds.end()) return it->second;
 	return tl::make_unexpected("Unknown enum value");
 }
 
-void LoadSpellData()
+void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename)
 {
-	SpellsData.clear();
-	const std::string_view filename = "txtdata\\spells\\spelldat.tsv";
-	DataFile dataFile = DataFile::loadOrDie(filename);
-	SpellsData.reserve(dataFile.numRecords() + 1);
-	AddNullSpell();
 	dataFile.skipHeaderOrDie(filename);
+	SpellsData.reserve(SpellsData.size() + dataFile.numRecords());
 	for (DataFileRecord record : dataFile) {
 		RecordReader reader { record, filename };
 		SpellData &item = SpellsData.emplace_back();
@@ -254,6 +263,19 @@ void LoadSpellData()
 		reader.readInt("staffMin", item.sStaffMin);
 		reader.readInt("staffMax", item.sStaffMax);
 	}
+}
+
+void LoadSpellData()
+{
+	DynamicSpellIds.clear();
+	ClearDynamicSpellIcons();
+	SpellsData.clear();
+	const std::string_view filename = "txtdata\\spells\\spelldat.tsv";
+	DataFile dataFile = DataFile::loadOrDie(filename);
+	SpellsData.reserve(dataFile.numRecords() + 1);
+	AddNullSpell();
+	LoadSpellDatFromFile(dataFile, filename);
+	lua::SpellDataLoaded();
 	SpellsData.shrink_to_fit();
 }
 

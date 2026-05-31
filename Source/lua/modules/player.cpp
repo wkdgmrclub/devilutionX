@@ -4,6 +4,7 @@
 
 #include <sol/sol.hpp>
 
+#include "data/file.hpp"
 #include "effects.h"
 #include "engine/backbuffer_state.hpp"
 #include "engine/point.hpp"
@@ -12,6 +13,7 @@
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
+#include "tables/playerdat.hpp"
 
 namespace devilution {
 namespace {
@@ -127,6 +129,12 @@ sol::table LuaPlayerModule(sol::state_view &lua)
 	    "Walk to the given coordinates",
 	    [](int x, int y) {
 		    NetSendCmdLoc(MyPlayerId, true, CMD_WALKXY, Point { x, y });
+	    });
+	LuaSetDocFn(table, "addClassDataFromTsv", "(path: string)",
+	    "Register a new player class from a classdat-format TSV file. Call this inside a PlayerDataLoaded handler.",
+	    [](const std::string_view path) {
+		    DataFile dataFile = DataFile::loadOrDie(path);
+		    LoadClassDatFromFile(dataFile, path);
 	    });
 
 	return table;

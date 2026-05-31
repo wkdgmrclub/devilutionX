@@ -49,6 +49,14 @@ local events = {
   UniqueItemDataLoaded = CreateEvent(),
   __doc_UniqueItemDataLoaded = "Called after the unique item data TSV file has been loaded.",
 
+  ---Called after the spell data TSV file has been loaded. Use spells.addSpellDataFromTsv() in this handler to register additional spells.
+  SpellDataLoaded = CreateEvent(),
+  __doc_SpellDataLoaded = "Called after the spell data TSV file has been loaded. Use spells.addSpellDataFromTsv() in this handler to register additional spells.",
+
+  ---Called after base class data has been loaded but before class attributes are built. Use player.addClassDataFromTsv() in this handler to register additional classes.
+  PlayerDataLoaded = CreateEvent(),
+  __doc_PlayerDataLoaded = "Called after base class data has been loaded. Use player.addClassDataFromTsv() in this handler to register additional classes.",
+
   ---Called after the monster data TSV file has been loaded.
   MonsterDataLoaded = CreateEvent(),
   __doc_MonsterDataLoaded = "Called after the monster data TSV file has been loaded.",
@@ -72,6 +80,15 @@ local events = {
   ---Called when a Monster takes damage.
   OnMonsterTakeDamage = CreateEvent(),
   __doc_OnMonsterTakeDamage = "Called when a Monster takes damage.",
+
+  ---Called when a Monster dies. Passes the monster as argument.
+  OnMonsterDeath = CreateEvent(),
+  __doc_OnMonsterDeath = "Called when a Monster dies. Passes the monster as argument.",
+
+  ---Called when a player successfully begins casting a spell or using a skill.
+  ---Passes: player, spellId (integer), spellType (integer: 0=Skill 1=Spell 2=Scroll 3=Charges), targetMonster (may be nil for non-monster-targeted casts).
+  OnSpellCast = CreateEvent(),
+  __doc_OnSpellCast = "Called when a player casts a spell or uses a skill. spellType: 0=Skill 1=Spell 2=Scroll 3=Charges. targetMonster is nil for non-monster-targeted casts.",
 
   ---Called when Player takes damage.
   OnPlayerTakeDamage = CreateEvent(),

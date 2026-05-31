@@ -34,6 +34,7 @@
 #include "lua/modules/log.hpp"
 #include "lua/modules/monsters.hpp"
 #include "lua/modules/player.hpp"
+#include "lua/modules/spells.hpp"
 #include "lua/modules/render.hpp"
 #include "lua/modules/system.hpp"
 #include "lua/modules/towners.hpp"
@@ -269,8 +270,8 @@ void LuaReloadActiveMods()
 
 	// Reload game data (this can probably be done later in the process to avoid having to reload it)
 	LoadTextData();
-	LoadPlayerDataFiles();
 	LoadSpellData();
+	LoadPlayerDataFiles();
 	LoadMissileData();
 	LoadMonsterData();
 	LoadItemData();
@@ -310,6 +311,7 @@ void LuaInitialize()
 	    "devilutionx.audio", LuaAudioModule(lua),
 	    "devilutionx.monsters", LuaMonstersModule(lua),
 	    "devilutionx.player", LuaPlayerModule(lua),
+	    "devilutionx.spells", LuaSpellsModule(lua),
 	    "devilutionx.render", LuaRenderModule(lua),
 	    "devilutionx.towners", LuaTownersModule(lua),
 	    "devilutionx.hellfire", LuaHellfireModule(lua),
