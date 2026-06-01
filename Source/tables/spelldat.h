@@ -273,8 +273,8 @@ inline const SpellData &GetSpellData(SpellID spellId)
 	return SpellsData[static_cast<std::underlying_type<SpellID>::type>(spellId)];
 }
 
-void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename);
-void RegisterDynamicSpellId(std::string_view name, SpellID id);
+void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename); // Lua mod support
+void RegisterDynamicSpellId(std::string_view name, SpellID id); // Lua mod support
 void LoadSpellData();
 
 } // namespace devilution

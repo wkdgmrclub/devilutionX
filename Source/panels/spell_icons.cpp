@@ -26,7 +26,7 @@ OptionalOwnedClxSpriteList LargeSpellIcons;
 
 uint8_t SplTransTbl[256];
 
-std::unordered_map<int, uint8_t> DynamicSpellIconFrames;
+std::unordered_map<int, uint8_t> DynamicSpellIconFrames; // Lua mod support
 
 /** Maps from SpellID to spelicon.cel frame number. */
 const SpellIcon SpellITbl[] = {
@@ -88,6 +88,7 @@ const SpellIcon SpellITbl[] = {
 
 } // namespace
 
+// Lua mod support
 uint8_t ParseSpellIconName(std::string_view name)
 {
 	if (name == "Firebolt") return static_cast<uint8_t>(SpellIcon::Firebolt);
@@ -136,11 +137,13 @@ uint8_t ParseSpellIconName(std::string_view name)
 	return static_cast<uint8_t>(SpellIcon::Empty);
 }
 
+// Lua mod support
 void RegisterDynamicSpellIcon(int spellId, uint8_t iconFrame)
 {
 	DynamicSpellIconFrames[spellId] = iconFrame;
 }
 
+// Lua mod support
 void ClearDynamicSpellIcons()
 {
 	DynamicSpellIconFrames.clear();
@@ -195,7 +198,7 @@ void FreeSmallSpellIcons()
 uint8_t GetSpellIconFrame(SpellID spell)
 {
 	const auto idx = static_cast<int>(static_cast<int8_t>(spell));
-	const auto it = DynamicSpellIconFrames.find(idx);
+	const auto it = DynamicSpellIconFrames.find(idx); // Lua mod support: dynamic spell icons registered by mods
 	if (it != DynamicSpellIconFrames.end())
 		return it->second;
 	if (static_cast<size_t>(idx) < std::size(SpellITbl))

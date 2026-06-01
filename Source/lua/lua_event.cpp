@@ -7,6 +7,7 @@
 #include <sol/sol.hpp>
 
 #include "inv.h"
+#include "items.h"
 #include "lua/lua_global.hpp"
 #include "monster.h"
 #include "player.h"
@@ -142,6 +143,11 @@ void GameDrawComplete()
 {
 	CallLuaEvent("GameDrawComplete");
 }
+void OnCustomItemRecreated(Item &item)
+{
+	CallLuaEvent("OnCustomItemRecreated", &item);
+}
+
 void GameStart()
 {
 	CallLuaEvent("GameStart");

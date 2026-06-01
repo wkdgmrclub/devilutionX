@@ -51,7 +51,7 @@ enum monster_flag : uint16_t {
 	MFLAG_NO_ENEMY        = 1 << 10,
 	MFLAG_BERSERK         = 1 << 11,
 	MFLAG_NOLIFESTEAL     = 1 << 12,
-	MFLAG_ALLY_SELECTABLE = 1 << 13,
+	MFLAG_ALLY_SELECTABLE = 1 << 13, // Lua mod support: allows cursor targeting of allied monsters
 	// clang-format on
 };
 
@@ -539,7 +539,7 @@ void M_StartHit(Monster &monster, const Player &player, int dam);
 void StartMonsterDeath(Monster &monster, const Player &player, bool sendmsg);
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg);
 void KillGolem(Monster &golem);
-void MakeMonsterAlly(Monster &monster, const Player &player);
+void MakeMonsterAlly(Monster &monster, const Player &player); // Lua mod support
 void M_StartKill(Monster &monster, const Player &player);
 void M_SyncStartKill(Monster &monster, Point position, const Player &player);
 void M_UpdateRelations(const Monster &monster);

@@ -142,11 +142,22 @@ void InitMonsterUserType(sol::state_view &lua)
 		    });
 		    if (!freePos) return;
 		    const Point snapPos = *freePos;
-		    M_ClearSquares(monster);
+		    // Explicitly zero dMonster at all three position fields before M_ClearSquares.
+		    // M_ClearSquares only covers a 3x3 around position.old; a walking monster can
+		    // have dMonster entries at position.future outside that radius, which would
+		    // persist as stale ghost images. // Lua mod support
+		    dMonster[monster.position.old.x][monster.position.old.y] = 0;
 		    dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		    dMonster[monster.position.future.x][monster.position.future.y] = 0;
+		    M_ClearSquares(monster);
 		    monster.position.tile = snapPos;
 		    monster.position.future = snapPos;
 		    monster.position.old = snapPos;
+		    // Reset to Stand so the engine does not process the interrupted walk step on
+		    // the next tick, which would otherwise set a new dMonster entry at the old
+		    // walk destination and create another ghost image. // Lua mod support
+		    monster.mode = MonsterMode::Stand;
+		    monster.changeAnimationData(MonsterGraphic::Stand);
 		    monster.occupyTile(snapPos, false);
 		    ChangeLightXY(monster.lightId, snapPos);
 	    });
@@ -166,6 +177,13 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	sol::table table = lua.create_table();
 	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);
 	LuaSetDocFn(table, "addUniqueMonsterDataFromTsv", "(path: string)", AddUniqueMonsterDataFromTsv);
+	LuaSetDocFn(table, "getNameByTypeId", "(typeId: integer) -> string|nil",
+	    "Get the base display name of a monster type by its numeric type ID. Returns nil if the type ID is out of range.",
+	    [](int typeIdInt) -> sol::optional<std::string> {
+		    if (typeIdInt < 0 || typeIdInt >= static_cast<int>(MonstersData.size()))
+			    return sol::nullopt;
+		    return MonstersData[typeIdInt].name;
+	    });
 	LuaSetDocFn(table, "spawnAt", "(typeId: integer, x: integer, y: integer) -> Monster|nil",
 	    "Spawn a monster of the given type ID at the given tile. Returns the new Monster or nil on failure.",
 	    [](int typeIdInt, int x, int y) -> Monster * {
@@ -183,8 +201,11 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    auto result = AddMonsterType(type, PLACE_SCATTER);
 			    if (!result) return nullptr;
 			    typeIndex = *result;
-			    // Load GFX for the newly registered type (no-op for already-loaded types).
-			    if (!InitAllMonsterGFX()) return nullptr;
+			    // Load GFX for this type only. InitAllMonsterGFX() skips entire sprite
+			    // groups when the first type sharing a sprite file is already loaded —
+			    // which breaks spawning two types from the same family (e.g. two drake
+			    // colors). Loading just the new type always works correctly. // Lua mod support
+			    if (!InitMonsterGFX(LevelMonsterTypes[typeIndex])) return nullptr;
 		    }
 
 		    if (ActiveMonsterCount >= MaxMonsters) return nullptr;

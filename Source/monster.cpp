@@ -3287,6 +3287,7 @@ bool PosOkMovingMissile(Point position)
 
 } // namespace
 
+// Lua mod support
 void MakeMonsterAlly(Monster &monster, const Player &player)
 {
 	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
@@ -4006,7 +4007,7 @@ void M_StartHit(Monster &monster, const Player &player, int dam)
 
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 {
-	lua::OnMonsterDeath(&monster);
+	lua::OnMonsterDeath(&monster); // Lua mod support
 
 	if (!monster.isPlayerMinion())
 		AddPlrMonstExper(monster.level(sgGameInitInfo.nDifficulty), monster.exp(sgGameInitInfo.nDifficulty), monster.whoHit);

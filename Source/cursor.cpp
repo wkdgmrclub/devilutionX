@@ -64,7 +64,7 @@ namespace {
 /** Cursor images CEL */
 OptionalOwnedClxSpriteList pCursCels;
 OptionalOwnedClxSpriteList pCursCels2;
-std::vector<OwnedClxSpriteList> customCursorSprites;
+std::vector<OwnedClxSpriteList> customCursorSprites; // Lua mod support
 
 OptionalOwnedClxSpriteList *HalfSizeItemSprites;
 OptionalOwnedClxSpriteList *HalfSizeItemSpritesRed;
@@ -75,7 +75,7 @@ bool IsValidMonsterForSelection(const Monster &monster)
 		return false;
 	if ((monster.flags & MFLAG_HIDDEN) != 0)
 		return false;
-	if (monster.isPlayerMinion() && !(monster.flags & MFLAG_ALLY_SELECTABLE))
+	if (monster.isPlayerMinion() && !(monster.flags & MFLAG_ALLY_SELECTABLE)) // Lua mod support: allow selecting MFLAG_ALLY_SELECTABLE allies
 		return false;
 	return true;
 }
@@ -461,6 +461,7 @@ void FreeCursor()
 	ClearCursor();
 }
 
+// Lua mod support
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
 {
 	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
@@ -468,6 +469,7 @@ int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
 	return iCurs;
 }
 
+// Lua mod support
 void FreeCustomCursorSprites()
 {
 	customCursorSprites.clear();

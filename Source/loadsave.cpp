@@ -2197,6 +2197,10 @@ void RemoveInvalidItem(Item &item)
 
 _item_indexes RemapItemIdxFromDiablo(_item_indexes i)
 {
+	// Custom items added via the Lua mod system have indices >= IDI_NUM_DEFAULT_ITEMS.
+	// They are stored as-is and need no remapping. // Lua mod support
+	if (i >= IDI_NUM_DEFAULT_ITEMS) return i;
+
 	constexpr auto GetItemIdValue = [](int i) -> int {
 		if (i == IDI_SORCERER) {
 			return IDI_SORCERER_DIABLO;
@@ -2219,6 +2223,10 @@ _item_indexes RemapItemIdxFromDiablo(_item_indexes i)
 
 _item_indexes RemapItemIdxToDiablo(_item_indexes i)
 {
+	// Custom items added via the Lua mod system have indices >= IDI_NUM_DEFAULT_ITEMS.
+	// They are stored as-is; the i >= 161 branch below must not swallow them. // Lua mod support
+	if (i >= IDI_NUM_DEFAULT_ITEMS) return i;
+
 	constexpr auto GetItemIdValue = [](int i) -> int {
 		if (i == IDI_SORCERER_DIABLO) {
 			return IDI_SORCERER;

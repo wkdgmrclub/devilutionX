@@ -791,7 +791,7 @@ void pfile_read_player_from_save(uint32_t saveNum, Player &player)
 
 void pfile_save_level()
 {
-	lua::OnLevelExit();
+	lua::OnLevelExit(); // Lua mod support
 	SaveWriter saveWriter = GetSaveWriter(gSaveNumber);
 	SaveLevel(saveWriter);
 }

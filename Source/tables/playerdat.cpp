@@ -379,7 +379,7 @@ void LoadPlayerDataFiles()
 {
 	ReloadExperienceData();
 	LoadClassDat();
-	lua::PlayerDataLoaded();
+	lua::PlayerDataLoaded(); // Lua mod support
 	LoadClassesAttributes();
 }
 

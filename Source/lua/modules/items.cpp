@@ -567,7 +567,7 @@ int LuaRegisterCursorGraphic(const std::string &path, int width)
 	return RegisterCustomCursorGraphic(std::move(sprite));
 }
 
-void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride)
+void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride)
 {
 	if (ActiveItemCount >= MAXITEMS)
 		return;
@@ -590,6 +590,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	item._iSeed = seed;
 	item._iCreateInfo = 0;
 	item._iIdentified = true;
+	if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
 
 	if (nameOverride.has_value()) {
 		CopyUtf8(item._iName, *nameOverride, sizeof(item._iName));
@@ -644,8 +645,8 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addItemData", "(itemData: table[], baseMappingId: number)", "Add item definitions from a list of Lua tables. Required field: name. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, skipSpeedbook, value.", AddItemData);
 	LuaSetDocFn(table, "addUniqueItemData", "(itemData: table[], baseMappingId: number)", "Add unique item definitions from a list of Lua tables. Required field: name. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID (pass to item's cursorGraphic field).", LuaRegisterCursorGraphic);
-	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string)",
-	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Uses the standard drop animation.",
+	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer)",
+	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (preserved through save/load; use to encode mod-specific data; bit 0 must be 0).",
 	    LuaSpawnItemAt);
 
 	// Expose enums through the module table

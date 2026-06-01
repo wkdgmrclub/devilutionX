@@ -83,6 +83,7 @@
 #include "utils/format_int.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
+#include "lua/lua_event.hpp"
 #include "utils/log.hpp"
 #include "utils/math.h"
 #include "utils/sdl_geometry.h"
@@ -129,7 +130,7 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0
 };
-const int ItemCAnimTblSize = static_cast<int>(std::size(ItemCAnimTbl));
+const int ItemCAnimTblSize = static_cast<int>(std::size(ItemCAnimTbl)); // Lua mod support
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -2213,7 +2214,7 @@ StringOrView GetTranslatedItemName(const Item &item)
 {
 	const auto &baseItemData = AllItemsList[static_cast<size_t>(item.IDidx)];
 
-	// If _iName has been overridden by a mod (differs from the base item definition), use it directly.
+	// Lua mod support: if _iName has been overridden by a mod (differs from the base item definition), use it directly.
 	if (std::string_view(item._iName) != std::string_view(baseItemData.iName)) {
 		return std::string(item._iName);
 	}
@@ -3540,6 +3541,10 @@ void RecreateItem(const Player &player, Item &item, _item_indexes idx, uint16_t 
 	if (icreateinfo == 0) {
 		InitializeItem(item, idx);
 		item._iSeed = iseed;
+		if (idx >= IDI_NUM_DEFAULT_ITEMS) { // Lua mod support: custom item registered via mod system
+			item.dwBuff = dwBuff; // restore after InitializeItem zeroed the struct
+			lua::OnCustomItemRecreated(item);
+		}
 		gbIsHellfire = tmpIsHellfire;
 		return;
 	}

@@ -57,9 +57,9 @@ void InitCursor();
 void FreeCursor();
 void ResetCursor();
 
-/** Registers a custom item cursor sprite for use by mod items. Returns the _iCurs value to assign. */
+/** Lua mod support: registers a custom item cursor sprite for use by mod items. Returns the _iCurs value to assign. */
 int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite);
-void FreeCustomCursorSprites();
+void FreeCustomCursorSprites(); // Lua mod support
 
 struct Item;
 /**

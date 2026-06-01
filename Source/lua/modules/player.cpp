@@ -115,12 +115,18 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "maxMana", "number",
 	    "Maximum mana (readonly)",
 	    [](Player &player) { return player._pMaxMana >> 6; });
+	LuaSetDocReadonlyProperty(playerType, "health", "integer",
+	    "Current hit points (readonly)",
+	    [](const Player &player) { return player._pHitPoints >> 6; });
+	LuaSetDocReadonlyProperty(playerType, "maxHealth", "integer",
+	    "Maximum hit points (readonly)",
+	    [](const Player &player) { return player._pMaxHP >> 6; });
 	LuaSetDocReadonlyProperty(playerType, "lightRadius", "integer",
 	    "Player's light radius in tiles (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pLightRad); });
-	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string) -> boolean",
-	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Returns true if placed successfully, false if inventory is full or item type not found.",
-	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name) -> bool {
+	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer) -> boolean",
+	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Returns true if placed successfully, false if inventory is full or item type not found.",
+	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride) -> bool {
 		    const auto it = ItemMappingIdsToIndices.find(mappingId);
 		    if (it == ItemMappingIdsToIndices.end()) return false;
 		    const auto itemIndex = static_cast<_item_indexes>(it->second);
@@ -130,11 +136,37 @@ void InitPlayerUserType(sol::state_view &lua)
 		    item._iSeed = seed;
 		    item._iCreateInfo = 0;
 		    item._iIdentified = true;
+		    if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
 		    CopyUtf8(item._iName, name, sizeof(item._iName));
 		    CopyUtf8(item._iIName, name, sizeof(item._iIName));
 		    if (!AutoPlaceItemInInventory(player, item, true)) return false;
 		    CalcPlrInv(player, true);
 		    return true;
+	    });
+	LuaSetDocFn(playerType, "findScrollBySeed", "(seed: integer) -> Item|nil",
+	    "Return the Item in inventory or belt whose _iSeed matches the given seed, or nil if not found.",
+	    [](Player &player, uint32_t seed) -> Item * {
+		    for (int i = 0; i < player._pNumInv; i++) {
+			    if (!player.InvList[i].isEmpty() && player.InvList[i]._iSeed == seed)
+				    return &player.InvList[i];
+		    }
+		    for (int i = 0; i < MaxBeltItems; i++) {
+			    if (!player.SpdList[i].isEmpty() && player.SpdList[i]._iSeed == seed)
+				    return &player.SpdList[i];
+		    }
+		    return nullptr;
+	    });
+	LuaSetDocFn(playerType, "iterateInventory", "(callback: function) -> void",
+	    "Call callback(item) for each non-empty Item in the player's inventory and belt. The Item usertype is passed by reference; modifications are live.",
+	    [](Player &player, sol::function callback) {
+		    for (int i = 0; i < player._pNumInv; i++) {
+			    if (!player.InvList[i].isEmpty())
+				    callback(&player.InvList[i]);
+		    }
+		    for (int i = 0; i < MaxBeltItems; i++) {
+			    if (!player.SpdList[i].isEmpty())
+				    callback(&player.SpdList[i]);
+		    }
 	    });
 	LuaSetDocFn(playerType, "findScrollSeedOf", "(spellId: integer) -> integer|nil",
 	    "Return the _iSeed of the first scroll in inventory or belt matching the given spell ID, or nil if none found.",

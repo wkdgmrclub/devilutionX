@@ -512,7 +512,7 @@ struct ItemData {
 	enum item_misc_id iMiscId;
 	SpellID iSpell;
 	bool iUsable;
-	bool iSkipSpeedbook; // If true, item will not appear in the speedbook even when it is a scroll
+	bool iSkipSpeedbook; // Lua mod support: if true, item will not appear in the speedbook even when it is a scroll
 	uint16_t iValue;
 	int32_t iMappingId;
 };

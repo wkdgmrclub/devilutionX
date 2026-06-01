@@ -102,6 +102,12 @@ local events = {
   ---All monsters and items are still accessible. Drop or recall anything before this returns.
   OnLevelExit = CreateEvent(),
   __doc_OnLevelExit = "Called just before the current level is saved and unloaded (level exit or player death). Monsters and items are still valid.",
+
+  ---Called inside RecreateItem for any item whose IDidx >= IDI_NUM_DEFAULT_ITEMS (Lua-registered custom items).
+  ---Fires after InitializeItem and seed/dwBuff are restored, so item.seed and item.buff are valid.
+  ---Use this to restore fields that InitializeItem resets (e.g. the display name).
+  OnCustomItemRecreated = CreateEvent(),
+  __doc_OnCustomItemRecreated = "Called after a custom (Lua-registered) item is recreated from save/delta data. item.seed and item.buff are valid; use to restore display name or other derived fields.",
 }
 
 ---Registers a custom event type with the given name.
