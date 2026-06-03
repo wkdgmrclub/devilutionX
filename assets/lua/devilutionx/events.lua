@@ -103,6 +103,11 @@ local events = {
   OnNewCharacter = CreateEvent(),
   __doc_OnNewCharacter = "Called once when a new character is created. Player has starting loadout; fires before first level load.",
 
+  ---Called from CreatePlrItems after the standard starting loadout is placed, before CalcPlrItemVals.
+  ---Use player:addScrollByMapping() to place additional starting items. Safe to use during character creation.
+  OnCreatePlrItems = CreateEvent(),
+  __doc_OnCreatePlrItems = "Called after standard starting items are placed for a new character. Use player:addScrollByMapping() to add class-specific starting items.",
+
   ---Called every frame at the end.
   GameDrawComplete = CreateEvent(),
   __doc_GameDrawComplete = "Called every frame at the end.",

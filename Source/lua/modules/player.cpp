@@ -55,14 +55,15 @@ void InitPlayerUserType(sol::state_view &lua)
 	    [](Player &player, int itemId, std::optional<int> count) -> bool {
 		    const auto itemIndex = static_cast<_item_indexes>(itemId);
 		    const int itemCount = count.value_or(1);
+		    const bool inGame = MyPlayer == &player;
 		    for (int i = 0; i < itemCount; i++) {
 			    Item tempItem {};
 			    SetupAllItems(player, tempItem, itemIndex, AdvanceRndSeed(), 1, 1, true, false);
-			    if (!AutoPlaceItemInInventory(player, tempItem, true)) {
+			    if (!AutoPlaceItemInInventory(player, tempItem, inGame)) {
 				    return false;
 			    }
 		    }
-		    CalcPlrInv(player, true);
+		    CalcPlrInv(player, inGame);
 		    return true;
 	    });
 	LuaSetDocFn(playerType, "hasItem", "(itemId: integer)",
@@ -138,23 +139,27 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "vitality", "integer",
 	    "Base vitality stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseVit); });
+	LuaSetDocReadonlyProperty(playerType, "className", "string",
+	    "Player class name (readonly)",
+	    [](const Player &player) -> std::string { return std::string(GetPlayerDataForClass(player._pClass).className); });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride) -> bool {
 		    const auto it = ItemMappingIdsToIndices.find(mappingId);
 		    if (it == ItemMappingIdsToIndices.end()) return false;
 		    const auto itemIndex = static_cast<_item_indexes>(it->second);
+		    const bool inGame = MyPlayer == &player;
 		    Item item {};
 		    GetItemAttrs(item, itemIndex, 1);
-		    SetupItem(item);
+		    // SetupItem accesses Players[MyPlayerId], which is uninitialized during character creation. Lua mod support
+		    if (inGame) SetupItem(item);
 		    item._iSeed = seed;
 		    item._iCreateInfo = 0;
-		    item._iIdentified = true;
 		    if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
 		    CopyUtf8(item._iName, name, sizeof(item._iName));
 		    CopyUtf8(item._iIName, name, sizeof(item._iIName));
-		    if (!AutoPlaceItemInInventory(player, item, true)) return false;
-		    CalcPlrInv(player, true);
+		    if (!AutoPlaceItemInInventory(player, item, inGame)) return false;
+		    if (inGame) CalcPlrInv(player, true);
 		    return true;
 	    });
 	LuaSetDocFn(playerType, "findScrollBySeed", "(seed: integer) -> Item|nil",

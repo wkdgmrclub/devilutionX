@@ -164,9 +164,16 @@ void GameStart()
 }
 void OnNewCharacter(const Player &player)
 {
-	if (&player != MyPlayer) return;
+	// MyPlayer is null during character creation (pfile_ui_save_create fires before NetInit).
+	// CreatePlayer is only ever called for the local player, so always fire the event.
+	if (MyPlayer != nullptr && &player != MyPlayer) return;
 	CallLuaEvent("OnNewCharacter", &player);
 }
+void OnCreatePlrItems(Player &player)
+{
+	CallLuaEvent("OnCreatePlrItems", &player);
+}
+
 void OnLevelExit()
 {
 	CallLuaEvent("OnLevelExit");

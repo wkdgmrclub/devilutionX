@@ -57,6 +57,7 @@ void LoadModsComplete();
 void GameDrawComplete();
 void GameStart();
 void OnNewCharacter(const Player &player);
+void OnCreatePlrItems(Player &player); // Lua mod support
 void OnLevelExit();
 void OnLevelEnter();
 

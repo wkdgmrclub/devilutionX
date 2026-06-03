@@ -85,7 +85,6 @@
 #include "utils/format_int.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
-#include "lua/lua_event.hpp"
 #include "utils/log.hpp"
 #include "utils/math.h"
 #include "utils/sdl_geometry.h"
@@ -3089,6 +3088,8 @@ void CreatePlrItems(Player &player)
 
 		player._pGold = goldItem._ivalue;
 	}
+
+	lua::OnCreatePlrItems(player); // Lua mod support
 
 	CalcPlrItemVals(player, false);
 }

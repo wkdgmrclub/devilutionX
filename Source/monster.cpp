@@ -730,14 +730,15 @@ void UpdateEnemy(Monster &monster)
 			continue;
 		}
 		// Lua mod support: tamed allies only seek new targets within the owner's light
-		// radius, or within 3 tiles of themselves (so nearby attackers are still engaged).
+		// radius, or within AllyEngageRadius tiles of themselves (so nearby attackers are still engaged).
 		if ((monster.flags & MFLAG_ALLY_SELECTABLE) != 0) {
+			constexpr int AllyEngageRadius = 3;
 			const auto ownerId = static_cast<size_t>(monster.allyOwnerPlayerId);
 			if (ownerId < Players.size()) {
 				const Player &owner = Players[ownerId];
 				const int distFromOwner = otherMonster.position.tile.WalkingDistance(owner.position.tile);
 				const int distFromAlly = otherMonster.position.tile.WalkingDistance(position);
-				if (distFromOwner > owner._pLightRad && distFromAlly > 3)
+				if (distFromOwner > owner._pLightRad && distFromAlly > AllyEngageRadius)
 					continue;
 			}
 		}
