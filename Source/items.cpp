@@ -5,6 +5,8 @@
  */
 #include "items.h"
 
+#include "lua/lua_event.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -2602,9 +2604,19 @@ void CalcPlrDamageMod(Player &player)
 		player._pDamageMod = strMod / 100;
 		break;
 	}
+	// Lua mod support: allow dynamic class to override damage modifier
+	player._pDamageMod = lua::OnGetPlayerDamageMod(
+	    &player, strMod, strDexMod,
+	    static_cast<int>(player._pVitality),
+	    player.isHoldingItem(ItemType::Bow),
+	    player.isHoldingItem(ItemType::Shield),
+	    player.isHoldingItem(ItemType::Staff),
+	    leftHandItem.isEmpty() && rightHandItem.isEmpty(),
+	    player._pDamageMod);
 
 	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::IronSkin)) {
+	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::IronSkin)
+	    || lua::OnPlayerHasIronSkin(&player, false)) { // Lua mod support
 		player._pIAC += playerLevel / 4;
 	}
 }
@@ -2615,7 +2627,8 @@ void CalcPlrResistances(Player &player, ItemSpecialEffect iflgs, int fire, int l
 
 	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
 
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::NaturalResistance)) {
+	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::NaturalResistance)
+	    || lua::OnPlayerHasNaturalResistance(&player, false)) { // Lua mod support
 		magic += playerLevel;
 		fire += playerLevel;
 		lightning += playerLevel;
@@ -2666,11 +2679,16 @@ void CalcPlrBlockFlag(Player &player)
 
 	player._pBlockFlag = false;
 
-	if (player._pClass == HeroClass::Monk) {
-		if (player.isHoldingItem(ItemType::Staff)) {
+	const bool isHoldingStaff = player.isHoldingItem(ItemType::Staff);
+	const bool isUnarmed = leftHandItem.isEmpty() && rightHandItem.isEmpty();
+	const bool isSingleHanded = (leftHandItem._iClass == ICLASS_WEAPON && leftHandItem._iLoc != ILOC_TWOHAND && rightHandItem.isEmpty())
+	                         || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty());
+	if (player._pClass == HeroClass::Monk
+	    || lua::OnPlayerCanBlockWithoutShield(&player, isHoldingStaff, isUnarmed, false)) { // Lua mod support
+		if (isHoldingStaff) {
 			player._pBlockFlag = true;
 			player._pIFlags |= ItemSpecialEffect::FastBlock;
-		} else if ((leftHandItem.isEmpty() && rightHandItem.isEmpty()) || (leftHandItem._iClass == ICLASS_WEAPON && leftHandItem._iLoc != ILOC_TWOHAND && rightHandItem.isEmpty()) || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty())) {
+		} else if (isUnarmed || isSingleHanded) {
 			player._pBlockFlag = true;
 		}
 	}
@@ -2723,7 +2741,11 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 			if (player._pClass == HeroClass::Monk) {
 				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
 					player._pIAC += playerLevel / 2;
+			} else {
+				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Heavy", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
+			if (lua::OnPlayerForceLightArmorSprite(&player, false)) // Lua mod support
+				return PlayerArmorGraphic::Light;
 			return PlayerArmorGraphic::Heavy;
 		case ItemType::MediumArmor:
 			if (player._pClass == HeroClass::Monk) {
@@ -2731,11 +2753,17 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 					player._pIAC += playerLevel * 2;
 				else
 					player._pIAC += playerLevel / 2;
+			} else {
+				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Medium", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
+			if (lua::OnPlayerForceLightArmorSprite(&player, false)) // Lua mod support
+				return PlayerArmorGraphic::Light;
 			return PlayerArmorGraphic::Medium;
 		default:
 			if (player._pClass == HeroClass::Monk)
 				player._pIAC += playerLevel * 2;
+			else
+				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Light", false, 0); // Lua mod support
 			return PlayerArmorGraphic::Light;
 		}
 	}
@@ -4640,8 +4668,28 @@ void SpawnBoy(int lvl)
 				if (IsAnyOf(itemType, ItemType::Bow, ItemType::Staff))
 					ivalue = INT_MAX;
 				break;
-			default:
+			default: {
+				// Lua mod support
+				std::string_view typeName;
+				switch (itemType) {
+				case ItemType::LightArmor:  typeName = "LightArmor";  break;
+				case ItemType::MediumArmor: typeName = "MediumArmor"; break;
+				case ItemType::HeavyArmor:  typeName = "HeavyArmor";  break;
+				case ItemType::Shield:      typeName = "Shield";       break;
+				case ItemType::Axe:         typeName = "Axe";          break;
+				case ItemType::Bow:         typeName = "Bow";          break;
+				case ItemType::Mace:        typeName = "Mace";         break;
+				case ItemType::Sword:       typeName = "Sword";        break;
+				case ItemType::Helm:        typeName = "Helm";         break;
+				case ItemType::Staff:       typeName = "Staff";        break;
+				case ItemType::Ring:        typeName = "Ring";         break;
+				case ItemType::Amulet:      typeName = "Amulet";       break;
+				default:                                               break;
+				}
+				if (!typeName.empty() && lua::OnShouldExcludeWirtItem(&myPlayer, typeName, false))
+					ivalue = INT_MAX;
 				break;
+			}
 			}
 		}
 	} while (keepgoing

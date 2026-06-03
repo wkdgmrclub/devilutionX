@@ -195,6 +195,7 @@ void StartAttack(Player &player, Direction d, bool includesFirstFrame)
 	} else if (HasAnyOf(flags, ItemSpecialEffect::QuickAttack)) {
 		skippedAnimationFrames = includesFirstFrame ? 1 : 0;
 	}
+	skippedAnimationFrames = lua::OnGetAnimationSkipFrames(&player, "Attack", skippedAnimationFrames); // Lua mod support
 
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
 	if (player._pmode == PM_ATTACK)
@@ -223,6 +224,7 @@ void StartRangeAttack(Player &player, Direction d, WorldTileCoord cx, WorldTileC
 			skippedAnimationFrames += 1;
 		}
 	}
+	skippedAnimationFrames = lua::OnGetAnimationSkipFrames(&player, "RangedAttack", skippedAnimationFrames); // Lua mod support
 
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
 	if (player._pmode == PM_RATTACK)
@@ -276,7 +278,7 @@ void StartSpell(Player &player, Direction d, WorldTileCoord cx, WorldTileCoord c
 	auto animationFlags = AnimationDistributionFlags::ProcessAnimationPending;
 	if (player._pmode == PM_SPELL)
 		animationFlags = static_cast<AnimationDistributionFlags>(animationFlags | AnimationDistributionFlags::RepeatedAction);
-	NewPlrAnim(player, GetPlayerGraphicForSpell(player.queuedSpell.spellId), d, animationFlags, 0, player._pSFNum);
+	NewPlrAnim(player, GetPlayerGraphicForSpell(player.queuedSpell.spellId), d, animationFlags, lua::OnGetAnimationSkipFrames(&player, "Cast", 0), player._pSFNum); // Lua mod support
 
 	PlaySfxLoc(GetSpellData(player.queuedSpell.spellId).sSFX, player.position.tile);
 
@@ -573,7 +575,8 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 	dam += player._pDamageMod;
 
 	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)) {
+	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)
+	    || lua::OnPlayerHasCriticalStrike(&player, false)) { // Lua mod support
 		if (GenerateRnd(100) < player.getCharacterLevel()) {
 			dam *= 2;
 		}
@@ -741,7 +744,8 @@ bool PlrHitPlr(Player &attacker, Player &target)
 	dam += attacker._pIBonusDamMod + attacker._pDamageMod;
 
 	const ClassAttributes &classAttributes = GetClassAttributes(attacker._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)) {
+	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)
+	    || lua::OnPlayerHasCriticalStrike(&attacker, false)) { // Lua mod support
 		if (GenerateRnd(100) < attacker.getCharacterLevel()) {
 			dam *= 2;
 		}
@@ -1551,9 +1555,12 @@ bool Player::CanUseItem(const Item &item) const
 	if (!IsItemValid(*this, item))
 		return false;
 
-	return _pStrength >= item._iMinStr
+	const bool statCheck = _pStrength >= item._iMinStr
 	    && _pMagic >= item._iMinMag
 	    && _pDexterity >= item._iMinDex;
+	if (!statCheck)
+		return false;
+	return lua::OnCanPlayerUseItem(this, &item, true); // Lua mod support
 }
 
 void Player::RemoveInvItem(int iv, bool calcScrolls)
@@ -1653,17 +1660,29 @@ int Player::GetCurrentAttributeValue(CharacterAttribute attribute) const
 int Player::GetMaximumAttributeValue(CharacterAttribute attribute) const
 {
 	const ClassAttributes &attr = getClassAttributes();
+	std::string_view name;
+	int defaultValue;
 	switch (attribute) {
 	case CharacterAttribute::Strength:
-		return attr.maxStr;
+		name = "Strength";
+		defaultValue = attr.maxStr;
+		break;
 	case CharacterAttribute::Magic:
-		return attr.maxMag;
+		name = "Magic";
+		defaultValue = attr.maxMag;
+		break;
 	case CharacterAttribute::Dexterity:
-		return attr.maxDex;
+		name = "Dexterity";
+		defaultValue = attr.maxDex;
+		break;
 	case CharacterAttribute::Vitality:
-		return attr.maxVit;
+		name = "Vitality";
+		defaultValue = attr.maxVit;
+		break;
+	default:
+		app_fatal("Unsupported attribute");
 	}
-	app_fatal("Unsupported attribute");
+	return lua::OnGetMaxAttributeValue(this, name, defaultValue); // Lua mod support
 }
 
 Point Player::GetTargetPosition() const
@@ -1738,6 +1757,49 @@ bool Player::isWalking() const
 	return IsAnyOf(_pmode, PM_WALK_NORTHWARDS, PM_WALK_SOUTHWARDS, PM_WALK_SIDEWAYS);
 }
 
+bool Player::CanCleave()
+{
+	switch (_pClass) {
+	case HeroClass::Warrior:
+	case HeroClass::Rogue:
+	case HeroClass::Sorcerer:
+		return false;
+	case HeroClass::Monk:
+		return isEquipped(ItemType::Staff);
+	case HeroClass::Bard:
+		return InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Sword && InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Sword;
+	case HeroClass::Barbarian:
+		return isEquipped(ItemType::Axe) || (!isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true)));
+	default: {
+		const bool isHoldingAxe = isEquipped(ItemType::Axe);
+		const bool isHoldingTwoHandedHeavy = !isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true));
+		const bool isHoldingStaff = isEquipped(ItemType::Staff);
+		return lua::OnPlayerCanCleave(this, isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff, false); // Lua mod support
+	}
+	}
+}
+
+int Player::CalculateArmorPierce(int monsterArmor, bool isMelee) const
+{
+	int tmac = monsterArmor;
+	if (_pIEnAc > 0) {
+		if (gbIsHellfire) {
+			int pIEnAc = _pIEnAc - 1;
+			if (pIEnAc > 0)
+				tmac >>= pIEnAc;
+			else
+				tmac -= tmac / 4;
+		}
+		if (isMelee && (_pClass == HeroClass::Barbarian || lua::OnPlayerHasArmorPierce(this, false))) { // Lua mod support
+			tmac -= monsterArmor / 8;
+		}
+	}
+	if (tmac < 0)
+		tmac = 0;
+
+	return tmac;
+}
+
 int Player::GetManaShieldDamageReduction()
 {
 	constexpr uint8_t Max = 7;
@@ -1750,8 +1812,10 @@ void Player::RestorePartialLife()
 	int l = ((wholeHitpoints / 8) + GenerateRnd(wholeHitpoints / 4)) << 6;
 	if (IsAnyOf(_pClass, HeroClass::Warrior, HeroClass::Barbarian))
 		l *= 2;
-	if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
+	else if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
 		l += l / 2;
+	else
+		l = lua::OnGetPotionHealAmount(this, l, l); // Lua mod support
 	_pHitPoints = std::min(_pHitPoints + l, _pMaxHP);
 	_pHPBase = std::min(_pHPBase + l, _pMaxHPBase);
 }
@@ -1762,8 +1826,10 @@ void Player::RestorePartialMana()
 	int l = ((wholeManaPoints / 8) + GenerateRnd(wholeManaPoints / 4)) << 6;
 	if (_pClass == HeroClass::Sorcerer)
 		l *= 2;
-	if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
+	else if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
 		l += l / 2;
+	else
+		l = lua::OnGetPotionManaAmount(this, l, l); // Lua mod support
 	if (HasNoneOf(_pIFlags, ItemSpecialEffect::NoMana)) {
 		_pMana = std::min(_pMana + l, _pMaxMana);
 		_pManaBase = std::min(_pManaBase + l, _pMaxManaBase);
@@ -2298,6 +2364,10 @@ void SetPlrAnims(Player &player)
 		if (armorGraphicIndex > 0)
 			player._pDFrames = 15;
 	}
+	// Lua mod support
+	const int8_t luaIdleFrames = lua::OnGetPlayerIdleFrames(&player, static_cast<int>(gn), leveltype == DTYPE_TOWN);
+	if (luaIdleFrames > 0)
+		player._pNFrames = luaIdleFrames;
 }
 
 /**
@@ -2371,6 +2441,7 @@ void CreatePlayer(Player &player, HeroClass c)
 
 	InitDungMsgs(player);
 	CreatePlrItems(player);
+	lua::OnNewCharacter(player); // Lua mod support
 	SetRndSeed(0);
 }
 
@@ -2618,6 +2689,7 @@ void StartPlrBlock(Player &player, Direction dir)
 	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastBlock)) {
 		skippedAnimationFrames = (player._pBFrames - 2); // ISPL_FASTBLOCK means we cancel the animation if frame 2 was shown
 	}
+	skippedAnimationFrames = lua::OnGetAnimationSkipFrames(&player, "Block", skippedAnimationFrames); // Lua mod support
 
 	NewPlrAnim(player, player_graphic::Block, dir, AnimationDistributionFlags::SkipsDelayOfLastFrame, skippedAnimationFrames);
 
@@ -2669,6 +2741,7 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 	} else {
 		skippedAnimationFrames = 0;
 	}
+	skippedAnimationFrames = lua::OnGetAnimationSkipFrames(&player, "HitRecovery", skippedAnimationFrames); // Lua mod support
 
 	NewPlrAnim(player, player_graphic::Hit, pd, AnimationDistributionFlags::None, skippedAnimationFrames);
 

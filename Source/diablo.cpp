@@ -3449,6 +3449,7 @@ tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 	CompleteProgress();
 
 	LoadGameLevelCalculateCursor();
+	lua::OnLevelEnter(); // Lua mod support
 	return {};
 }
 

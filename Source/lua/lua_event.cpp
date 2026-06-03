@@ -148,13 +148,122 @@ void OnCustomItemRecreated(Item &item)
 	CallLuaEvent("OnCustomItemRecreated", &item);
 }
 
+int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip)
+{
+	return static_cast<int8_t>(CallLuaEventReturn<int>(static_cast<int>(defaultSkip), "OnGetAnimationSkipFrames", player, std::string(animType), static_cast<int>(defaultSkip)));
+}
+
+int8_t OnGetPlayerIdleFrames(const Player *player, int weaponGraphic, bool isInTown)
+{
+	return static_cast<int8_t>(CallLuaEventReturn<int>(0, "OnGetPlayerIdleFrames", player, weaponGraphic, isInTown));
+}
+
 void GameStart()
 {
 	CallLuaEvent("GameStart");
 }
+void OnNewCharacter(const Player &player)
+{
+	if (&player != MyPlayer) return;
+	CallLuaEvent("OnNewCharacter", &player);
+}
 void OnLevelExit()
 {
 	CallLuaEvent("OnLevelExit");
+}
+void OnLevelEnter()
+{
+	CallLuaEvent("OnLevelEnter");
+}
+
+bool OnCanPlayerUseItem(const Player *player, const Item *item, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnCanPlayerUseItem", player, item);
+}
+
+int OnGetMaxAttributeValue(const Player *player, std::string_view attribute, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetMaxAttributeValue", player, std::string(attribute), defaultValue);
+}
+
+int OnGetPlayerDamageMod(const Player *player, int strMod, int strDexMod, int totalVit, bool isHoldingBow, bool isHoldingShield, bool isHoldingStaff, bool isUnarmed, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetPlayerDamageMod", player, strMod, strDexMod, totalVit, isHoldingBow, isHoldingShield, isHoldingStaff, isUnarmed);
+}
+
+int OnGetManaCost(const Player *player, int baseCost, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetManaCost", player, baseCost);
+}
+
+bool OnPlayerHasCriticalStrike(const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasCriticalStrike", player);
+}
+
+bool OnPlayerHasIronSkin(const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasIronSkin", player);
+}
+
+bool OnPlayerHasNaturalResistance(const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasNaturalResistance", player);
+}
+
+int OnGetBowDamageMod(const Player *player, int fullMod, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetBowDamageMod", player, fullMod);
+}
+
+int OnGetArrowVelocityBonus(const Player *player, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetArrowVelocityBonus", player);
+}
+
+bool OnPlayerCanBlockWithoutShield(const Player *player, bool isHoldingStaff, bool isUnarmed, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanBlockWithoutShield", player, isHoldingStaff, isUnarmed);
+}
+
+int OnGetArmorLevelBonus(const Player *player, std::string_view armorType, bool isUnique, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetArmorLevelBonus", player, std::string(armorType), isUnique);
+}
+
+int OnGetPotionHealAmount(const Player *player, int l, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetPotionHealAmount", player, l);
+}
+
+int OnGetPotionManaAmount(const Player *player, int l, int defaultValue)
+{
+	return CallLuaEventReturn<int>(defaultValue, "OnGetPotionManaAmount", player, l);
+}
+
+bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasArmorPierce", player);
+}
+
+bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTwoHandedHeavy, bool isHoldingStaff, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanCleave", player, isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff);
+}
+
+void OnOilyShrine(const Player *player)
+{
+	CallLuaEvent("OnOilyShrine", player);
+}
+
+bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnShouldExcludeWirtItem", player, std::string(itemType));
+}
+
+bool OnPlayerForceLightArmorSprite(const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerForceLightArmorSprite", player);
 }
 
 } // namespace lua

@@ -228,6 +228,7 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	monster.rndItemSeed = AdvanceRndSeed();
 	monster.aiSeed = AdvanceRndSeed();
 	monster.whoHit = 0;
+	monster.allyOwnerPlayerId = -1; // Lua mod support
 	monster.minDamage = monster.data().minDamage;
 	monster.maxDamage = monster.data().maxDamage;
 	monster.minDamageSpecial = monster.data().minDamageSpecial;
@@ -728,6 +729,19 @@ void UpdateEnemy(Monster &monster)
 		        && (otherMonster.flags & MFLAG_GOLEM) == 0)) {
 			continue;
 		}
+		// Lua mod support: tamed allies only seek new targets within the owner's light
+		// radius, or within 3 tiles of themselves (so nearby attackers are still engaged).
+		if ((monster.flags & MFLAG_ALLY_SELECTABLE) != 0) {
+			const auto ownerId = static_cast<size_t>(monster.allyOwnerPlayerId);
+			if (ownerId < Players.size()) {
+				const Player &owner = Players[ownerId];
+				const int distFromOwner = otherMonster.position.tile.WalkingDistance(owner.position.tile);
+				const int distFromAlly = otherMonster.position.tile.WalkingDistance(position);
+				if (distFromOwner > owner._pLightRad && distFromAlly > 3)
+					continue;
+			}
+		}
+
 		const bool sameroom = dTransVal[position.x][position.y] == dTransVal[otherMonster.position.tile.x][otherMonster.position.tile.y];
 		if ((sameroom && !bestsameroom)
 		    || ((sameroom || !bestsameroom) && dist < bestDist)
@@ -1125,9 +1139,15 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 	ApplyMonsterDamage(DamageType::Physical, target, dam);
 
 	if (attacker.isPlayerMinion()) {
-		const auto playerId = static_cast<size_t>(attacker.goalVar3);
-		const Player &player = Players[playerId];
-		target.tag(player);
+		// Lua mod support: tag the target so the owner player receives XP when it dies.
+		// allyOwnerPlayerId is set by MakeMonsterAlly and never written by AI code,
+		// making it reliable even for non-Golem AI types (e.g. Scavenger) that
+		// overwrite goalVar3 during normal behaviour.
+		const auto playerId = static_cast<size_t>(attacker.allyOwnerPlayerId);
+		if (playerId < Players.size()) {
+			const Player &player = Players[playerId];
+			target.tag(player);
+		}
 	}
 
 	if (target.hasNoLife()) {
@@ -3293,7 +3313,7 @@ void MakeMonsterAlly(Monster &monster, const Player &player)
 	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
 	monster.flags |= MFLAG_GOLEM | MFLAG_ALLY_SELECTABLE;
 	monster.golemToHit = naturalToHit;
-	monster.goalVar3 = static_cast<int8_t>(player.getId());
+	monster.allyOwnerPlayerId = static_cast<int8_t>(player.getId());
 	monster.goal = MonsterGoal::Normal;
 	monster.activeForTicks = UINT8_MAX;
 	UpdateEnemy(monster);

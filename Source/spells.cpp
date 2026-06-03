@@ -5,6 +5,8 @@
  */
 #include "spells.h"
 
+#include "lua/lua_event.hpp"
+
 #include "control/control.hpp"
 #include "cursor.h"
 #ifdef _DEBUG
@@ -135,6 +137,8 @@ int GetManaAmount(const Player &player, SpellID sn)
 		ma /= 2;
 	} else if (player._pClass == HeroClass::Rogue || player._pClass == HeroClass::Monk || player._pClass == HeroClass::Bard) {
 		ma -= ma / 4;
+	} else {
+		ma = lua::OnGetManaCost(&player, ma, ma); // Lua mod support
 	}
 
 	if (GetSpellData(sn).sMinMana > ma >> 6) {

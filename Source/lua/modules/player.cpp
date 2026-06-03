@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include <magic_enum/magic_enum.hpp>
 #include <sol/sol.hpp>
 
 #include "data/file.hpp"
@@ -13,6 +14,7 @@
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "player.h"
+#include "spells.h"
 #include "tables/itemdat.h"
 #include "tables/playerdat.hpp"
 #include "utils/utf8.hpp"
@@ -124,6 +126,18 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "lightRadius", "integer",
 	    "Player's light radius in tiles (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pLightRad); });
+	LuaSetDocReadonlyProperty(playerType, "strength", "integer",
+	    "Base strength stat (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pBaseStr); });
+	LuaSetDocReadonlyProperty(playerType, "magic", "integer",
+	    "Base magic stat (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pBaseMag); });
+	LuaSetDocReadonlyProperty(playerType, "dexterity", "integer",
+	    "Base dexterity stat (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pBaseDex); });
+	LuaSetDocReadonlyProperty(playerType, "vitality", "integer",
+	    "Base vitality stat (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pBaseVit); });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride) -> bool {
@@ -168,6 +182,26 @@ void InitPlayerUserType(sol::state_view &lua)
 				    callback(&player.SpdList[i]);
 		    }
 	    });
+	LuaSetDocFn(playerType, "say", "(speechId: integer)",
+	    "Play the player's voice line for the given HeroSpeech enum ID",
+	    [](const Player &player, int speechId) {
+		    player.Say(static_cast<HeroSpeech>(speechId));
+	    });
+	LuaSetDocFn(playerType, "modifyStat", "(name: string, amount: integer)",
+	    "Increase a base stat by the given amount. name is \"Strength\", \"Magic\", \"Dexterity\", or \"Vitality\". Recalculates inventory after modification.",
+	    [](Player &player, const std::string_view name, int amount) {
+		    if (name == "Strength") ModifyPlrStr(player, amount);
+		    else if (name == "Magic") ModifyPlrMag(player, amount);
+		    else if (name == "Dexterity") ModifyPlrDex(player, amount);
+		    else if (name == "Vitality") ModifyPlrVit(player, amount);
+		    CheckStats(player);
+		    CalcPlrInv(player, true);
+	    });
+	LuaSetDocFn(playerType, "addSkill", "(spellId: integer)",
+	    "Add a skill to the player's ability bitmask (_pAblSpells). Idempotent — safe to call every GameStart.",
+	    [](Player &player, int spellIdInt) {
+		    player._pAblSpells |= GetSpellBitmask(static_cast<SpellID>(spellIdInt));
+	    });
 	LuaSetDocFn(playerType, "findScrollSeedOf", "(spellId: integer) -> integer|nil",
 	    "Return the _iSeed of the first scroll in inventory or belt matching the given spell ID, or nil if none found.",
 	    [](const Player &player, int spellIdInt) -> sol::optional<uint32_t> {
@@ -207,6 +241,13 @@ sol::table LuaPlayerModule(sol::state_view &lua)
 		    DataFile dataFile = DataFile::loadOrDie(path);
 		    LoadClassDatFromFile(dataFile, path);
 	    });
+
+	// Expose HeroSpeech enum so mods can trigger class-appropriate voice lines.
+	sol::table heroSpeechTable = lua.create_table();
+	for (const auto val : magic_enum::enum_values<HeroSpeech>()) {
+		heroSpeechTable[std::string(magic_enum::enum_name(val))] = static_cast<int>(val);
+	}
+	table["HeroSpeech"] = heroSpeechTable;
 
 	return table;
 }

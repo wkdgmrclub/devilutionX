@@ -402,23 +402,7 @@ public:
 
 	bool CanUseItem(const Item &item) const;
 
-	bool CanCleave()
-	{
-		switch (_pClass) {
-		case HeroClass::Warrior:
-		case HeroClass::Rogue:
-		case HeroClass::Sorcerer:
-			return false;
-		case HeroClass::Monk:
-			return isEquipped(ItemType::Staff);
-		case HeroClass::Bard:
-			return InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Sword && InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Sword;
-		case HeroClass::Barbarian:
-			return isEquipped(ItemType::Axe) || (!isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true)));
-		default:
-			return false;
-		}
-	}
+	bool CanCleave();
 
 	bool isEquipped(ItemType itemType, bool isTwoHanded = false)
 	{
@@ -650,26 +634,7 @@ public:
 	 * @param monsterArmor - monster armor before applying % armor pierce
 	 * @param isMelee - indicates if it's melee or ranged combat
 	 */
-	int CalculateArmorPierce(int monsterArmor, bool isMelee) const
-	{
-		int tmac = monsterArmor;
-		if (_pIEnAc > 0) {
-			if (gbIsHellfire) {
-				int pIEnAc = _pIEnAc - 1;
-				if (pIEnAc > 0)
-					tmac >>= pIEnAc;
-				else
-					tmac -= tmac / 4;
-			}
-			if (isMelee && _pClass == HeroClass::Barbarian) {
-				tmac -= monsterArmor / 8;
-			}
-		}
-		if (tmac < 0)
-			tmac = 0;
-
-		return tmac;
-	}
+	int CalculateArmorPierce(int monsterArmor, bool isMelee) const;
 
 	/**
 	 * @brief Calculates the players current Hit Points as a percentage of their max HP and stores it for later reference

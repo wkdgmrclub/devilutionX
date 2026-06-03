@@ -242,6 +242,9 @@ struct Monster { // note: missing field _mAFNum
 	 */
 	int8_t goalVar3;
 
+	/** @brief For Lua-allied monsters: owning player index (0-3). -1 = no owner. Never written by AI code. */
+	int8_t allyOwnerPlayerId; // Lua mod support
+
 	int16_t var1;
 	int16_t var2;
 	int8_t var3;

@@ -50,6 +50,7 @@
 #include "utils/language.h"
 #include "utils/log.hpp"
 #include "utils/str_cat.hpp"
+#include "lua/lua_event.hpp"
 
 namespace devilution {
 
@@ -2818,6 +2819,7 @@ void OperateShrineOily(Player &player, Point spawnPosition)
 		ModifyPlrMag(player, 1);
 		break;
 	default:
+		lua::OnOilyShrine(&player); // Lua mod support
 		break;
 	}
 
