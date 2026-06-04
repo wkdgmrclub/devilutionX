@@ -1,6 +1,7 @@
 #include "panels/spell_list.hpp"
 
 #include <cstdint>
+#include <string_view>
 
 #include <fmt/format.h>
 
@@ -12,6 +13,7 @@
 #include "engine/render/primitive_render.hpp"
 #include "engine/render/text_render.hpp"
 #include "inv_iterators.hpp"
+#include "lua/lua_event.hpp"
 #include "options.h"
 #include "panels/spell_icons.hpp"
 #include "player.h"
@@ -26,6 +28,18 @@
 namespace devilution {
 
 namespace {
+
+// Lua mod support: convert SpellType to/from the string names used by hook interfaces.
+constexpr std::string_view SpellTypeName(SpellType t)
+{
+	switch (t) {
+	case SpellType::Skill:   return "Skill";
+	case SpellType::Spell:   return "Spell";
+	case SpellType::Scroll:  return "Scroll";
+	case SpellType::Charges: return "Charges";
+	default:                 return "";
+	}
+}
 
 void PrintSBookSpellType(const Surface &out, Point position, std::string_view text, uint8_t rectColorIndex)
 {
@@ -59,6 +73,14 @@ bool GetSpellListSelection(SpellID &pSpell, SpellType &pSplType)
 			pSplType = spellListItem.type;
 			if (spellListItem.id == GetPlayerStartingLoadoutForClass(myPlayer._pClass).skill)
 				pSplType = SpellType::Skill;
+			// Lua mod support: allow overriding the resolved spell type for this entry
+			const std::string typeOverride = lua::OnGetSpeedbookSelectionType(
+			    &myPlayer, static_cast<int>(pSpell),
+			    SpellTypeName(spellListItem.type), SpellTypeName(pSplType));
+			if (typeOverride == "Scroll") pSplType = SpellType::Scroll;
+			else if (typeOverride == "Skill") pSplType = SpellType::Skill;
+			else if (typeOverride == "Spell") pSplType = SpellType::Spell;
+			else if (typeOverride == "Charges") pSplType = SpellType::Charges;
 			return true;
 		}
 	}
@@ -171,10 +193,16 @@ void DrawSpellList(const Surface &out)
 				spellColor = PAL16_RED - 59;
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Scroll"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("Scroll of {:s}")), pgettext("spell", spellDataItem.sNameText));
-			const int scrollCount = c_count_if(InventoryAndBeltPlayerItemsRange { myPlayer }, [spellId](const Item &item) {
-				return item.isScrollOf(spellId);
-			});
+			if (spellListItem.displayName.empty()) {
+				InfoString = fmt::format(fmt::runtime(_("Scroll of {:s}")), pgettext("spell", spellDataItem.sNameText));
+			} else {
+				InfoString = spellListItem.displayName; // Lua mod support: custom label, no "Scroll of" prefix
+			}
+			const int scrollCount = spellListItem.customScrollCount >= 0
+			    ? spellListItem.customScrollCount
+			    : c_count_if(InventoryAndBeltPlayerItemsRange { myPlayer }, [spellId](const Item &item) {
+			          return item.isScrollOf(spellId);
+			      });
 			AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount)), scrollCount));
 		} break;
 		case SpellType::Charges: {
@@ -240,6 +268,27 @@ std::vector<SpellListItem> GetSpellListItems()
 		}
 		if (mask != 0 && x != mainPanelPosition.x + 12 + SPLICONLENGTH * SPLROWICONLS)
 			x -= SPLICONLENGTH;
+		if (x == mainPanelPosition.x + 12 - SPLICONLENGTH) {
+			x = mainPanelPosition.x + 12 + SPLICONLENGTH * SPLROWICONLS;
+			y -= SPLICONLENGTH;
+		}
+	}
+
+	// Lua mod support: append custom scroll entries (e.g. named Tame Scrolls per monster).
+	for (const lua::CustomSpeedbookEntry &entry : lua::OnGetCustomSpeedbookScrollEntries(MyPlayer)) {
+		const int lx = x;
+		const int ly = y - SPLICONLENGTH;
+		const bool isSelected = (MousePosition.x >= lx && MousePosition.x < lx + SPLICONLENGTH
+		    && MousePosition.y >= ly && MousePosition.y < ly + SPLICONLENGTH);
+		SpellListItem item;
+		item.location = { x, y };
+		item.type = SpellType::Scroll;
+		item.id = static_cast<SpellID>(entry.spellId);
+		item.isSelected = isSelected;
+		item.displayName = entry.displayName;
+		item.customScrollCount = entry.scrollCount;
+		spellListItems.push_back(std::move(item));
+		x -= SPLICONLENGTH;
 		if (x == mainPanelPosition.x + 12 - SPLICONLENGTH) {
 			x = mainPanelPosition.x + 12 + SPLICONLENGTH * SPLROWICONLS;
 			y -= SPLICONLENGTH;

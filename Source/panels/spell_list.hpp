@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 #include <vector>
 
 #include "engine/point.hpp"
@@ -14,6 +15,8 @@ struct SpellListItem {
 	SpellType type;
 	SpellID id;
 	bool isSelected;
+	std::string displayName {};      // non-empty: override spell name in info box
+	int customScrollCount = -1;      // ≥0: override scroll count in info box
 };
 
 /**

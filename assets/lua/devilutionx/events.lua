@@ -267,17 +267,54 @@ local events = {
   __doc_OnOilyShrine = "Fired when an unrecognised class activates an Oily Shrine. Use player:modifyStat() to grant the bonus.",
 
   ---Query event fired from GetPlrAnimArmorId for any player wearing Medium or Heavy armor.
-  ---Return true to force the player's sprite to use the Light armor graphic regardless of equipped armor.
-  ---The AC bonus from the armor still applies; only the animation sprite set changes.
-  ---Return nil or false to use the normal armor-type graphic.
-  OnPlayerForceLightArmorSprite = CreateQueryEvent(),
-  __doc_OnPlayerForceLightArmorSprite = "Query: return true to force Light armor sprite regardless of equipped armor type. AC bonuses still apply. Return nil or false for normal behavior.",
+  ---Override the resolved armor sprite tier. Receives (player, currentGraphic) where currentGraphic is "Light", "Medium", or "Heavy".
+  ---Return "Light", "Medium", or "Heavy" to override; return nil to use the default.
+  ---AC bonuses from equipped armor still apply; only the animation sprite set changes.
+  OnGetPlayerArmorGraphic = CreateQueryEvent(),
+  __doc_OnGetPlayerArmorGraphic = "Query: return \"Light\", \"Medium\", or \"Heavy\" to override the resolved armor sprite tier. Receives (player, currentGraphic). AC bonuses still apply. Return nil for default behavior.",
+
+  ---Query event fired from UpdateEnemy for every MFLAG_GOLEM monster evaluating a new target.
+  ---Args: ally (Monster), candidate (Monster), hasLOS (bool — true when a clear missile line exists between ally and candidate).
+  ---Return false to reject the candidate. Return nil or true to allow (default: true).
+  OnGolemCanTargetMonster = CreateQueryEvent(),
+  __doc_OnGolemCanTargetMonster = "Query: return false to prevent a golem/ally from targeting the candidate monster. Args: ally, candidate, hasLOS (bool). Return nil or true to allow.",
+
+  ---Query event fired from GolumAi when a golem has a target not yet in melee range, before pathing toward it.
+  ---Args: ally (Monster), target (Monster).
+  ---Return false to block the ally from walking toward the target this tick (falls through to idle walk).
+  ---Return nil or true to allow normal chase (default: true).
+  OnGolemCanChaseTarget = CreateQueryEvent(),
+  __doc_OnGolemCanChaseTarget = "Query: return false to block a golem/ally from pathing toward its target. Args: ally, target. Return nil or true to allow chase.",
+
+  ---Query event fired from IsValidMonsterForSelection for every MFLAG_GOLEM monster under the cursor.
+  ---Return true to allow cursor selection. Return nil or false to block (default: false for all golems).
+  OnGolemCanSelect = CreateQueryEvent(),
+  __doc_OnGolemCanSelect = "Query: return true to allow the cursor to select a golem/ally monster. Return nil or false to block selection.",
+
+  ---Query event fired from GolumAi on each idle-walk tick.
+  ---Args: ally (Monster), hasTarget (bool — true when pursuing an enemy), enemyPosition (Point — valid when hasTarget).
+  ---Return a Point to walk toward. Return false to stand still (Lua takes ownership, no fallback walk).
+  ---Return nil to use the engine default (random-walk in the owner's facing direction; use for non-modded golems).
+  OnGolemIdle = CreateQueryEvent(),
+  __doc_OnGolemIdle = "Query: return Point to walk (AiPlanPath first, RandomWalk fallback), false to stand still, nil for engine default. Args: ally, hasTarget (bool), enemyPosition (Point).",
 
   ---Query event fired from SpawnBoy (Wirt's item generation) for classes not handled by the built-in switch.
   ---itemType is one of: "LightArmor", "MediumArmor", "HeavyArmor", "Shield", "Axe", "Bow", "Mace", "Sword", "Helm", "Staff", "Ring", "Amulet".
   ---Return true to exclude this item type (forces a reroll). Return nil or false to allow.
   OnShouldExcludeWirtItem = CreateQueryEvent(),
   __doc_OnShouldExcludeWirtItem = "Query: return true to exclude an item type from Wirt's item for this player. itemType: \"Bow\"/\"Staff\"/\"Sword\" etc. Return nil or false to allow.",
+
+  ---Query event fired from GetSpellListItems to collect custom scroll entries for the speedbook.
+  ---Return a table of {name, seed, spell, count} entries to inject, or nil for none.
+  ---count is optional (defaults to -1 = standard inventory count).
+  OnGetCustomSpeedbookScrollEntries = CreateQueryEvent(),
+  __doc_OnGetCustomSpeedbookScrollEntries = "Query: return a table of {name, seed, spell, count} to inject as custom scroll entries in the speedbook. Return nil for none.",
+
+  ---Query event fired from GetSpellListSelection after the built-in starting-skill type promotion.
+  ---Args: player, spellId (int), originalType (string), promotedType (string).
+  ---Return "Skill", "Spell", "Scroll", or "Charges" to override the resolved type; return nil to keep promotedType.
+  OnGetSpeedbookSelectionType = CreateQueryEvent(),
+  __doc_OnGetSpeedbookSelectionType = "Query: return \"Skill\"/\"Spell\"/\"Scroll\"/\"Charges\" to override the resolved SpellType for a selected speedbook entry. originalType is the entry's own type; promotedType is after starting-skill promotion. Return nil to keep promotedType.",
 }
 
 ---Registers a custom event type with the given name.

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "engine/point.hpp"
 
@@ -71,6 +72,16 @@ void OnNewCharacter(const Player &player);
 void OnCreatePlrItems(Player &player); // Lua mod support
 void OnLevelExit();
 void OnLevelEnter();
+
+// Speedbook hooks
+struct CustomSpeedbookEntry {
+	std::string displayName;
+	uint32_t scrollSeed;
+	int spellId;
+	int scrollCount; // -1 = standard inventory count
+};
+std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player *player);
+std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::string_view originalType, std::string_view promotedType);
 
 } // namespace lua
 

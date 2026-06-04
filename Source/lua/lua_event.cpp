@@ -3,6 +3,7 @@
 #include <optional>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <sol/sol.hpp>
 
@@ -299,6 +300,36 @@ bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bo
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic)
 {
 	return CallLuaEventReturn<std::string>(std::string(defaultGraphic), "OnGetPlayerArmorGraphic", player, std::string(defaultGraphic));
+}
+
+std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player *player)
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return {};
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGetCustomSpeedbookScrollEntries", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return {};
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	sol::object result = SafeCallResult(fn(player), /*optional=*/true);
+	if (!result.is<sol::table>()) return {};
+	std::vector<CustomSpeedbookEntry> entries;
+	const sol::table tbl = result.as<sol::table>();
+	for (int i = 1; ; ++i) {
+		const sol::optional<sol::table> entry = tbl.get<sol::optional<sol::table>>(i);
+		if (!entry) break;
+		CustomSpeedbookEntry e;
+		e.displayName = entry->get_or("name", std::string {});
+		e.scrollSeed = static_cast<uint32_t>(entry->get_or("seed", 0));
+		e.spellId = entry->get_or("spell", 0);
+		e.scrollCount = entry->get_or("count", -1);
+		if (!e.displayName.empty())
+			entries.push_back(std::move(e));
+	}
+	return entries;
+}
+
+std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::string_view originalType, std::string_view promotedType)
+{
+	return CallLuaEventReturn<std::string>(std::string(promotedType), "OnGetSpeedbookSelectionType", player, spellId, std::string(originalType), std::string(promotedType));
 }
 
 } // namespace lua
