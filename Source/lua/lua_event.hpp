@@ -1,7 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <string_view>
+
+#include "engine/point.hpp"
 
 namespace devilution {
 
@@ -22,6 +26,13 @@ void StoreOpened(std::string_view name);
 
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 void OnMonsterDeath(const Monster *monster);
+bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool hasLOS, bool defaultValue);
+bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue);
+bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
+// Returns: nullopt = engine default wander; empty optional<Point> = stand still; Point = walk toward.
+// When a Point is returned, GolumAi sets enemyPosition to it and tries AiPlanPath first (wall routing),
+// then falls back to RandomWalk if AiPlanPath returns false (clear line).
+std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition);
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
@@ -51,7 +62,7 @@ bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue);
 bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTwoHandedHeavy, bool isHoldingStaff, bool defaultValue);
 void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bool defaultValue);
-bool OnPlayerForceLightArmorSprite(const Player *player, bool defaultValue);
+std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
 
 void LoadModsComplete();
 void GameDrawComplete();

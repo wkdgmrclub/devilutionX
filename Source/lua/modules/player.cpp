@@ -55,15 +55,14 @@ void InitPlayerUserType(sol::state_view &lua)
 	    [](Player &player, int itemId, std::optional<int> count) -> bool {
 		    const auto itemIndex = static_cast<_item_indexes>(itemId);
 		    const int itemCount = count.value_or(1);
-		    const bool inGame = MyPlayer == &player;
 		    for (int i = 0; i < itemCount; i++) {
 			    Item tempItem {};
 			    SetupAllItems(player, tempItem, itemIndex, AdvanceRndSeed(), 1, 1, true, false);
-			    if (!AutoPlaceItemInInventory(player, tempItem, inGame)) {
+			    if (!AutoPlaceItemInInventory(player, tempItem, true)) {
 				    return false;
 			    }
 		    }
-		    CalcPlrInv(player, inGame);
+		    CalcPlrInv(player, true);
 		    return true;
 	    });
 	LuaSetDocFn(playerType, "hasItem", "(itemId: integer)",
@@ -127,6 +126,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "lightRadius", "integer",
 	    "Player's light radius in tiles (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pLightRad); });
+	LuaSetDocReadonlyProperty(playerType, "isMoving", "boolean",
+	    "True when the player is currently walking (PM_WALK_*). False during stand, attack, cast, etc. // Lua mod support",
+	    [](const Player &player) { return player.isWalking(); });
 	LuaSetDocReadonlyProperty(playerType, "strength", "integer",
 	    "Base strength stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseStr); });
@@ -148,18 +150,17 @@ void InitPlayerUserType(sol::state_view &lua)
 		    const auto it = ItemMappingIdsToIndices.find(mappingId);
 		    if (it == ItemMappingIdsToIndices.end()) return false;
 		    const auto itemIndex = static_cast<_item_indexes>(it->second);
-		    const bool inGame = MyPlayer == &player;
 		    Item item {};
 		    GetItemAttrs(item, itemIndex, 1);
-		    // SetupItem accesses Players[MyPlayerId], which is uninitialized during character creation. Lua mod support
-		    if (inGame) SetupItem(item);
+		    SetupItem(item);
+		    item._iIdentified = true;
 		    item._iSeed = seed;
 		    item._iCreateInfo = 0;
 		    if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
 		    CopyUtf8(item._iName, name, sizeof(item._iName));
 		    CopyUtf8(item._iIName, name, sizeof(item._iIName));
-		    if (!AutoPlaceItemInInventory(player, item, inGame)) return false;
-		    if (inGame) CalcPlrInv(player, true);
+		    if (!AutoPlaceItemInInventory(player, item, false)) return false;
+		    CalcPlrInv(player, true);
 		    return true;
 	    });
 	LuaSetDocFn(playerType, "findScrollBySeed", "(seed: integer) -> Item|nil",

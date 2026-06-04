@@ -41,6 +41,7 @@
 #include "qol/itemlabels.h"
 #include "qol/stash.h"
 #include "qol/visual_store.h"
+#include "lua/lua_event.hpp"
 #include "towners.h"
 #include "track.h"
 #include "utils/attributes.h"
@@ -75,7 +76,7 @@ bool IsValidMonsterForSelection(const Monster &monster)
 		return false;
 	if ((monster.flags & MFLAG_HIDDEN) != 0)
 		return false;
-	if (monster.isPlayerMinion() && !(monster.flags & MFLAG_ALLY_SELECTABLE)) // Lua mod support: allow selecting MFLAG_ALLY_SELECTABLE allies
+	if (monster.isPlayerMinion() && !lua::OnGolemCanSelect(&monster, false)) // Lua mod support
 		return false;
 	return true;
 }

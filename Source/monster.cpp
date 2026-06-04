@@ -228,7 +228,6 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	monster.rndItemSeed = AdvanceRndSeed();
 	monster.aiSeed = AdvanceRndSeed();
 	monster.whoHit = 0;
-	monster.allyOwnerPlayerId = -1; // Lua mod support
 	monster.minDamage = monster.data().minDamage;
 	monster.maxDamage = monster.data().maxDamage;
 	monster.minDamageSpecial = monster.data().minDamageSpecial;
@@ -729,18 +728,11 @@ void UpdateEnemy(Monster &monster)
 		        && (otherMonster.flags & MFLAG_GOLEM) == 0)) {
 			continue;
 		}
-		// Lua mod support: tamed allies only seek new targets within the owner's light
-		// radius, or within AllyEngageRadius tiles of themselves (so nearby attackers are still engaged).
-		if ((monster.flags & MFLAG_ALLY_SELECTABLE) != 0) {
-			constexpr int AllyEngageRadius = 3;
-			const auto ownerId = static_cast<size_t>(monster.allyOwnerPlayerId);
-			if (ownerId < Players.size()) {
-				const Player &owner = Players[ownerId];
-				const int distFromOwner = otherMonster.position.tile.WalkingDistance(owner.position.tile);
-				const int distFromAlly = otherMonster.position.tile.WalkingDistance(position);
-				if (distFromOwner > owner._pLightRad && distFromAlly > AllyEngageRadius)
-					continue;
-			}
+		// Lua mod support: pass hasLOS so Lua can allow ranged allies to acquire out-of-LR targets
+		if ((monster.flags & MFLAG_GOLEM) != 0) {
+			const bool hasLOS = LineClearMovingMissile(monster.position.tile, otherMonster.position.tile);
+			if (!lua::OnGolemCanTargetMonster(&monster, &otherMonster, hasLOS, true))
+				continue;
 		}
 
 		const bool sameroom = dTransVal[position.x][position.y] == dTransVal[otherMonster.position.tile.x][otherMonster.position.tile.y];
@@ -1139,16 +1131,9 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 	const int dam = RandomIntBetween(mind, maxd) << 6;
 	ApplyMonsterDamage(DamageType::Physical, target, dam);
 
-	if (attacker.isPlayerMinion()) {
-		// Lua mod support: tag the target so the owner player receives XP when it dies.
-		// allyOwnerPlayerId is set by MakeMonsterAlly and never written by AI code,
-		// making it reliable even for non-Golem AI types (e.g. Scavenger) that
-		// overwrite goalVar3 during normal behaviour.
-		const auto playerId = static_cast<size_t>(attacker.allyOwnerPlayerId);
-		if (playerId < Players.size()) {
-			const Player &player = Players[playerId];
-			target.tag(player);
-		}
+	if (attacker.isPlayerMinion() && !gbIsMultiplayer && MyPlayer != nullptr) {
+		// Lua mod support
+		target.tag(*MyPlayer);
 	}
 
 	if (target.hasNoLife()) {
@@ -3309,14 +3294,20 @@ bool PosOkMovingMissile(Point position)
 } // namespace
 
 // Lua mod support
-void MakeMonsterAlly(Monster &monster, const Player &player)
+void ChangeMonsterToGolem(Monster &monster)
 {
 	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
-	monster.flags |= MFLAG_GOLEM | MFLAG_ALLY_SELECTABLE;
+	monster.flags |= MFLAG_GOLEM;
+	// Clear flags from the monster's previous AI that could interfere with GolumAi:
+	// MFLAG_TARGETS_MONSTER / MFLAG_NO_ENEMY would block UpdateEnemy; MFLAG_SEARCH would
+	// bypass GolumAi entirely in the main AI dispatch loop.
+	monster.flags &= ~(MFLAG_TARGETS_MONSTER | MFLAG_NO_ENEMY | MFLAG_SEARCH);
 	monster.golemToHit = naturalToHit;
-	monster.allyOwnerPlayerId = static_cast<int8_t>(player.getId());
 	monster.goal = MonsterGoal::Normal;
 	monster.activeForTicks = UINT8_MAX;
+	monster.ai = MonsterAIID::Golem;
+	monster.goalVar3 = static_cast<int>(MyPlayerId);
+	monster.pathCount = 0;
 	UpdateEnemy(monster);
 }
 
@@ -4199,8 +4190,8 @@ void GolumAi(Monster &golem)
 		return;
 	}
 
-	if ((golem.flags & MFLAG_TARGETS_MONSTER) == 0)
-		UpdateEnemy(golem);
+	// Lua mod support: run every tick; Lua's OnGolemCanTargetMonster handles target filtering
+	UpdateEnemy(golem);
 
 	if (golem.mode == MonsterMode::MeleeAttack) {
 		return;
@@ -4231,14 +4222,31 @@ void GolumAi(Monster &golem)
 			StartAttack(golem);
 			return;
 		}
-		if (AiPlanPath(golem))
-			return;
+		// Lua mod support
+		if (lua::OnGolemCanChaseTarget(&golem, &enemy, true)) {
+			if (AiPlanPath(golem))
+				return;
+		}
 	}
 
 	golem.pathCount++;
 	if (golem.pathCount > 8)
 		golem.pathCount = 5;
 
+	// Lua mod support: pass hasTarget + enemyPosition so Lua can direct the idle walk.
+	// Lua returns Point → walk there; false → stand still; nil → engine default (_pdir wander).
+	const bool hasTarget = (golem.flags & MFLAG_NO_ENEMY) == 0;
+	const auto idleResult = lua::OnGolemIdle(&golem, hasTarget, golem.enemyPosition);
+	if (idleResult.has_value()) {
+		if (idleResult->has_value()) {
+			const Point dest = **idleResult;
+			golem.enemyPosition = dest;
+			if (!AiPlanPath(golem))
+				RandomWalk(golem, GetDirection(golem.position.tile, dest));
+		}
+		return; // Lua took ownership: either walked or deliberately stood still
+	}
+	// No Lua handler answered: original _pdir wander (backward compat for non-modded golems)
 	if (RandomWalk(golem, Players[golem.goalVar3]._pdir))
 		return;
 

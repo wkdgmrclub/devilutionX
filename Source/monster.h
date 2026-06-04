@@ -51,7 +51,6 @@ enum monster_flag : uint16_t {
 	MFLAG_NO_ENEMY        = 1 << 10,
 	MFLAG_BERSERK         = 1 << 11,
 	MFLAG_NOLIFESTEAL     = 1 << 12,
-	MFLAG_ALLY_SELECTABLE = 1 << 13, // Lua mod support: allows cursor targeting of allied monsters
 	// clang-format on
 };
 
@@ -241,9 +240,6 @@ struct Monster { // note: missing field _mAFNum
 	 * Used only by @p ScavengerAi, @p MegaAi and @p GolemAi.
 	 */
 	int8_t goalVar3;
-
-	/** @brief For Lua-allied monsters: owning player index (0-3). -1 = no owner. Never written by AI code. */
-	int8_t allyOwnerPlayerId; // Lua mod support
 
 	int16_t var1;
 	int16_t var2;
@@ -542,7 +538,7 @@ void M_StartHit(Monster &monster, const Player &player, int dam);
 void StartMonsterDeath(Monster &monster, const Player &player, bool sendmsg);
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg);
 void KillGolem(Monster &golem);
-void MakeMonsterAlly(Monster &monster, const Player &player); // Lua mod support
+void ChangeMonsterToGolem(Monster &monster); // Lua mod support
 void M_StartKill(Monster &monster, const Player &player);
 void M_SyncStartKill(Monster &monster, Point position, const Player &player);
 void M_UpdateRelations(const Monster &monster);

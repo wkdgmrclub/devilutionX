@@ -94,6 +94,34 @@ void OnMonsterDeath(const Monster *monster)
 	CallLuaEvent("OnMonsterDeath", monster);
 }
 
+bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool hasLOS, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetMonster", ally, candidate, hasLOS);
+}
+
+bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanChaseTarget", ally, target);
+}
+
+bool OnGolemCanSelect(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanSelect", monster);
+}
+
+std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition)
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return std::nullopt;
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGolemIdle", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return std::nullopt;
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	sol::object result = SafeCallResult(fn(golem, hasTarget, enemyPosition), /*optional=*/true);
+	if (result.is<Point>()) return std::optional<Point>{ result.as<Point>() };          // walk toward Point
+	if (result.get_type() != sol::type::lua_nil) return std::optional<Point>{};         // any non-nil = stand still (false, true, etc.)
+	return std::nullopt;                                                                  // nil = engine default
+}
+
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY)
 {
 	// For scroll casts, resolve which specific scroll item was used so Lua can
@@ -268,9 +296,9 @@ bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bo
 	return CallLuaEventReturn<bool>(defaultValue, "OnShouldExcludeWirtItem", player, std::string(itemType));
 }
 
-bool OnPlayerForceLightArmorSprite(const Player *player, bool defaultValue)
+std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerForceLightArmorSprite", player);
+	return CallLuaEventReturn<std::string>(std::string(defaultGraphic), "OnGetPlayerArmorGraphic", player, std::string(defaultGraphic));
 }
 
 } // namespace lua

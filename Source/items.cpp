@@ -2734,6 +2734,8 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 	const bool chestUsable = player.CanUseItem(chestItem);
 	const uint8_t playerLevel = player.getCharacterLevel();
 
+	PlayerArmorGraphic armorGraphic = PlayerArmorGraphic::Light;
+
 	if (chestUsable) {
 		switch (chestItem._itype) {
 		case ItemType::HeavyArmor:
@@ -2743,9 +2745,8 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 			} else {
 				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Heavy", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
-			if (lua::OnPlayerForceLightArmorSprite(&player, false)) // Lua mod support
-				return PlayerArmorGraphic::Light;
-			return PlayerArmorGraphic::Heavy;
+			armorGraphic = PlayerArmorGraphic::Heavy;
+			break;
 		case ItemType::MediumArmor:
 			if (player._pClass == HeroClass::Monk) {
 				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
@@ -2755,18 +2756,24 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 			} else {
 				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Medium", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
-			if (lua::OnPlayerForceLightArmorSprite(&player, false)) // Lua mod support
-				return PlayerArmorGraphic::Light;
-			return PlayerArmorGraphic::Medium;
+			armorGraphic = PlayerArmorGraphic::Medium;
+			break;
 		default:
 			if (player._pClass == HeroClass::Monk)
 				player._pIAC += playerLevel * 2;
 			else
 				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Light", false, 0); // Lua mod support
-			return PlayerArmorGraphic::Light;
+			break;
 		}
 	}
 
+	// Lua mod support: allow mods to override the resolved armor sprite tier
+	const char *defaultStr = armorGraphic == PlayerArmorGraphic::Heavy ? "Heavy"
+	    : armorGraphic == PlayerArmorGraphic::Medium                    ? "Medium"
+	                                                                     : "Light";
+	const std::string result = lua::OnGetPlayerArmorGraphic(&player, defaultStr);
+	if (result == "Heavy") return PlayerArmorGraphic::Heavy;
+	if (result == "Medium") return PlayerArmorGraphic::Medium;
 	return PlayerArmorGraphic::Light;
 }
 
@@ -3077,7 +3084,6 @@ void CreatePlrItems(Player &player)
 		if (itemData != _item_indexes::IDI_NONE)
 			CreateStartingItem(player, itemData);
 	}
-	FreeCursor();
 
 	if (loadout.gold > 0) {
 		Item &goldItem = player.InvList[player._pNumInv];
@@ -3089,7 +3095,9 @@ void CreatePlrItems(Player &player)
 		player._pGold = goldItem._ivalue;
 	}
 
-	lua::OnCreatePlrItems(player); // Lua mod support
+	lua::OnCreatePlrItems(player); // Lua mod support — must fire inside InitCursor/FreeCursor window
+
+	FreeCursor();
 
 	CalcPlrItemVals(player, false);
 }

@@ -7,6 +7,7 @@
 #include <sol/sol.hpp>
 
 #include "crawl.hpp"
+#include "engine/lighting_defs.hpp"
 #include "data/file.hpp"
 #include "engine/point.hpp"
 #include "engine/random.hpp"
@@ -43,6 +44,7 @@ void InitPointUserType(sol::state_view &lua)
 	sol::usertype<Point> pointType = lua.new_usertype<Point>(sol::no_constructor);
 	pointType["x"] = &Point::x;
 	pointType["y"] = &Point::y;
+	pointType["new"] = [](int x, int y) -> Point { return { x, y }; };
 }
 
 void InitMonsterUserType(sol::state_view &lua)
@@ -54,9 +56,9 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return Point { monster.position.tile };
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "id", "integer",
-	    "Monster's unique ID (readonly)",
+	    "Monster's index in the Monsters array (readonly). Stable within a session; range 0..MaxMonsters-1.",
 	    [](const Monster &monster) {
-		    return static_cast<int>(reinterpret_cast<uintptr_t>(&monster));
+		    return static_cast<int>(&monster - &Monsters[0]);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "typeId", "integer",
 	    "Monster type ID matching _monster_id constants (readonly)",
@@ -93,11 +95,6 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster) {
 		    return static_cast<int>(monster.level(static_cast<_difficulty>(sgGameInitInfo.nDifficulty)));
 	    });
-	LuaSetDocReadonlyProperty(monsterType, "isAlly", "boolean",
-	    "Whether this monster is currently flagged as a player ally (MFLAG_ALLY_SELECTABLE) (readonly)",
-	    [](const Monster &monster) {
-		    return (monster.flags & MFLAG_ALLY_SELECTABLE) != 0;
-	    });
 	LuaSetDocFn(monsterType, "remove", "()",
 	    "Silently remove this monster from the level without triggering death effects, loot, or XP.",
 	    [](const Monster &constMonster) {
@@ -119,10 +116,37 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.hitPoints = hp << 6;
 	    });
-	LuaSetDocFn(monsterType, "makeAlly", "(player: Player)",
-	    "Make this monster fight as an ally for the given player (uses the same mechanism as Golem)",
-	    [](Monster &monster, const Player &player) {
-		    MakeMonsterAlly(monster, player);
+	LuaSetDocFn(monsterType, "makeGolem", "()",
+	    "Convert this monster to a golem (switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour)",
+	    [](Monster &monster) {
+		    ChangeMonsterToGolem(monster);
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "isLit", "boolean",
+	    "Whether the tile this monster stands on is currently illuminated by any light source (readonly)",
+	    [](const Monster &monster) {
+		    return dLight[monster.position.tile.x][monster.position.tile.y] < LightsMax;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "hasRangedAttack", "boolean",
+	    "Whether this monster type has a ranged attack (based on original AI type; unchanged by taming). readonly",
+	    [](const Monster &monster) -> bool {
+		    const MonsterAIID ai = monster.data().ai;
+		    return ai == MonsterAIID::SkeletonRanged
+		        || ai == MonsterAIID::GoatRanged
+		        || ai == MonsterAIID::Magma
+		        || ai == MonsterAIID::Gargoyle
+		        || ai == MonsterAIID::Succubus
+		        || ai == MonsterAIID::Storm
+		        || ai == MonsterAIID::Acid
+		        || ai == MonsterAIID::AcidUnique
+		        || ai == MonsterAIID::Diablo
+		        || ai == MonsterAIID::LazarusSuccubus
+		        || ai == MonsterAIID::FireBat
+		        || ai == MonsterAIID::Torchant
+		        || ai == MonsterAIID::Lich
+		        || ai == MonsterAIID::ArchLich
+		        || ai == MonsterAIID::Psychorb
+		        || ai == MonsterAIID::Necromorb
+		        || ai == MonsterAIID::BoneDemon;
 	    });
 	LuaSetDocFn(monsterType, "snapToPlayer", "(player: Player)",
 	    "Instantly move this monster to the nearest free tile adjacent to the player.",
