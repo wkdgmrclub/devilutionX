@@ -1017,7 +1017,8 @@ void StartDeathFromMonster(Monster &attacker, Monster &target)
 {
 	const Direction md = GetDirection(target.position.tile, attacker.position.tile);
 	MonsterDeath(target, md, true);
-
+	if (attacker.flags & MFLAG_GOLEM) // Lua mod support
+		lua::OnGolemKilledMonster(&attacker, &target);
 	if (gbIsHellfire)
 		M_StartStand(attacker, attacker.direction);
 }

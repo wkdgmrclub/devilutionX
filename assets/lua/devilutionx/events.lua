@@ -237,6 +237,25 @@ local events = {
   OnGetArmorLevelBonus = CreateQueryEvent(),
   __doc_OnGetArmorLevelBonus = "Query: return integer AC bonus to add based on armor type. armorType: \"Light\"/\"Medium\"/\"Heavy\". isUnique: true for unique items. Return nil or 0 for no bonus.",
 
+  ---Query event fired from StartPlrHit before the hit-recovery animation decision.
+  ---baseThreshold is the damage floor (dam>>6 must be >= threshold to stagger the player).
+  ---The Barbarian's level+level/4 bonus is pre-applied by C++ before this fires.
+  ---Return an integer to override the threshold. Return nil to keep baseThreshold unchanged.
+  OnGetHitRecoveryThreshold = CreateQueryEvent(),
+  __doc_OnGetHitRecoveryThreshold = "Query: return integer to override the hit-recovery stagger threshold (dam>>6 < threshold = no stagger). Barbarian bonus is pre-applied. Args: player, baseThreshold. Return nil to keep.",
+
+  ---Query event fired from CalcPlrDamage when a player has no weapon equipped
+  ---(both hand slots empty and no shield; minDamage and maxDamage were 0 entering the function).
+  ---Return a table {newMin, newMax} to set damage floors. Return nil for no change.
+  OnGetUnarmedDamageFloor = CreateQueryEvent(),
+  __doc_OnGetUnarmedDamageFloor = "Query: return {minDamage, maxDamage} table to set unarmed damage floors. Fires only when player has no weapon equipped. Args: player, currentMin, currentMax. Return nil for no change.",
+
+  ---Query event fired from getBaseToBlock() for every block-chance calculation.
+  ---baseBonusFromTsv is the class's TSV blockBonus value.
+  ---Return an integer to replace the block bonus. Return nil to keep baseBonusFromTsv unchanged.
+  OnGetBlockChanceBonus = CreateQueryEvent(),
+  __doc_OnGetBlockChanceBonus = "Query: return integer to replace the block chance bonus (replaces TSV blockBonus). Fires on every block-chance calculation. Args: player, baseBonusFromTsv. Return nil to keep.",
+
   ---Query event fired from RestorePartialLife for classes that are not Warrior/Barbarian/Rogue/Monk/Bard.
   ---l is the base partial heal amount (before class multiplier). Return an integer to replace l.
   ---Return nil to heal the base amount (no multiplier).
@@ -310,11 +329,50 @@ local events = {
   OnGetCustomSpeedbookScrollEntries = CreateQueryEvent(),
   __doc_OnGetCustomSpeedbookScrollEntries = "Query: return a table of {name, seed, spell, count} to inject as custom scroll entries in the speedbook. Return nil for none.",
 
+  ---Called when the player uses (consumes) any item via right-click or belt hotkey.
+  ---Args: player, miscId (integer matching items.ItemMiscID.*), spellId (integer, 0 for items with no spell).
+  ---Fires after the item's C++ effect is applied (e.g., HP/mana already restored for FullRejuv).
+  OnItemUsed = CreateEvent(),
+  __doc_OnItemUsed = "Called when a player consumes an item. Args: player, miscId (int), spellId (int). Effect already applied before this fires.",
+
   ---Query event fired from GetSpellListSelection after the built-in starting-skill type promotion.
   ---Args: player, spellId (int), originalType (string), promotedType (string).
   ---Return "Skill", "Spell", "Scroll", or "Charges" to override the resolved type; return nil to keep promotedType.
   OnGetSpeedbookSelectionType = CreateQueryEvent(),
   __doc_OnGetSpeedbookSelectionType = "Query: return \"Skill\"/\"Spell\"/\"Scroll\"/\"Charges\" to override the resolved SpellType for a selected speedbook entry. originalType is the entry's own type; promotedType is after starting-skill promotion. Return nil to keep promotedType.",
+
+  ---Query event fired from DrawSpellList when rendering the info string for a hovered speedbook entry.
+  ---Args: player, spellId (int), defaultName (string — the spell's sNameText from data).
+  ---Return a string to override the spell's display name in the info box. Return nil to keep defaultName.
+  OnGetSpeedbookSpellName = CreateQueryEvent(),
+  __doc_OnGetSpeedbookSpellName = "Query: return a string to override the spell name shown in the speedbook info box. Args: player, spellId (int), defaultName (string). Return nil to keep defaultName.",
+
+  ---Query event fired from GetSpellListItems for every entry about to be added to the speedbook.
+  ---Args: player, spellId (int), spellType (string: "Skill"/"Spell"/"Scroll"/"Charges").
+  ---Return true to hide this entry from the speedbook. Return nil or false to show it (default).
+  OnShouldHideSpeedbookSpell = CreateQueryEvent(),
+  __doc_OnShouldHideSpeedbookSpell = "Query: return true to hide a speedbook entry. Args: player, spellId (int), spellType (\"Skill\"/\"Spell\"/\"Scroll\"/\"Charges\"). Return nil or false to show.",
+
+  ---Query event fired from CheckSBook when the player clicks a learned spell (SpellType::Spell) in the spellbook panel.
+  ---Does not fire for skills or staff charges. Args: player, spellId (int).
+  ---Return false to block the selection (spell is not set as the active cast spell). Return nil or true to allow.
+  OnCanSelectSpellBookEntry = CreateQueryEvent(),
+  __doc_OnCanSelectSpellBookEntry = "Query: return false to block a learned spell from being selected as the active cast spell via the spellbook. Only fires for SpellType::Spell entries. Args: player, spellId (int). Return nil or true to allow.",
+
+  ---Query event fired when the item info box is rendering an item's description line.
+  ---Args: item. Return a string to override the default miscId-derived description; return nil for default.
+  OnGetMiscItemDescription = CreateQueryEvent(),
+  __doc_OnGetMiscItemDescription = "Query: return a string to add or override the description line for any misc item in the info box. Receives (item). Return nil for default behavior.",
+
+  ---Event fired when a MFLAG_GOLEM monster kills another monster via melee.
+  ---Args: ally (Monster), victim (Monster).
+  OnGolemKilledMonster = CreateEvent(),
+  __doc_OnGolemKilledMonster = "Fired when a golem/ally kills a monster in melee. Args: ally, victim.",
+
+  ---Query event fired from the monster info box in place of PrintMonstHistory.
+  ---Args: monster. Return a table of strings to fully replace the info block; return nil for default (PrintMonstHistory).
+  OnGetMonsterInfo = CreateQueryEvent(),
+  __doc_OnGetMonsterInfo = "Query: return a table of strings to replace the entire monster info block in the info box. Args: monster. Return nil for default behavior (PrintMonstHistory).",
 }
 
 ---Registers a custom event type with the given name.

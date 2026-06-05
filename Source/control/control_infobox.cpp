@@ -1,6 +1,11 @@
 #include "control.hpp"
 #include "control_panel.hpp"
 
+#include <string>
+#include <vector>
+
+#include "lua/lua_event.hpp"
+
 #include "engine/render/primitive_render.hpp"
 #include "inv.h"
 #include "levels/trigs.h"
@@ -412,7 +417,12 @@ void DrawInfoBox(const Surface &out)
 				const Monster &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
 				InfoString = monster.name();
-				if (monster.isUnique()) {
+				// Lua mod support — check before isUnique so tamed unique variants also use ally display
+				std::vector<std::string> killLines = lua::OnGetMonsterInfo(&monster);
+				if (!killLines.empty()) {
+					for (const std::string &line : killLines)
+						AddInfoBoxString(line);
+				} else if (monster.isUnique()) {
 					InfoColor = UiFlags::ColorWhitegold;
 					PrintUniqueHistory();
 				} else {

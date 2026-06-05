@@ -13,6 +13,7 @@
 #include "inv.h"
 #include "items.h"
 #include "lua/metadoc.hpp"
+#include "msg.h"
 #include "player.h"
 #include "spells.h"
 #include "tables/itemdat.h"
@@ -223,6 +224,46 @@ void InitPlayerUserType(sol::state_view &lua)
 				    return item._iSeed;
 		    }
 		    return sol::nullopt;
+	    });
+	LuaSetDocFn(playerType, "classBaseStats", "() -> integer, integer, integer, integer",
+	    "Return the class starting base stats as (str, mag, dex, vit). Useful for stat-reset items.",
+	    [](const Player &player) -> std::tuple<int, int, int, int> {
+		    const ClassAttributes &attr = player.getClassAttributes();
+		    return { attr.baseStr, attr.baseMag, attr.baseDex, attr.baseVit };
+	    });
+	LuaSetDocFn(playerType, "resetStats", "(str: integer, mag: integer, dex: integer, vit: integer)",
+	    "Reset all base stats to the given values, refund the invested difference back to _pStatPts, and recompute max HP/mana from scratch to correct any drift (Black Death, shrine side-effects). Sends net sync messages.",
+	    [](Player &player, int str, int mag, int dex, int vit) {
+		    // Compute the total invested points to refund before wiping stats.
+		    const int refund = (player._pBaseStr - str) + (player._pBaseMag - mag)
+		        + (player._pBaseDex - dex) + (player._pBaseVit - vit);
+
+		    player._pBaseStr = str; player._pStrength = str;
+		    player._pBaseMag = mag; player._pMagic = mag;
+		    player._pBaseDex = dex; player._pDexterity = dex;
+		    player._pBaseVit = vit; player._pVitality = vit;
+
+		    if (refund > 0) player._pStatPts += refund;
+
+		    // Recompute HP/mana bases from the class formula so drift (Black Death,
+		    // shrine side-effects) is corrected rather than carried forward.
+		    const int32_t correctHPBase = player.calculateBaseLife();
+		    player._pMaxHPBase = correctHPBase;
+		    player._pHPBase = std::min(player._pHPBase, correctHPBase);
+
+		    const int32_t correctManaBase = player.calculateBaseMana();
+		    player._pMaxManaBase = correctManaBase;
+		    player._pManaBase = std::min(player._pManaBase, correctManaBase);
+
+		    CheckStats(player);
+		    CalcPlrInv(player, true);
+
+		    if (&player == MyPlayer) {
+			    NetSendCmdParam1(false, CMD_SETSTR, player._pBaseStr);
+			    NetSendCmdParam1(false, CMD_SETMAG, player._pBaseMag);
+			    NetSendCmdParam1(false, CMD_SETDEX, player._pBaseDex);
+			    NetSendCmdParam1(false, CMD_SETVIT, player._pBaseVit);
+		    }
 	    });
 }
 } // namespace

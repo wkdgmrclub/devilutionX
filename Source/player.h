@@ -393,10 +393,7 @@ public:
 		return _(getPlayerData().className);
 	}
 
-	[[nodiscard]] int getBaseToBlock() const
-	{
-		return getPlayerCombatData().baseToBlock;
-	}
+	[[nodiscard]] int getBaseToBlock() const;
 
 	void CalcScrolls();
 

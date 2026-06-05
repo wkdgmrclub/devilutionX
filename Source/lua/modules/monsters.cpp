@@ -1,5 +1,6 @@
 #include "lua/modules/monsters.hpp"
 
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -7,6 +8,7 @@
 #include <sol/sol.hpp>
 
 #include "crawl.hpp"
+#include "diablo.h"
 #include "engine/lighting_defs.hpp"
 #include "data/file.hpp"
 #include "engine/point.hpp"
@@ -21,11 +23,49 @@
 #include "player.h"
 #include "tables/monstdat.h"
 #include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/str_split.hpp"
 
 namespace devilution {
 
 namespace {
+
+struct MonsterPlacement {
+	size_t typeIndex;
+	size_t monsterIndex;
+	Point spawnPos;
+	uint32_t seed;
+};
+
+// Shared pre-spawn setup: crawl for a free tile, grab the next ActiveMonsters slot.
+// Does NOT call InitializeSpawnedMonster — callers do that after setting difficulty.
+std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
+{
+	if (ActiveMonsterCount >= MaxMonsters) return std::nullopt;
+	if (!MyPlayer->isLevelOwnedByLocalClient()) return std::nullopt;
+	const Point requestedPos { x, y };
+	const auto freePos = Crawl(0, MaxCrawlRadius, [&requestedPos](Displacement d) -> std::optional<Point> {
+		const Point c = requestedPos + d;
+		if (dPlayer[c.x][c.y] != 0 || dMonster[c.x][c.y] != 0) return {};
+		if (!IsTileWalkable(c)) return {};
+		return c;
+	});
+	if (!freePos) return std::nullopt;
+	return MonsterPlacement { typeIndex, ActiveMonsters[ActiveMonsterCount], *freePos, GetLCGEngineState() };
+}
+
+// Shared type registration: find or register the monster type and load its GFX.
+std::optional<size_t> EnsureMonsterType(_monster_id type, placeflag pflag)
+{
+	for (size_t i = 0; i < LevelMonsterTypeCount; i++) {
+		if (LevelMonsterTypes[i].type == type) return i;
+	}
+	auto result = AddMonsterType(type, pflag);
+	if (!result) return std::nullopt;
+	const size_t idx = *result;
+	if (!InitMonsterGFX(LevelMonsterTypes[idx])) return std::nullopt;
+	return idx;
+}
 
 void AddMonsterDataFromTsv(const std::string_view path)
 {
@@ -84,6 +124,12 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Whether this is a named unique monster (readonly)",
 	    [](const Monster &monster) {
 		    return monster.isUnique();
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "uniqueType", "integer",
+	    "Index into UniqueMonstersData (-1 if not a named unique monster). readonly",
+	    [](const Monster &m) -> int {
+		    if (m.uniqueType == UniqueMonsterType::None) return -1;
+		    return static_cast<int>(m.uniqueType);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isQuestMonster", "boolean",
 	    "Whether this monster is quest-critical and should not be tameable or skippable (readonly)",
@@ -208,6 +254,58 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    return sol::nullopt;
 		    return MonstersData[typeIdInt].name;
 	    });
+	LuaSetDocFn(table, "getTypeKillCount", "(typeId: integer) -> integer",
+	    "Returns the total number of monsters of this type the player has killed (MonsterKillCounts).",
+	    [](int typeId) -> int {
+		    if (typeId < 0 || typeId >= static_cast<int>(NUM_MAX_MTYPES))
+			    return 0;
+		    return MonsterKillCounts[typeId];
+	    });
+	LuaSetDocFn(table, "getTypeHpRange", "(typeId: integer) -> integer, integer",
+	    "Returns the difficulty-scaled HP range (minHp, maxHp) for this monster type, matching the PrintMonstHistory thresholds.",
+	    [](int typeId) -> std::tuple<int, int> {
+		    if (typeId < 0 || typeId >= static_cast<int>(MonstersData.size()))
+			    return { 0, 0 };
+		    int minHP = MonstersData[typeId].hitPointsMinimum;
+		    int maxHP = MonstersData[typeId].hitPointsMaximum;
+		    if (!gbIsMultiplayer) {
+			    minHP /= 2;
+			    maxHP /= 2;
+		    }
+		    minHP = std::max(minHP, 1);
+		    maxHP = std::max(maxHP, 1);
+		    int hpBonusNightmare = 100;
+		    int hpBonusHell = 200;
+		    if (gbIsHellfire) {
+			    hpBonusNightmare = (!gbIsMultiplayer ? 50 : 100);
+			    hpBonusHell = (!gbIsMultiplayer ? 100 : 200);
+		    }
+		    if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
+			    minHP = 3 * minHP + hpBonusNightmare;
+			    maxHP = 3 * maxHP + hpBonusNightmare;
+		    } else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
+			    minHP = 4 * minHP + hpBonusHell;
+			    maxHP = 4 * maxHP + hpBonusHell;
+		    }
+		    return { minHP, maxHP };
+	    });
+	LuaSetDocFn(table, "getTypeResistances", "(typeId: integer) -> table",
+	    "Returns a table of resistance/immunity booleans for the type at current difficulty: resistMagic, resistFire, resistLightning, immuneMagic, immuneFire, immuneLightning.",
+	    [&lua](int typeId) -> sol::table {
+		    sol::table t = lua.create_table();
+		    if (typeId < 0 || typeId >= static_cast<int>(MonstersData.size()))
+			    return t;
+		    const int res = (sgGameInitInfo.nDifficulty != DIFF_HELL)
+		        ? MonstersData[typeId].resistance
+		        : MonstersData[typeId].resistanceHell;
+		    t["resistMagic"]     = (res & RESIST_MAGIC) != 0;
+		    t["resistFire"]      = (res & RESIST_FIRE) != 0;
+		    t["resistLightning"] = (res & RESIST_LIGHTNING) != 0;
+		    t["immuneMagic"]     = (res & IMMUNE_MAGIC) != 0;
+		    t["immuneFire"]      = (res & IMMUNE_FIRE) != 0;
+		    t["immuneLightning"] = (res & IMMUNE_LIGHTNING) != 0;
+		    return t;
+	    });
 	LuaSetDocFn(table, "spawnAt", "(typeId: integer, x: integer, y: integer) -> Monster|nil",
 	    "Spawn a monster of the given type ID at the given tile. Returns the new Monster or nil on failure.",
 	    [](int typeIdInt, int x, int y) -> Monster * {
@@ -256,6 +354,55 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		        static_cast<uint16_t>(monsterIndex), seed, 0, 0);
 
 		    return &Monsters[monsterIndex];
+	    });
+	LuaSetDocFn(table, "currentDifficulty", "() -> integer",
+	    "Returns the current game difficulty: 0=Normal, 1=Nightmare, 2=Hell.",
+	    []() -> int {
+		    return static_cast<int>(sgGameInitInfo.nDifficulty);
+	    });
+	LuaSetDocFn(table, "getUniqueName", "(uniqueTypeIdx: integer) -> string|nil",
+	    "Returns the display name of a unique monster by its UniqueMonstersData index. Returns nil if out of range.",
+	    [](int idx) -> sol::optional<std::string> {
+		    if (idx < 0 || idx >= static_cast<int>(UniqueMonstersData.size())) return sol::nullopt;
+		    return UniqueMonstersData[static_cast<size_t>(idx)].mName;
+	    });
+	LuaSetDocFn(table, "spawnWithDifficulty", "(typeId: integer, capturedDifficulty: integer, x: integer, y: integer) -> Monster|nil",
+	    "Spawn a monster using captured-difficulty stat scaling. Temporarily overrides nDifficulty for InitializeSpawnedMonster. // Lua mod support",
+	    [](int typeIdInt, int capturedDifficulty, int x, int y) -> Monster * {
+		    const auto type = static_cast<_monster_id>(typeIdInt);
+		    const auto typeIndex = EnsureMonsterType(type, PLACE_SCATTER);
+		    if (!typeIndex) return nullptr;
+		    const auto placement = PrepareSpawnSlot(*typeIndex, x, y);
+		    if (!placement) return nullptr;
+		    ActiveMonsterCount++;
+		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
+		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
+		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
+		    sgGameInitInfo.nDifficulty = savedDiff;
+		    NetSendCmdSpawnMonster(placement->spawnPos, Direction::South, static_cast<uint16_t>(placement->typeIndex),
+		        static_cast<uint16_t>(placement->monsterIndex), placement->seed, 0, 0);
+		    return &Monsters[placement->monsterIndex];
+	    });
+	LuaSetDocFn(table, "spawnUniqueAt", "(uniqueTypeIdx: integer, capturedDifficulty: integer, x: integer, y: integer) -> Monster|nil",
+	    "Spawn a named unique monster with captured-difficulty stat scaling. No minion pack. // Lua mod support",
+	    [](int uniqueTypeIdx, int capturedDifficulty, int x, int y) -> Monster * {
+		    if (uniqueTypeIdx < 0 || uniqueTypeIdx >= static_cast<int>(UniqueMonstersData.size())) return nullptr;
+		    const UniqueMonsterType uniqueType = static_cast<UniqueMonsterType>(uniqueTypeIdx);
+		    const _monster_id baseType = UniqueMonstersData[static_cast<size_t>(uniqueTypeIdx)].mtype;
+		    const auto typeIndex = EnsureMonsterType(baseType, PLACE_UNIQUE);
+		    if (!typeIndex) return nullptr;
+		    const auto placement = PrepareSpawnSlot(*typeIndex, x, y);
+		    if (!placement) return nullptr;
+		    ActiveMonsterCount++;
+		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
+		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
+		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
+		    if (const auto result = PrepareUniqueMonst(Monsters[placement->monsterIndex], uniqueType, 0, 0, UniqueMonstersData[static_cast<size_t>(uniqueTypeIdx)]); !result)
+			    LogError("spawnUniqueAt: PrepareUniqueMonst failed: {}", result.error());
+		    sgGameInitInfo.nDifficulty = savedDiff;
+		    NetSendCmdSpawnMonster(placement->spawnPos, Direction::South, static_cast<uint16_t>(placement->typeIndex),
+		        static_cast<uint16_t>(placement->monsterIndex), placement->seed, 0, 0);
+		    return &Monsters[placement->monsterIndex];
 	    });
 	return table;
 }

@@ -1625,6 +1625,11 @@ void Player::RemoveSpdBarItem(int iv)
 	return static_cast<uint8_t>(std::distance<const Player *>(&Players[0], this));
 }
 
+int Player::getBaseToBlock() const
+{
+	return lua::OnGetBlockChanceBonus(this, getPlayerCombatData().baseToBlock); // Lua mod support
+}
+
 int Player::GetBaseAttributeValue(CharacterAttribute attribute) const
 {
 	switch (attribute) {
@@ -2721,12 +2726,14 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 	player.Say(HeroSpeech::ArghClang);
 
 	RedrawComponent(PanelDrawComponent::Health);
-	if (player._pClass == HeroClass::Barbarian) {
-		if (dam >> 6 < player.getCharacterLevel() + player.getCharacterLevel() / 4 && !forcehit) {
+	{
+		int threshold = player.getCharacterLevel();
+		if (player._pClass == HeroClass::Barbarian)
+			threshold += threshold / 4;
+		threshold = lua::OnGetHitRecoveryThreshold(&player, threshold); // Lua mod support
+		if (dam >> 6 < threshold && !forcehit) {
 			return;
 		}
-	} else if (dam >> 6 < player.getCharacterLevel() && !forcehit) {
-		return;
 	}
 
 	const Direction pd = player._pdir;

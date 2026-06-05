@@ -166,20 +166,24 @@ void DrawSpellList(const Surface &out)
 		if (!spellListItem.isSelected)
 			continue;
 
+		// Lua mod support: allow overriding the spell display name in the speedbook info box.
+		const std::string spellDisplayName = lua::OnGetSpeedbookSpellName(
+		    &myPlayer, static_cast<int>(spellId), spellDataItem.sNameText);
+
 		uint8_t spellColor = PAL16_GRAY + 5;
 
 		switch (spellListItem.type) {
 		case SpellType::Skill:
 			spellColor = PAL16_YELLOW - 46;
 			PrintSBookSpellType(out, spellListItem.location, _("Skill"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("{:s} Skill")), pgettext("spell", spellDataItem.sNameText));
+			InfoString = fmt::format(fmt::runtime(_("{:s} Skill")), spellDisplayName);
 			break;
 		case SpellType::Spell:
 			if (!myPlayer.isOnLevel(0)) {
 				spellColor = PAL16_BLUE + 5;
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Spell"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("{:s} Spell")), pgettext("spell", spellDataItem.sNameText));
+			InfoString = fmt::format(fmt::runtime(_("{:s} Spell")), spellDisplayName);
 			if (spellId == SpellID::HolyBolt) {
 				AddInfoBoxString(_("Damages undead only"));
 			}
@@ -194,7 +198,7 @@ void DrawSpellList(const Surface &out)
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Scroll"), spellColor);
 			if (spellListItem.displayName.empty()) {
-				InfoString = fmt::format(fmt::runtime(_("Scroll of {:s}")), pgettext("spell", spellDataItem.sNameText));
+				InfoString = fmt::format(fmt::runtime(_("Scroll of {:s}")), spellDisplayName);
 			} else {
 				InfoString = spellListItem.displayName; // Lua mod support: custom label, no "Scroll of" prefix
 			}
@@ -210,7 +214,7 @@ void DrawSpellList(const Surface &out)
 				spellColor = PAL16_ORANGE + 5;
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Staff"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("Staff of {:s}")), pgettext("spell", spellDataItem.sNameText));
+			InfoString = fmt::format(fmt::runtime(_("Staff of {:s}")), spellDisplayName);
 			int charges = myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges;
 			AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Charge", "{:d} Charges", charges)), charges));
 		} break;
@@ -255,6 +259,9 @@ std::vector<SpellListItem> GetSpellListItems()
 		auto j = static_cast<int8_t>(SpellID::Firebolt);
 		for (uint64_t spl = 1; static_cast<size_t>(j) < SpellsData.size(); spl <<= 1, j++) {
 			if ((mask & spl) == 0)
+				continue;
+			// Lua mod support: allow hiding individual speedbook entries per spell/type.
+			if (lua::OnShouldHideSpeedbookSpell(&myPlayer, static_cast<int>(j), SpellTypeName(static_cast<SpellType>(i))))
 				continue;
 			const int lx = x;
 			const int ly = y - SPLICONLENGTH;

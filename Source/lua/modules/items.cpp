@@ -13,6 +13,7 @@
 #include "lua/metadoc.hpp"
 #include "msg.h"
 #include "player.h"
+#include "stores.h"
 #include "tables/itemdat.h"
 #include "utils/utf8.hpp"
 
@@ -623,6 +624,31 @@ int8_t DefaultDropAnimForItemType(ItemType type)
 	}
 }
 
+void LuaAddToHealerStock(int32_t mappingId, int ivalue)
+{
+	const auto it = ItemMappingIdsToIndices.find(mappingId);
+	if (it == ItemMappingIdsToIndices.end()) return;
+	const auto itemIndex = static_cast<_item_indexes>(it->second);
+
+	// Idempotent: skip if this item is already in the healer's stock.
+	for (const Item &existing : HealerItems) {
+		if (existing.IDidx == itemIndex) return;
+	}
+
+	// If at capacity, replace the last (lowest-priority) random item.
+	if (HealerItems.size() >= NumHealerItemsHf) {
+		HealerItems.erase(HealerItems.end() - 1);
+	}
+
+	Item item = {};
+	GetItemAttrs(item, itemIndex, 1);
+	item._iIdentified = true;
+	item._iIvalue = ivalue;
+	item._ivalue = ivalue;
+	item._iStatFlag = true;
+	HealerItems.push_back(std::move(item));
+}
+
 } // namespace
 
 sol::table LuaItemModule(sol::state_view &lua)
@@ -648,6 +674,9 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer)",
 	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (preserved through save/load; use to encode mod-specific data; bit 0 must be 0).",
 	    LuaSpawnItemAt);
+	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer)",
+	    "Add a custom item to the healer's buy list at the given identified value (shop price). Idempotent — calling again while the item is already in stock is a no-op. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so the item reappears after purchase.",
+	    LuaAddToHealerStock);
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

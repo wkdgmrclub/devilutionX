@@ -287,6 +287,29 @@ bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTw
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanCleave", player, isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff);
 }
 
+int OnGetHitRecoveryThreshold(const Player *player, int defaultThreshold)
+{
+	return CallLuaEventReturn<int>(defaultThreshold, "OnGetHitRecoveryThreshold", player, defaultThreshold);
+}
+
+std::pair<int, int> OnGetUnarmedDamageFloor(const Player *player, int minDamage, int maxDamage)
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return { minDamage, maxDamage };
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGetUnarmedDamageFloor", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return { minDamage, maxDamage };
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	sol::object result = SafeCallResult(fn(player, minDamage, maxDamage), /*optional=*/true);
+	if (!result.is<sol::table>()) return { minDamage, maxDamage };
+	const sol::table tbl = result.as<sol::table>();
+	return { tbl.get_or(1, minDamage), tbl.get_or(2, maxDamage) };
+}
+
+int OnGetBlockChanceBonus(const Player *player, int blockBonus)
+{
+	return CallLuaEventReturn<int>(blockBonus, "OnGetBlockChanceBonus", player, blockBonus);
+}
+
 void OnOilyShrine(const Player *player)
 {
 	CallLuaEvent("OnOilyShrine", player);
@@ -300,6 +323,40 @@ bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bo
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic)
 {
 	return CallLuaEventReturn<std::string>(std::string(defaultGraphic), "OnGetPlayerArmorGraphic", player, std::string(defaultGraphic));
+}
+
+void OnItemUsed(const Player &player, int mid, int spellID)
+{
+	CallLuaEvent("OnItemUsed", &player, mid, spellID);
+}
+
+std::string OnGetMiscItemDescription(const Item *item) // Lua mod support
+{
+	return CallLuaEventReturn<std::string>(std::string {}, "OnGetMiscItemDescription", item);
+}
+
+void OnGolemKilledMonster(const Monster *ally, const Monster *victim)
+{
+	CallLuaEvent("OnGolemKilledMonster", ally, victim);
+}
+
+std::vector<std::string> OnGetMonsterInfo(const Monster *monster) // Lua mod support
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return {};
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGetMonsterInfo", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return {};
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	sol::object result = SafeCallResult(fn(monster), /*optional=*/true);
+	if (!result.is<sol::table>()) return {};
+	std::vector<std::string> lines;
+	const sol::table tbl = result.as<sol::table>();
+	for (int i = 1; ; ++i) {
+		const sol::optional<std::string> entry = tbl.get<sol::optional<std::string>>(i);
+		if (!entry) break;
+		lines.push_back(*entry);
+	}
+	return lines;
 }
 
 std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player *player)
@@ -330,6 +387,21 @@ std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player
 std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::string_view originalType, std::string_view promotedType)
 {
 	return CallLuaEventReturn<std::string>(std::string(promotedType), "OnGetSpeedbookSelectionType", player, spellId, std::string(originalType), std::string(promotedType));
+}
+
+std::string OnGetSpeedbookSpellName(const Player *player, int spellId, std::string_view defaultName)
+{
+	return CallLuaEventReturn<std::string>(std::string(defaultName), "OnGetSpeedbookSpellName", player, spellId, std::string(defaultName));
+}
+
+bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_view spellType)
+{
+	return CallLuaEventReturn<bool>(false, "OnShouldHideSpeedbookSpell", player, spellId, std::string(spellType));
+}
+
+bool OnCanSelectSpellBookEntry(const Player *player, int spellId)
+{
+	return CallLuaEventReturn<bool>(true, "OnCanSelectSpellBookEntry", player, spellId);
 }
 
 } // namespace lua

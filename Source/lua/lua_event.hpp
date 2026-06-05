@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "engine/point.hpp"
@@ -61,9 +62,14 @@ int OnGetPotionHealAmount(const Player *player, int l, int defaultValue);
 int OnGetPotionManaAmount(const Player *player, int l, int defaultValue);
 bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue);
 bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTwoHandedHeavy, bool isHoldingStaff, bool defaultValue);
+int OnGetHitRecoveryThreshold(const Player *player, int defaultThreshold);
+std::pair<int, int> OnGetUnarmedDamageFloor(const Player *player, int minDamage, int maxDamage);
+int OnGetBlockChanceBonus(const Player *player, int blockBonus);
 void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bool defaultValue);
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
+void OnItemUsed(const Player &player, int mid, int spellID); // Lua mod support
+std::string OnGetMiscItemDescription(const Item *item); // Lua mod support
 
 void LoadModsComplete();
 void GameDrawComplete();
@@ -72,6 +78,9 @@ void OnNewCharacter(const Player &player);
 void OnCreatePlrItems(Player &player); // Lua mod support
 void OnLevelExit();
 void OnLevelEnter();
+
+void OnGolemKilledMonster(const Monster *ally, const Monster *victim);
+std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 
 // Speedbook hooks
 struct CustomSpeedbookEntry {
@@ -82,6 +91,9 @@ struct CustomSpeedbookEntry {
 };
 std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player *player);
 std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::string_view originalType, std::string_view promotedType);
+std::string OnGetSpeedbookSpellName(const Player *player, int spellId, std::string_view defaultName);
+bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_view spellType);
+bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
 
 } // namespace lua
 

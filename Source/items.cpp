@@ -1766,7 +1766,6 @@ void printItemMiscKBM(const Item &item, const bool isOil, const bool isCastOnTar
 	if (item._iMiscId == IMISC_MAPOFDOOM) {
 		AddItemInfoBoxString(_("Right-click to view"));
 	} else if (isOil) {
-		PrintItemOil(item._iMiscId);
 		AddItemInfoBoxString(_("Right-click to use"));
 	} else if (isCastOnTarget) {
 		AddItemInfoBoxString(_("Right-click to read, then\nleft-click to target"));
@@ -1780,7 +1779,6 @@ void printItemMiscGenericGamepad(const Item &item, const bool isOil, bool isCast
 	if (item._iMiscId == IMISC_MAPOFDOOM) {
 		AddItemInfoBoxString(_("Activate to view"));
 	} else if (isOil) {
-		PrintItemOil(item._iMiscId);
 		if (!invflag) {
 			AddItemInfoBoxString(_("Open inventory to use"));
 		} else {
@@ -1805,7 +1803,6 @@ void printItemMiscGamepad(const Item &item, bool isOil, bool isCastOnTarget)
 	if (item._iMiscId == IMISC_MAPOFDOOM) {
 		AddItemInfoBoxString(fmt::format(fmt::runtime(_("{} to view")), activateButton));
 	} else if (isOil) {
-		PrintItemOil(item._iMiscId);
 		if (!invflag) {
 			AddItemInfoBoxString(_("Open inventory to use"));
 		} else {
@@ -1835,6 +1832,15 @@ void PrintItemMisc(const Item &item)
 	const bool mouseRequiresTarget = (item._iMiscId == IMISC_SCROLLT && item._iSpell != SpellID::Flash)
 	    || (item._iMiscId == IMISC_SCROLL && IsAnyOf(item._iSpell, SpellID::TownPortal, SpellID::Identify));
 	const bool gamepadRequiresTarget = item.isScroll() && TargetsMonster(item._iSpell);
+
+	// Lua mod support: allow mods to add or override the description for any misc item.
+	// For oil/potion items, falls back to PrintItemOil when Lua returns nothing.
+	const std::string customDesc = lua::OnGetMiscItemDescription(&item);
+	if (!customDesc.empty()) {
+		AddItemInfoBoxString(customDesc);
+	} else if (isOil) {
+		PrintItemOil(item._iMiscId);
+	}
 
 	switch (ControlMode) {
 	case ControlTypes::None:
@@ -2513,6 +2519,10 @@ void CalcPlrDamage(Player &player, int minDamage, int maxDamage)
 		if (player._pClass == HeroClass::Monk) {
 			minDamage = std::max(minDamage, playerLevel / 2);
 			maxDamage = std::max<int>(maxDamage, playerLevel);
+		} else {
+			const auto floor = lua::OnGetUnarmedDamageFloor(&player, minDamage, maxDamage); // Lua mod support
+			minDamage = floor.first;
+			maxDamage = floor.second;
 		}
 	}
 
@@ -4407,6 +4417,8 @@ void UseItem(Player &player, item_misc_id mid, SpellID spellID, int spellFrom)
 	default:
 		break;
 	}
+
+	lua::OnItemUsed(player, static_cast<int>(mid), static_cast<int>(spellID)); // Lua mod support
 
 	if (prepareSpellID) {
 		assert(IsValidSpellFrom(spellFrom));

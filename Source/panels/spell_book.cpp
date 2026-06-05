@@ -16,6 +16,7 @@
 #include "engine/render/clx_render.hpp"
 #include "engine/render/text_render.hpp"
 #include "game_mode.hpp"
+#include "lua/lua_event.hpp"
 #include "missiles.h"
 #include "panels/spell_icons.hpp"
 #include "panels/ui_panels.hpp"
@@ -212,6 +213,9 @@ void CheckSBook()
 			if ((player._pAblSpells & GetSpellBitmask(sn)) != 0) {
 				st = SpellType::Skill;
 			}
+			// Lua mod support: block restricted learned spells from being selected as active cast spell.
+			if (st == SpellType::Spell && !lua::OnCanSelectSpellBookEntry(&player, static_cast<int>(sn)))
+				return;
 			player._pRSpell = sn;
 			player._pRSplType = st;
 			RedrawEverything();
