@@ -386,6 +386,10 @@ void DrawMonster(const Surface &out, Point tilePosition, Point targetBufferPosit
 		ClxDrawTRN(out, targetBufferPosition, sprite, GetInfravisionTRN());
 		return;
 	}
+	// Lua mod support — draw colored outline before the main sprite; -1 = no outline
+	const int luaOutlineColor = lua::OnGetMonsterOutlineColor(&monster);
+	if (luaOutlineColor >= 0)
+		ClxDrawOutlineSkipColorZero(out, static_cast<uint8_t>(luaOutlineColor), targetBufferPosition, sprite);
 	uint8_t *trn = nullptr;
 	if (monster.isUnique())
 		trn = monster.uniqueMonsterTRN.get();

@@ -177,6 +177,11 @@ void OnCustomItemRecreated(Item &item)
 	CallLuaEvent("OnCustomItemRecreated", &item);
 }
 
+void OnItemPickedUp(const Player &player, const Item &item) // Lua mod support
+{
+	CallLuaEvent("OnItemPickedUp", &player, &item);
+}
+
 int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip)
 {
 	return static_cast<int8_t>(CallLuaEventReturn<int>(static_cast<int>(defaultSkip), "OnGetAnimationSkipFrames", player, std::string(animType), static_cast<int>(defaultSkip)));
@@ -373,6 +378,16 @@ std::vector<std::string> OnGetMonsterInfo(const Monster *monster) // Lua mod sup
 		lines.push_back(*entry);
 	}
 	return lines;
+}
+
+std::string OnGetMonsterDisplayName(const Monster *monster) // Lua mod support
+{
+	return CallLuaEventReturn<std::string>(std::string(monster->name()), "OnGetMonsterDisplayName", monster);
+}
+
+int OnGetMonsterOutlineColor(const Monster *monster) // Lua mod support; -1 = no outline
+{
+	return CallLuaEventReturn<int>(-1, "OnGetMonsterOutlineColor", monster);
 }
 
 bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue) // Lua mod support

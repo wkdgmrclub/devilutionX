@@ -49,6 +49,7 @@
 #include "utils/sdl_geometry.h"
 #include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
+#include "lua/lua_event.hpp"
 
 namespace devilution {
 
@@ -1772,6 +1773,7 @@ void AutoGetItem(Player &player, Item *itemPointer, int ii)
 	}
 
 	if (done) {
+		lua::OnItemPickedUp(player, item); // Lua mod support
 		if (!autoEquipped && *GetOptions().Audio.itemPickupSound && &player == MyPlayer) {
 			PlaySFX(SfxID::GrabItem);
 		}

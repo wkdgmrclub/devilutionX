@@ -41,6 +41,7 @@ void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
 
 void OnCustomItemRecreated(Item &item);
+void OnItemPickedUp(const Player &player, const Item &item); // Lua mod support
 
 int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip);
 int8_t OnGetPlayerIdleFrames(const Player *player, int weaponGraphic, bool isInTown);
@@ -81,6 +82,8 @@ void OnLevelEnter();
 
 void OnGolemKilledMonster(const Monster *ally, const Monster *victim);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
+std::string OnGetMonsterDisplayName(const Monster *monster); // Lua mod support; default = monster.name()
+int OnGetMonsterOutlineColor(const Monster *monster); // Lua mod support; -1 = no outline
 bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue); // Lua mod support
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue); // Lua mod support
 bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue); // Lua mod support

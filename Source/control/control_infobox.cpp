@@ -416,7 +416,7 @@ void DrawInfoBox(const Surface &out)
 			if (leveltype != DTYPE_TOWN) {
 				const Monster &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
-				InfoString = monster.name();
+				InfoString = lua::OnGetMonsterDisplayName(&monster); // Lua mod support; default = monster.name()
 				// Lua mod support — checked before isUnique so mods can fully override the info display
 				std::vector<std::string> killLines = lua::OnGetMonsterInfo(&monster);
 				if (!killLines.empty()) {

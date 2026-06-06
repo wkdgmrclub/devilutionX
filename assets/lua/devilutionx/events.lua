@@ -335,6 +335,12 @@ local events = {
   OnItemUsed = CreateEvent(),
   __doc_OnItemUsed = "Called when a player consumes an item. Args: player, miscId (int), spellId (int). Effect already applied before this fires.",
 
+  ---Called after a floor item is successfully moved into the player's inventory, belt, or equipment slot.
+  ---Args: player, item (the floor item as it was before pickup — use item.seed to find the live inventory copy).
+  ---Fires before the floor entry is cleaned up, so item.seed and all attributes are still valid for identification.
+  OnItemPickedUp = CreateEvent(),
+  __doc_OnItemPickedUp = "Called after a floor item is picked up. Args: player, item (floor item snapshot). Use player:findScrollBySeed(item.seed) to get the live inventory copy.",
+
   ---Query event fired from GetSpellListSelection after the built-in starting-skill type promotion.
   ---Args: player, spellId (int), originalType (string), promotedType (string).
   ---Return "Skill", "Spell", "Scroll", or "Charges" to override the resolved type; return nil to keep promotedType.
@@ -373,6 +379,17 @@ local events = {
   ---Args: monster. Return a table of strings to fully replace the info block; return nil for default (PrintMonstHistory).
   OnGetMonsterInfo = CreateQueryEvent(),
   __doc_OnGetMonsterInfo = "Query: return a table of strings to replace the entire monster info block in the info box. Args: monster. Return nil for default behavior (PrintMonstHistory).",
+
+  ---Query event fired from the info box to override the name shown for a hovered monster.
+  ---Args: monster. Return a string to replace the default name; return nil to keep monster.name.
+  OnGetMonsterDisplayName = CreateQueryEvent(),
+  __doc_OnGetMonsterDisplayName = "Query: return a string to override the monster name in the info box header. Args: monster. Return nil for default (monster.name).",
+
+  ---Query event fired from DrawMonster to get a colored outline for a monster.
+  ---Args: monster. Return a palette color index (0–255) to draw a 1px outline; return nil for no outline.
+  ---PAL16_YELLOW+2 = 194 (gold/object color). PAL16_BLUE+7 = 183 (blue). PAL16_GRAY+5 = 245 (silver).
+  OnGetMonsterOutlineColor = CreateQueryEvent(),
+  __doc_OnGetMonsterOutlineColor = "Query: return a palette color index (0-255) to draw a colored outline around a monster sprite. Return nil for no outline.",
 
   ---Query event fired by FindClosest before a monster is selected as a missile bounce target.
   ---Args: monster. Return false to skip this monster; return nil or true to allow (default: true).
