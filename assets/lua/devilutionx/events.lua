@@ -373,6 +373,26 @@ local events = {
   ---Args: monster. Return a table of strings to fully replace the info block; return nil for default (PrintMonstHistory).
   OnGetMonsterInfo = CreateQueryEvent(),
   __doc_OnGetMonsterInfo = "Query: return a table of strings to replace the entire monster info block in the info box. Args: monster. Return nil for default behavior (PrintMonstHistory).",
+
+  ---Query event fired by FindClosest before a monster is selected as a missile bounce target.
+  ---Args: monster. Return false to skip this monster; return nil or true to allow (default: true).
+  OnMissileCanTargetMonster = CreateQueryEvent(),
+  __doc_OnMissileCanTargetMonster = "Query: return false to prevent a bouncing missile (Chain Lightning, Bone Spirit) from targeting this monster. Args: monster. Return nil or true to allow.",
+
+  ---Query event fired before a player's left-click attack or offensive spell cast is queued on a monster.
+  ---Args: player, monster. Return false to cancel (silently no-op); return nil or true to allow (default: true).
+  OnPlayerAttackMonster = CreateQueryEvent(),
+  __doc_OnPlayerAttackMonster = "Query: return false to cancel a player's attack or spell cast targeting a monster. Args: player, monster. Return nil or true to allow.",
+
+  ---Query event fired when CURSOR_HEALOTHER is active and the cursor is over a monster tile.
+  ---Return true to allow pcursmonst to be set (enabling monster click targeting); return nil or false to keep the default player-only restriction.
+  OnCanSelectMonsterWithCursor = CreateQueryEvent(),
+  __doc_OnCanSelectMonsterWithCursor = "Query: return true to allow monster selection while a player-only cursor (HealOther or Resurrect) is active. Args: cursorId (int, compare against player.CursorID.*). Return nil or false for default (player-only) behavior.",
+
+  ---Query event fired from TryIconCurs when CURSOR_HEALOTHER is active and a monster was clicked (pcursmonst != -1).
+  ---Args: monster. Return true to signal the action was handled (cursor resets to hand); return nil or false to leave cursor active.
+  OnCursorMonsterTarget = CreateQueryEvent(),
+  __doc_OnCursorMonsterTarget = "Query: called when a monster is clicked while the HealOther cursor is active. Args: monster. Return true to consume the click and dismiss cursor; return nil or false to leave cursor active.",
 }
 
 ---Registers a custom event type with the given name.

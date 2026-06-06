@@ -5,6 +5,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <sol/sol.hpp>
 
+#include "cursor.h"
 #include "data/file.hpp"
 #include "effects.h"
 #include "engine/backbuffer_state.hpp"
@@ -194,6 +195,11 @@ void InitPlayerUserType(sol::state_view &lua)
 	    [](const Player &player, int speechId) {
 		    player.Say(static_cast<HeroSpeech>(speechId));
 	    });
+	LuaSetDocFn(playerType, "enterHealOtherMode", "()",
+	    "Switch the cursor to CURSOR_HEALOTHER targeting mode.",
+	    [](const Player & /*player*/) {
+		    NewCursor(CURSOR_HEALOTHER);
+	    });
 	LuaSetDocFn(playerType, "modifyStat", "(name: string, amount: integer)",
 	    "Increase a base stat by the given amount. name is \"Strength\", \"Magic\", \"Dexterity\", or \"Vitality\". Recalculates inventory after modification.",
 	    [](Player &player, const std::string_view name, int amount) {
@@ -295,6 +301,13 @@ sol::table LuaPlayerModule(sol::state_view &lua)
 		heroSpeechTable[std::string(magic_enum::enum_name(val))] = static_cast<int>(val);
 	}
 	table["HeroSpeech"] = heroSpeechTable;
+
+	// Expose cursor_id enum so mods can compare cursor IDs in OnCanSelectMonsterWithCursor and similar hooks.
+	sol::table cursorIdTable = lua.create_table();
+	for (const auto val : magic_enum::enum_values<cursor_id>()) {
+		cursorIdTable[std::string(magic_enum::enum_name(val))] = static_cast<int>(val);
+	}
+	table["CursorID"] = cursorIdTable;
 
 	return table;
 }

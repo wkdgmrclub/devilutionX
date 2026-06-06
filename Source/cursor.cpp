@@ -301,8 +301,9 @@ bool TrySelectPixelBased(Point tile)
 			continue;
 
 		int monsterId = dMonster[adjacentTile.x][adjacentTile.y];
-		// Never select a monster if a target-player-only spell is selected
-		if (monsterId != 0 && IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT)) {
+		// Never select a monster if a target-player-only spell is selected,
+		// unless Lua opts in for this cursor state. // Lua mod support
+		if (monsterId != 0 && (IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT) || lua::OnCanSelectMonsterWithCursor(pcurs, false))) { // Lua mod support
 			monsterId = std::abs(monsterId) - 1;
 			if (leveltype == DTYPE_TOWN) {
 				const Towner &towner = Towners[monsterId];
@@ -458,7 +459,7 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
-	FreeCustomCursorSprites();
+	FreeCustomCursorSprites(); // Lua mod support
 	ClearCursor();
 }
 
@@ -480,7 +481,7 @@ ClxSprite GetInvItemSprite(int cursId)
 {
 	assert(cursId > 0);
 	const int itemCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
-	if (itemCurs >= ItemCAnimTblSize) {
+	if (itemCurs >= ItemCAnimTblSize) { // Lua mod support: custom cursor sprites registered by mods
 		const size_t customIdx = static_cast<size_t>(itemCurs - ItemCAnimTblSize);
 		if (customIdx < customCursorSprites.size()) {
 			return customCursorSprites[customIdx][0];
@@ -504,7 +505,7 @@ Size GetInvItemSize(int cursId)
 
 ClxSprite GetHalfSizeItemSprite(int cursId)
 {
-	if (cursId >= ItemCAnimTblSize) {
+	if (cursId >= ItemCAnimTblSize) { // Lua mod support
 		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
 		if (customIdx < customCursorSprites.size()) {
 			return customCursorSprites[customIdx][0];
@@ -516,7 +517,7 @@ ClxSprite GetHalfSizeItemSprite(int cursId)
 
 ClxSprite GetHalfSizeItemSpriteRed(int cursId)
 {
-	if (cursId >= ItemCAnimTblSize) {
+	if (cursId >= ItemCAnimTblSize) { // Lua mod support
 		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
 		if (customIdx < customCursorSprites.size()) {
 			return customCursorSprites[customIdx][0];
@@ -904,8 +905,9 @@ bool CheckCursorActions(const Point currentTile, bool flipflag)
 		return true;
 
 	if (leveltype != DTYPE_TOWN) {
-		// Never select a monster if a target-player-only spell is selected.
-		if (IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT)) {
+		// Never select a monster if a target-player-only spell is selected,
+		// unless Lua opts in for this cursor state. // Lua mod support
+		if (IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT) || lua::OnCanSelectMonsterWithCursor(pcurs, false)) { // Lua mod support
 			if (pcurstemp != -1 && TrySelectMonster(flipflag, currentTile, [](const Monster &monster) {
 				    if (!IsValidMonsterForSelection(monster))
 					    return false;

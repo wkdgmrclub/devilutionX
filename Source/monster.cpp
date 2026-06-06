@@ -1132,9 +1132,10 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 	const int dam = RandomIntBetween(mind, maxd) << 6;
 	ApplyMonsterDamage(DamageType::Physical, target, dam);
 
-	if (attacker.isPlayerMinion() && !gbIsMultiplayer && MyPlayer != nullptr) {
-		// Lua mod support
-		target.tag(*MyPlayer);
+	if (attacker.isPlayerMinion()) {
+		const auto playerId = static_cast<size_t>(attacker.goalVar3);
+		const Player &player = Players[playerId];
+		target.tag(player);
 	}
 
 	if (target.hasNoLife()) {
@@ -4191,8 +4192,8 @@ void GolumAi(Monster &golem)
 		return;
 	}
 
-	// Lua mod support: run every tick; Lua's OnGolemCanTargetMonster handles target filtering
-	UpdateEnemy(golem);
+	if ((golem.flags & MFLAG_TARGETS_MONSTER) == 0)
+		UpdateEnemy(golem);
 
 	if (golem.mode == MonsterMode::MeleeAttack) {
 		return;
@@ -4227,6 +4228,8 @@ void GolumAi(Monster &golem)
 		if (lua::OnGolemCanChaseTarget(&golem, &enemy, true)) {
 			if (AiPlanPath(golem))
 				return;
+		} else {
+			golem.flags &= ~MFLAG_TARGETS_MONSTER; // Lua mod support: allow re-evaluation next tick
 		}
 	}
 

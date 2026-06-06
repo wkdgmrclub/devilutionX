@@ -280,7 +280,7 @@ void LeftMouseCmd(bool bShift)
 		} else if (pcursmonst != -1) {
 			if (CanTalkToMonst(Monsters[pcursmonst])) {
 				NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
-			} else {
+			} else if (lua::OnPlayerAttackMonster(MyPlayer, &Monsters[pcursmonst], true)) { // Lua mod support
 				LastPlayerAction = PlayerActionType::AttackMonsterTarget;
 				NetSendCmdParam1(true, CMD_RATTACKID, pcursmonst);
 			}
@@ -293,7 +293,7 @@ void LeftMouseCmd(bool bShift)
 			if (pcursmonst != -1) {
 				if (CanTalkToMonst(Monsters[pcursmonst])) {
 					NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
-				} else {
+				} else if (lua::OnPlayerAttackMonster(MyPlayer, &Monsters[pcursmonst], true)) { // Lua mod support
 					LastPlayerAction = PlayerActionType::Attack;
 					NetSendCmdLoc(MyPlayerId, true, CMD_SATTACKXY, cursPosition);
 				}
@@ -302,8 +302,10 @@ void LeftMouseCmd(bool bShift)
 				NetSendCmdLoc(MyPlayerId, true, CMD_SATTACKXY, cursPosition);
 			}
 		} else if (pcursmonst != -1) {
-			LastPlayerAction = PlayerActionType::AttackMonsterTarget;
-			NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
+			if (lua::OnPlayerAttackMonster(MyPlayer, &Monsters[pcursmonst], true)) { // Lua mod support
+				LastPlayerAction = PlayerActionType::AttackMonsterTarget;
+				NetSendCmdParam1(true, CMD_ATTACKID, pcursmonst);
+			}
 		} else if (PlayerUnderCursor != nullptr && !PlayerUnderCursor->hasNoLife() && !myPlayer.friendlyMode) {
 			LastPlayerAction = PlayerActionType::AttackPlayerTarget;
 			NetSendCmdParam1(true, CMD_ATTACKPID, PlayerUnderCursor->getId());
@@ -2799,6 +2801,10 @@ bool TryIconCurs()
 			NewCursor(CURSOR_HAND);
 			return true;
 		}
+		if (pcursmonst != -1 && lua::OnCursorMonsterTarget(&Monsters[pcursmonst], false)) { // Lua mod support
+			NewCursor(CURSOR_HAND);
+			return true;
+		}
 
 		return false;
 	}
@@ -2867,7 +2873,9 @@ bool TryIconCurs()
 			const Direction sd = GetDirection(myPlayer.position.tile, cursPosition);
 			NetSendCmdLocParam4(true, CMD_SPELLXYD, cursPosition, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), static_cast<uint16_t>(sd), spellFrom);
 		} else if (pcursmonst != -1 && leveltype != DTYPE_TOWN) {
-			NetSendCmdParam4(true, CMD_SPELLID, pcursmonst, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
+			if (lua::OnPlayerAttackMonster(MyPlayer, &Monsters[pcursmonst], true)) { // Lua mod support
+				NetSendCmdParam4(true, CMD_SPELLID, pcursmonst, static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
+			}
 		} else if (PlayerUnderCursor != nullptr && !PlayerUnderCursor->hasNoLife() && !myPlayer.friendlyMode) {
 			NetSendCmdParam4(true, CMD_SPELLPID, PlayerUnderCursor->getId(), static_cast<int8_t>(spellID), static_cast<uint8_t>(spellType), spellFrom);
 		} else {

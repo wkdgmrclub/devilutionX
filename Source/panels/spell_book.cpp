@@ -76,11 +76,8 @@ void PrintSBookStr(const Surface &out, Point position, std::string_view text, Ui
 SpellType GetSBookTrans(SpellID ii, bool townok)
 {
 	const Player &player = *InspectPlayer;
-	if (ii == GetPlayerStartingLoadoutForClass(player._pClass).skill) {
-		if (townok && leveltype == DTYPE_TOWN && !GetSpellData(ii).isAllowedInTown()) // Lua mod support: prevent town use of skills not allowed there
-			return SpellType::Invalid;
+	if (ii == GetPlayerStartingLoadoutForClass(player._pClass).skill)
 		return SpellType::Skill;
-	}
 	SpellType st = SpellType::Spell;
 	if ((player._pISpells & GetSpellBitmask(ii)) != 0) {
 		st = SpellType::Charges;

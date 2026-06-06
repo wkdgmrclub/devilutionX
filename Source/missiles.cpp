@@ -158,8 +158,11 @@ Monster *FindClosest(Point source, int rad)
 {
 	std::optional<Point> monsterPosition = FindClosestValidPosition(
 	    [&source](Point target) {
-		    // search for a monster with clear line of sight
-		    return InDungeonBounds(target) && dMonster[target.x][target.y] > 0 && !CheckBlock(source, target);
+		    if (!InDungeonBounds(target)) return false;
+		    const int mid = dMonster[target.x][target.y];
+		    if (mid <= 0) return false;
+		    if (CheckBlock(source, target)) return false;
+		    return lua::OnMissileCanTargetMonster(&Monsters[mid - 1], true); // Lua mod support
 	    },
 	    source, 1, rad);
 

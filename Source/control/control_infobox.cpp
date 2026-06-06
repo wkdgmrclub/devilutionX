@@ -417,7 +417,7 @@ void DrawInfoBox(const Surface &out)
 				const Monster &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
 				InfoString = monster.name();
-				// Lua mod support — check before isUnique so tamed unique variants also use ally display
+				// Lua mod support — checked before isUnique so mods can fully override the info display
 				std::vector<std::string> killLines = lua::OnGetMonsterInfo(&monster);
 				if (!killLines.empty()) {
 					for (const std::string &line : killLines)

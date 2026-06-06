@@ -132,7 +132,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return static_cast<int>(m.uniqueType);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isQuestMonster", "boolean",
-	    "Whether this monster is quest-critical and should not be tameable or skippable (readonly)",
+	    "Whether this monster is quest-critical (named unique or Diablo). readonly",
 	    [](const Monster &monster) {
 		    return monster.isUnique() || monster.type().type == MT_DIABLO;
 	    });
@@ -171,6 +171,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Whether the tile this monster stands on is currently illuminated by any light source (readonly)",
 	    [](const Monster &monster) {
 		    return dLight[monster.position.tile.x][monster.position.tile.y] < LightsMax;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "isGolem", "boolean",
+	    "Whether this monster has the MFLAG_GOLEM flag set (Golem spell or player-controlled ally). readonly",
+	    [](const Monster &monster) -> bool {
+		    return (monster.flags & MFLAG_GOLEM) != 0;
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "hasRangedAttack", "boolean",
 	    "Whether this monster type has a ranged attack (based on original AI type; unchanged by taming). readonly",

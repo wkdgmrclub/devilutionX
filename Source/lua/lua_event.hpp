@@ -66,7 +66,7 @@ int OnGetHitRecoveryThreshold(const Player *player, int defaultThreshold);
 std::pair<int, int> OnGetUnarmedDamageFloor(const Player *player, int minDamage, int maxDamage);
 int OnGetBlockChanceBonus(const Player *player, int blockBonus);
 void OnOilyShrine(const Player *player);
-bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bool defaultValue);
+bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue);
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
 void OnItemUsed(const Player &player, int mid, int spellID); // Lua mod support
 std::string OnGetMiscItemDescription(const Item *item); // Lua mod support
@@ -81,6 +81,10 @@ void OnLevelEnter();
 
 void OnGolemKilledMonster(const Monster *ally, const Monster *victim);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
+bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue); // Lua mod support
+bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue); // Lua mod support
+bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue); // Lua mod support
+bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue); // Lua mod support
 
 // Speedbook hooks
 struct CustomSpeedbookEntry {

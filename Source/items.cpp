@@ -4689,28 +4689,10 @@ void SpawnBoy(int lvl)
 				if (IsAnyOf(itemType, ItemType::Bow, ItemType::Staff))
 					ivalue = INT_MAX;
 				break;
-			default: {
-				// Lua mod support
-				std::string_view typeName;
-				switch (itemType) {
-				case ItemType::LightArmor:  typeName = "LightArmor";  break;
-				case ItemType::MediumArmor: typeName = "MediumArmor"; break;
-				case ItemType::HeavyArmor:  typeName = "HeavyArmor";  break;
-				case ItemType::Shield:      typeName = "Shield";       break;
-				case ItemType::Axe:         typeName = "Axe";          break;
-				case ItemType::Bow:         typeName = "Bow";          break;
-				case ItemType::Mace:        typeName = "Mace";         break;
-				case ItemType::Sword:       typeName = "Sword";        break;
-				case ItemType::Helm:        typeName = "Helm";         break;
-				case ItemType::Staff:       typeName = "Staff";        break;
-				case ItemType::Ring:        typeName = "Ring";         break;
-				case ItemType::Amulet:      typeName = "Amulet";       break;
-				default:                                               break;
-				}
-				if (!typeName.empty() && lua::OnShouldExcludeWirtItem(&myPlayer, typeName, false))
+			default:
+				if (lua::OnShouldExcludeWirtItem(&myPlayer, static_cast<int>(itemType), false)) // Lua mod support
 					ivalue = INT_MAX;
 				break;
-			}
 			}
 		}
 	} while (keepgoing

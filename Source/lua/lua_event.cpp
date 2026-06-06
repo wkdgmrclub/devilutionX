@@ -315,9 +315,25 @@ void OnOilyShrine(const Player *player)
 	CallLuaEvent("OnOilyShrine", player);
 }
 
-bool OnShouldExcludeWirtItem(const Player *player, std::string_view itemType, bool defaultValue)
+bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnShouldExcludeWirtItem", player, std::string(itemType));
+	std::string_view typeName;
+	switch (static_cast<ItemType>(itemTypeInt)) {
+	case ItemType::LightArmor:  typeName = "LightArmor";  break;
+	case ItemType::MediumArmor: typeName = "MediumArmor"; break;
+	case ItemType::HeavyArmor:  typeName = "HeavyArmor";  break;
+	case ItemType::Shield:      typeName = "Shield";       break;
+	case ItemType::Axe:         typeName = "Axe";          break;
+	case ItemType::Bow:         typeName = "Bow";          break;
+	case ItemType::Mace:        typeName = "Mace";         break;
+	case ItemType::Sword:       typeName = "Sword";        break;
+	case ItemType::Helm:        typeName = "Helm";         break;
+	case ItemType::Staff:       typeName = "Staff";        break;
+	case ItemType::Ring:        typeName = "Ring";         break;
+	case ItemType::Amulet:      typeName = "Amulet";       break;
+	default:                    return defaultValue;
+	}
+	return CallLuaEventReturn<bool>(defaultValue, "OnShouldExcludeWirtItem", player, std::string(typeName));
 }
 
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic)
@@ -357,6 +373,26 @@ std::vector<std::string> OnGetMonsterInfo(const Monster *monster) // Lua mod sup
 		lines.push_back(*entry);
 	}
 	return lines;
+}
+
+bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue) // Lua mod support
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster);
+}
+
+bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue) // Lua mod support
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerAttackMonster", player, monster);
+}
+
+bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue) // Lua mod support
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnCanSelectMonsterWithCursor", cursorId);
+}
+
+bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue) // Lua mod support
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnCursorMonsterTarget", monster);
 }
 
 std::vector<CustomSpeedbookEntry> OnGetCustomSpeedbookScrollEntries(const Player *player)
