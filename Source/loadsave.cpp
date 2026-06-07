@@ -43,6 +43,7 @@
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/status_macros.hpp"
+#include "lua/lua_event.hpp" // Lua mod support
 
 namespace devilution {
 
@@ -2949,6 +2950,30 @@ void SaveLevel(SaveWriter &saveWriter)
 tl::expected<void, std::string> LoadLevel()
 {
 	return LoadLevel(nullptr);
+}
+
+void SavePlayerModData(SaveWriter &saveWriter) // Lua mod support
+{
+	const std::vector<uint32_t> data = lua::OnSavePlayerData();
+	if (data.empty())
+		return;
+	const size_t byteCount = sizeof(uint32_t) + data.size() * sizeof(uint32_t);
+	SaveHelper file(saveWriter, "luamoddata", byteCount);
+	file.WriteLE<uint32_t>(static_cast<uint32_t>(data.size()));
+	for (const uint32_t value : data)
+		file.WriteLE<uint32_t>(value);
+}
+
+void LoadPlayerModData() // Lua mod support
+{
+	LoadHelper file(OpenSaveArchive(gSaveNumber), "luamoddata");
+	if (!file.IsValid())
+		return; // old save or no mod data; _iLuaData defaults to 0
+	const uint32_t count = file.NextLE<uint32_t>();
+	std::vector<uint32_t> data(count);
+	for (uint32_t &value : data)
+		value = file.NextLE<uint32_t>();
+	lua::OnLoadPlayerData(data);
 }
 
 } // namespace devilution

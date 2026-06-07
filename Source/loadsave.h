@@ -46,5 +46,7 @@ tl::expected<void, std::string> LoadLevel();
 tl::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter);
 void LoadStash();
 void SaveStash(SaveWriter &stashWriter);
+void SavePlayerModData(SaveWriter &saveWriter); // Lua mod support
+void LoadPlayerModData();                       // Lua mod support
 
 } // namespace devilution

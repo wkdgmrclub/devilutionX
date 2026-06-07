@@ -35,7 +35,9 @@ bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 // When a Point is returned, GolumAi sets enemyPosition to it and tries AiPlanPath first (wall routing),
 // then falls back to RandomWalk if AiPlanPath returns false (clear line).
 std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition);
+bool OnGolemChooseAction(const Monster *golem, bool hasTarget, int distanceToTarget, bool hasLOS);
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
+void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY); // Lua mod support
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
@@ -71,6 +73,7 @@ bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool default
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
 void OnItemUsed(const Player &player, int mid, int spellID); // Lua mod support
 std::string OnGetMiscItemDescription(const Item *item); // Lua mod support
+bool OnPrepareUniqueInfoBox(const Item &item);          // Lua mod support; true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
 
 void LoadModsComplete();
 void GameDrawComplete();
@@ -101,6 +104,12 @@ std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::
 std::string OnGetSpeedbookSpellName(const Player *player, int spellId, std::string_view defaultName);
 bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_view spellType);
 bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
+
+// Mod data persistence hooks — Lua mod support
+// OnSavePlayerData: all handlers run; return values (tables of uint32) are concatenated into a flat vector.
+// OnLoadPlayerData: the same flat vector is passed back to all handlers on load.
+std::vector<uint32_t> OnSavePlayerData();
+void OnLoadPlayerData(const std::vector<uint32_t> &data);
 
 } // namespace lua
 

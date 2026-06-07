@@ -10,6 +10,7 @@
 
 #include <array>
 #include <functional>
+#include <optional>
 #include <string>
 
 #include <expected.hpp>
@@ -545,6 +546,12 @@ void M_UpdateRelations(const Monster &monster);
 void DoEnding();
 void PrepDoEnding();
 bool Walk(Monster &monster, Direction md);
+bool AiPlanPath(Monster &monster);                                    // Lua mod support
+void StartGolemRangedAttack(Monster &monster, MissileID missileType); // Lua mod support
+bool StartGolemCharge(Monster &monster);                              // Lua mod support
+void StartHeal(Monster &monster);                                     // Lua mod support
+void StartEating(Monster &monster);                                   // Lua mod support
+std::optional<Point> ScavengerFindCorpse(const Monster &monster);    // Lua mod support
 void GolumAi(Monster &golem);
 void DeleteMonsterList();
 void RemoveEnemyReferences(const Player &player);

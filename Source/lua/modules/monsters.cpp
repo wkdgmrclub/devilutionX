@@ -8,6 +8,8 @@
 #include <sol/sol.hpp>
 
 #include "crawl.hpp"
+#include "cursor.h"
+#include "dead.h"
 #include "diablo.h"
 #include "engine/lighting_defs.hpp"
 #include "data/file.hpp"
@@ -64,6 +66,7 @@ std::optional<size_t> EnsureMonsterType(_monster_id type, placeflag pflag)
 	if (!result) return std::nullopt;
 	const size_t idx = *result;
 	if (!InitMonsterGFX(LevelMonsterTypes[idx])) return std::nullopt;
+	RegisterLateMonsterTypeCorpse(LevelMonsterTypes[idx]);
 	return idx;
 }
 
@@ -199,6 +202,11 @@ void InitMonsterUserType(sol::state_view &lua)
 		        || ai == MonsterAIID::Necromorb
 		        || ai == MonsterAIID::BoneDemon;
 	    });
+	LuaSetDocReadonlyProperty(monsterType, "originalAiId", "integer",
+	    "The monster type's original AI ID as a MonsterAIID integer. Stable after taming (GolemAi overwrites monster.ai but not the type data). Use monsters.AIID constants. readonly // Lua mod support",
+	    [](const Monster &monster) {
+		    return static_cast<int>(monster.data().ai);
+	    });
 	LuaSetDocFn(monsterType, "snapToPlayer", "(player: Player)",
 	    "Instantly move this monster to the nearest free tile adjacent to the player.",
 	    [](const Monster &constMonster, const Player &player) {
@@ -240,6 +248,46 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Returns the Chebyshev tile distance between this monster and the given player.",
 	    [](const Monster &monster, const Player &player) {
 		    return monster.position.tile.WalkingDistance(player.position.tile);
+	    });
+	LuaSetDocFn(monsterType, "startRangedAttack", "(missileId: integer)",
+	    "Fire a ranged attack at the monster's current target using the given MissileID integer. Damage is drawn from the monster's natural min/max damage range. Use monsters.MissileID for missile ID constants.",
+	    [](const Monster &constMonster, int missileIdInt) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartGolemRangedAttack(monster, static_cast<MissileID>(missileIdInt));
+	    });
+	LuaSetDocFn(monsterType, "startCharge", "() -> boolean",
+	    "Fire a Rhino-missile charge at the current enemy target, using TARGET_MONSTERS (ally-safe). Returns true if the charge started. // Lua mod support",
+	    [](const Monster &constMonster) -> bool {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    return StartGolemCharge(monster);
+	    });
+	LuaSetDocFn(monsterType, "startHeal", "()",
+	    "Trigger the Gargoyle self-heal animation (reverses Special animation, enters Heal mode). // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartHeal(monster);
+	    });
+	LuaSetDocFn(monsterType, "startEating", "()",
+	    "Trigger the Scavenger corpse-eating animation (enters SpecialMeleeAttack mode). GolumAi will not interrupt until the animation finishes. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartEating(monster);
+	    });
+	LuaSetDocFn(monsterType, "findNearbyCorpse", "() -> Point|nil",
+	    "Search within 4 tiles for a corpse tile with line-of-sight. Returns the tile position or nil. // Lua mod support",
+	    [](const Monster &monster) -> sol::optional<Point> {
+		    const auto result = ScavengerFindCorpse(monster);
+		    if (!result) return sol::nullopt;
+		    return *result;
+	    });
+	LuaSetDocFn(monsterType, "walkToward", "(x: integer, y: integer) -> boolean",
+	    "Walk one step toward the given tile using AiPlanPath (wall routing) with RandomWalk fallback. Returns true if a step was taken. // Lua mod support",
+	    [](const Monster &constMonster, int x, int y) -> bool {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.enemyPosition = { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
+		    if (AiPlanPath(monster)) return true;
+		    const WorldTilePosition dest { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
+		    return Walk(monster, GetDirection(monster.position.tile, dest));
 	    });
 }
 
@@ -333,6 +381,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    // which breaks spawning two types from the same family (e.g. two drake
 			    // colors). Loading just the new type always works correctly. // Lua mod support
 			    if (!InitMonsterGFX(LevelMonsterTypes[typeIndex])) return nullptr;
+			    RegisterLateMonsterTypeCorpse(LevelMonsterTypes[typeIndex]);
 		    }
 
 		    if (ActiveMonsterCount >= MaxMonsters) return nullptr;
@@ -402,13 +451,53 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
 		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
 		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
-		    if (const auto result = PrepareUniqueMonst(Monsters[placement->monsterIndex], uniqueType, 0, 0, UniqueMonstersData[static_cast<size_t>(uniqueTypeIdx)]); !result)
-			    LogError("spawnUniqueAt: PrepareUniqueMonst failed: {}", result.error());
+		    if (const auto result = PrepareUniqueMonst(Monsters[placement->monsterIndex], uniqueType, 0, 0, UniqueMonstersData[static_cast<size_t>(uniqueTypeIdx)]); !result) {
+			    LogError("spawnUniqueAt: PrepareUniqueMonst failed for unique type {}: {}", uniqueTypeIdx, result.error());
+			    sgGameInitInfo.nDifficulty = savedDiff;
+			    Monster &m = Monsters[placement->monsterIndex];
+			    if (m.lightId != NO_LIGHT) { AddUnLight(m.lightId); m.lightId = NO_LIGHT; }
+			    M_ClearSquares(m);
+			    dMonster[m.position.tile.x][m.position.tile.y] = 0;
+			    m.isInvalid = true;
+			    DeleteMonsterList();
+			    return nullptr;
+		    }
 		    sgGameInitInfo.nDifficulty = savedDiff;
 		    NetSendCmdSpawnMonster(placement->spawnPos, Direction::South, static_cast<uint16_t>(placement->typeIndex),
 		        static_cast<uint16_t>(placement->monsterIndex), placement->seed, 0, 0);
 		    return &Monsters[placement->monsterIndex];
 	    });
+	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
+	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",
+	    []() -> Monster * {
+		    if (pcursmonst < 0 || pcursmonst >= static_cast<int>(MaxMonsters)) return nullptr;
+		    return &Monsters[pcursmonst];
+	    });
+	// Lua mod support: missile ID constants for use with monster:startRangedAttack()
+	{
+		sol::table missileIdTable = lua.create_table();
+		missileIdTable["Arrow"]          = static_cast<int>(MissileID::Arrow);
+		missileIdTable["Firebolt"]       = static_cast<int>(MissileID::Firebolt);
+		missileIdTable["LightningArrow"] = static_cast<int>(MissileID::LightningArrow);
+		missileIdTable["FireArrow"]      = static_cast<int>(MissileID::FireArrow);
+		missileIdTable["ChargedBolt"]    = static_cast<int>(MissileID::ChargedBolt);
+		missileIdTable["HolyBolt"]       = static_cast<int>(MissileID::HolyBolt);
+		missileIdTable["Fireball"]       = static_cast<int>(MissileID::Fireball);
+		table["MissileID"] = missileIdTable;
+	}
+	// Lua mod support: MonsterAIID constants for use with monster.originalAiId
+	{
+		sol::table aiIdTable = lua.create_table();
+		aiIdTable["Scavenger"]    = static_cast<int>(MonsterAIID::Scavenger);
+		aiIdTable["Rhino"]        = static_cast<int>(MonsterAIID::Rhino);
+		aiIdTable["Gargoyle"]     = static_cast<int>(MonsterAIID::Gargoyle);
+		aiIdTable["Bat"]          = static_cast<int>(MonsterAIID::Bat);
+		aiIdTable["Snake"]        = static_cast<int>(MonsterAIID::Snake);
+		aiIdTable["SkeletonKing"] = static_cast<int>(MonsterAIID::SkeletonKing);
+		aiIdTable["HorkDemon"]    = static_cast<int>(MonsterAIID::HorkDemon);
+		aiIdTable["GoatMelee"]    = static_cast<int>(MonsterAIID::GoatMelee);
+		table["AIID"] = aiIdTable;
+	}
 	return table;
 }
 

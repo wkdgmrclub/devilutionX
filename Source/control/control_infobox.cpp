@@ -350,24 +350,27 @@ void CheckPanelInfo()
 		const Player &myPlayer = *MyPlayer;
 		const SpellID spellId = myPlayer._pRSpell;
 		if (IsValidSpell(spellId)) {
+			// Lua mod support: allow overriding the displayed spell name for the panel hover info box.
+			const std::string spellDisplayName = lua::OnGetSpeedbookSpellName(
+			    &myPlayer, static_cast<int>(spellId), pgettext("spell", GetSpellData(spellId).sNameText));
 			switch (myPlayer._pRSplType) {
 			case SpellType::Skill:
-				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Skill")), pgettext("spell", GetSpellData(spellId).sNameText)));
+				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Skill")), spellDisplayName));
 				break;
 			case SpellType::Spell: {
-				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Spell")), pgettext("spell", GetSpellData(spellId).sNameText)));
+				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Spell")), spellDisplayName));
 				const int spellLevel = myPlayer.GetSpellLevel(spellId);
 				AddInfoBoxString(spellLevel == 0 ? _("Spell Level 0 - Unusable") : fmt::format(fmt::runtime(_("Spell Level {:d}")), spellLevel));
 			} break;
 			case SpellType::Scroll: {
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Scroll of {:s}")), pgettext("spell", GetSpellData(spellId).sNameText)));
+				AddInfoBoxString(fmt::format(fmt::runtime(_("Scroll of {:s}")), spellDisplayName));
 				const int scrollCount = c_count_if(InventoryAndBeltPlayerItemsRange { myPlayer }, [spellId](const Item &item) {
 					return item.isScrollOf(spellId);
 				});
 				AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount)), scrollCount));
 			} break;
 			case SpellType::Charges:
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Staff of {:s}")), pgettext("spell", GetSpellData(spellId).sNameText)));
+				AddInfoBoxString(fmt::format(fmt::runtime(_("Staff of {:s}")), spellDisplayName));
 				AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Charge", "{:d} Charges", myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges)), myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges));
 				break;
 			case SpellType::Invalid:

@@ -7,6 +7,9 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "DiabloUI/ui_flags.hpp"
 #include "cursor.h"
@@ -137,6 +140,11 @@ enum _unique_items : int32_t {
 	UITEM_INVALID = -1,
 };
 
+// Lua mod support: sentinel stored in Item::_iUid at render-time to redirect DrawUniqueInfo to the Lua-populated slot.
+// Never written to save files — only set on the global curruitem copy during hover rendering.
+constexpr int UITEM_LUA_CUSTOM = 0x7FFF;
+void SetLuaUniqueInfoBox(std::string_view name, const std::vector<std::string> &lines); // Lua mod support
+
 /*
 CF_LEVEL: Item Level (6 bits; value ranges from 0-63)
 CF_ONLYGOOD: Item is not able to have affixes with PLOK set to false
@@ -255,6 +263,7 @@ struct Item {
 	bool _iStatFlag = false;
 	ItemSpecialEffectHf _iDamAcFlags = ItemSpecialEffectHf::None;
 	uint32_t dwBuff = 0;
+	uint32_t _iLuaData = 0; // Lua mod support: generic mod-data slot; persisted in save files; base game never reads or writes this field
 
 	/**
 	 * @brief Clears this item and returns the old value

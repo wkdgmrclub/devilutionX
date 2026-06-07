@@ -95,6 +95,25 @@ void AddCorpse(Point tilePosition, int8_t dv, Direction ddir)
 	dCorpse[tilePosition.x][tilePosition.y] = (dv & 0x1F) + (static_cast<int>(ddir) << 5);
 }
 
+// Lua mod support
+void RegisterLateMonsterTypeCorpse(CMonster &monsterType)
+{
+	if (monsterType.corpseId != 0)
+		return;
+	for (int8_t i = stonendx; i < static_cast<int8_t>(MaxCorpses); i++) {
+		if (Corpses[i].width != 0)
+			continue;
+		const AnimStruct &animData = monsterType.getAnimData(MonsterGraphic::Death);
+		if (animData.sprites)
+			Corpses[i].sprites.emplace(*animData.sprites);
+		Corpses[i].frame = animData.frames - 1;
+		Corpses[i].width = animData.width;
+		Corpses[i].translationPaletteIndex = 0;
+		monsterType.corpseId = i + 1;
+		return;
+	}
+}
+
 void MoveLightsToCorpses()
 {
 	for (size_t i = 0; i < ActiveMonsterCount; i++) {

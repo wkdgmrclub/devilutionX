@@ -524,6 +524,7 @@ void pfile_write_hero(SaveWriter &saveWriter, bool writeGameData)
 	if (!gbVanilla) {
 		SaveHotkeys(saveWriter, myPlayer);
 		SaveHeroItems(saveWriter, myPlayer);
+		SavePlayerModData(saveWriter); // Lua mod support
 	}
 }
 
@@ -785,6 +786,7 @@ void pfile_read_player_from_save(uint32_t saveNum, Player &player)
 
 	UnPackPlayer(pkplr, player);
 	LoadHeroItems(player);
+	LoadPlayerModData(); // Lua mod support
 	RemoveAllInvalidItems(player);
 	CalcPlrInv(player, false);
 }

@@ -9,6 +9,7 @@
 
 #include "inv.h"
 #include "items.h"
+#include "levels/gendung.h"
 #include "lua/lua_global.hpp"
 #include "monster.h"
 #include "player.h"
@@ -123,6 +124,11 @@ std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTa
 	return std::nullopt;                                                                  // nil = engine default
 }
 
+bool OnGolemChooseAction(const Monster *golem, bool hasTarget, int distanceToTarget, bool hasLOS)
+{
+	return CallLuaEventReturn<bool>(false, "OnGolemChooseAction", golem, hasTarget, distanceToTarget, hasLOS);
+}
+
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY)
 {
 	// For scroll casts, resolve which specific scroll item was used so Lua can
@@ -153,6 +159,43 @@ void OnSpellCast(const Player *player, int spellId, int spellType, const Monster
 		}
 	}
 	CallLuaEvent("OnSpellCast", player, spellId, spellType, targetMonster, scrollSeed, targetX, targetY);
+}
+
+void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY)
+{
+	// Resolve scrollSeed from executedSpell (same logic as OnSpellCast but reads executedSpell).
+	uint32_t scrollSeed = 0;
+	if (spellType == static_cast<int>(SpellType::Scroll) && player != nullptr) {
+		const int8_t spellFrom = player->executedSpell.spellFrom;
+		if (spellFrom >= INVITEM_INV_FIRST && spellFrom <= INVITEM_INV_LAST) {
+			const Item &item = player->InvList[spellFrom - INVITEM_INV_FIRST];
+			if (!item.isEmpty()) scrollSeed = item._iSeed;
+		} else if (spellFrom >= INVITEM_BELT_FIRST && spellFrom <= INVITEM_BELT_LAST) {
+			const Item &item = player->SpdList[spellFrom - INVITEM_BELT_FIRST];
+			if (!item.isEmpty()) scrollSeed = item._iSeed;
+		}
+		if (scrollSeed == 0) {
+			const auto spellIdEnum = static_cast<SpellID>(spellId);
+			for (int i = 0; i < player->_pNumInv && scrollSeed == 0; i++) {
+				const Item &item = player->InvList[i];
+				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+					scrollSeed = item._iSeed;
+			}
+			for (int i = 0; i < MaxBeltItems && scrollSeed == 0; i++) {
+				const Item &item = player->SpdList[i];
+				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+					scrollSeed = item._iSeed;
+			}
+		}
+	}
+	// Look up monster at target position. Fires before CastSpell so the scroll is still in inventory.
+	// Monster may be nil if it moved off the target tile during the cast animation.
+	const Monster *targetMonster = nullptr;
+	const Point pos { targetX, targetY };
+	if (InDungeonBounds(pos) && dMonster[pos.x][pos.y] != 0) {
+		targetMonster = &Monsters[std::abs(dMonster[pos.x][pos.y]) - 1];
+	}
+	CallLuaEvent("OnSpellActionFrame", player, spellId, spellType, targetMonster, scrollSeed, targetX, targetY);
 }
 
 void OnPlayerGainExperience(const Player *player, uint32_t exp)
@@ -356,6 +399,11 @@ std::string OnGetMiscItemDescription(const Item *item) // Lua mod support
 	return CallLuaEventReturn<std::string>(std::string {}, "OnGetMiscItemDescription", item);
 }
 
+bool OnPrepareUniqueInfoBox(const Item &item) // Lua mod support
+{
+	return CallLuaEventReturn<bool>(false, "OnPrepareUniqueInfoBox", &item);
+}
+
 void OnGolemKilledMonster(const Monster *ally, const Monster *victim)
 {
 	CallLuaEvent("OnGolemKilledMonster", ally, victim);
@@ -453,6 +501,39 @@ bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_v
 bool OnCanSelectSpellBookEntry(const Player *player, int spellId)
 {
 	return CallLuaEventReturn<bool>(true, "OnCanSelectSpellBookEntry", player, spellId);
+}
+
+std::vector<uint32_t> OnSavePlayerData() // Lua mod support
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return {};
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnSavePlayerData", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return {};
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	sol::object result = SafeCallResult(fn(), /*optional=*/true);
+	if (!result.is<sol::table>()) return {};
+	std::vector<uint32_t> data;
+	const sol::table tbl = result.as<sol::table>();
+	for (int i = 1; ; ++i) {
+		const sol::optional<uint32_t> entry = tbl.get<sol::optional<uint32_t>>(i);
+		if (!entry) break;
+		data.push_back(*entry);
+	}
+	return data;
+}
+
+void OnLoadPlayerData(const std::vector<uint32_t> &data) // Lua mod support
+{
+	sol::table *events = GetLuaEvents();
+	if (events == nullptr) return;
+	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnLoadPlayerData", "trigger");
+	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return;
+	sol::state_view lua(events->lua_state());
+	sol::table luaData = lua.create_table();
+	for (size_t i = 0; i < data.size(); ++i)
+		luaData[static_cast<int>(i + 1)] = data[i];
+	const sol::protected_function fn = trigger->as<sol::protected_function>();
+	SafeCallResult(fn(luaData), /*optional=*/true);
 }
 
 } // namespace lua

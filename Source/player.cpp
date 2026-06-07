@@ -1010,6 +1010,7 @@ void DamageArmor(Player &player)
 bool DoSpell(Player &player)
 {
 	if (player.AnimInfo.currentFrame == player._pSFNum) {
+		lua::OnSpellActionFrame(&player, static_cast<int>(player.executedSpell.spellId), static_cast<int>(player.executedSpell.spellType), player.position.temp.x, player.position.temp.y); // Lua mod support
 		CastSpell(
 		    player,
 		    player.executedSpell.spellId,

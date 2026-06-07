@@ -872,14 +872,6 @@ void StartSpecialAttack(Monster &monster)
 	monster.position.old = monster.position.tile;
 }
 
-void StartEating(Monster &monster)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, monster.direction);
-	monster.mode = MonsterMode::SpecialMeleeAttack;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-}
-
 void DiabloDeath(Monster &diablo, bool sendmsg)
 {
 	PlaySFX(SfxID::DiabloDeath);
@@ -1057,15 +1049,6 @@ void StartFadeout(Monster &monster, Direction md, bool backwards)
  *
  * @param monster The monster that will be healed.
  */
-void StartHeal(Monster &monster)
-{
-	monster.changeAnimationData(MonsterGraphic::Special);
-	monster.animInfo.currentFrame = monster.type().getAnimData(MonsterGraphic::Special).frames - 1;
-	monster.flags |= MFLAG_LOCK_ANIMATION;
-	monster.mode = MonsterMode::Heal;
-	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
-}
-
 void SyncLightPosition(Monster &monster)
 {
 	if (monster.lightId == NO_LIGHT)
@@ -1866,39 +1849,6 @@ bool RoundWalk(Monster &monster, Direction direction, int8_t *dir)
 	return RandomWalk(monster, Opposite(turn90deg));
 }
 
-bool AiPlanPath(Monster &monster)
-{
-	if (monster.type().type != MT_GOLEM) {
-		if (monster.activeForTicks == 0)
-			return false;
-		if (monster.mode != MonsterMode::Stand)
-			return false;
-		if (IsNoneOf(monster.goal, MonsterGoal::Normal, MonsterGoal::Move, MonsterGoal::Attack))
-			return false;
-		if (monster.position.tile == GolemHoldingCell)
-			return false;
-	}
-
-	const bool clear = LineClear(
-	    [&monster](Point position) { return (IsTileWalkable(position) && IsTileSafe(monster, position)); },
-	    monster.position.tile,
-	    monster.enemyPosition);
-	if (!clear || (monster.pathCount >= 5 && monster.pathCount < 8)) {
-		if ((monster.flags & MFLAG_CAN_OPEN_DOOR) != 0)
-			MonstCheckDoors(monster);
-		monster.pathCount++;
-		if (monster.pathCount < 5)
-			return false;
-		if (AiPlanWalk(monster))
-			return true;
-	}
-
-	if (monster.type().type != MT_GOLEM)
-		monster.pathCount = 0;
-
-	return false;
-}
-
 void AiAvoidance(Monster &monster)
 {
 	if (monster.mode != MonsterMode::Stand || monster.activeForTicks == 0) {
@@ -2184,28 +2134,6 @@ void SkeletonBowAi(Monster &monster)
 	}
 
 	monster.checkStandAnimationIsLoaded(md);
-}
-
-std::optional<Point> ScavengerFindCorpse(const Monster &scavenger)
-{
-	const bool reverseSearch = FlipCoin();
-	const int first = reverseSearch ? 4 : -4;
-	const int last = reverseSearch ? -4 : 4;
-	const int increment = reverseSearch ? -1 : 1;
-
-	for (int y = first; y <= last; y += increment) {
-		for (int x = first; x <= last; x += increment) {
-			Point position = scavenger.position.tile + Displacement { x, y };
-			if (!InDungeonBounds(position))
-				continue;
-			if (dCorpse[position.x][position.y] == 0)
-				continue;
-			if (!IsLineNotSolid(scavenger.position.tile, position))
-				continue;
-			return position;
-		}
-	}
-	return {};
 }
 
 void ScavengerAi(Monster &monster)
@@ -3295,6 +3223,79 @@ bool PosOkMovingMissile(Point position)
 
 } // namespace
 
+// Lua mod support: exposed for Lua bindings; moved out of anonymous namespace to resolve ADL ambiguity.
+void StartEating(Monster &monster)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, monster.direction);
+	monster.mode = MonsterMode::SpecialMeleeAttack;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+}
+
+void StartHeal(Monster &monster)
+{
+	monster.changeAnimationData(MonsterGraphic::Special);
+	monster.animInfo.currentFrame = monster.type().getAnimData(MonsterGraphic::Special).frames - 1;
+	monster.flags |= MFLAG_LOCK_ANIMATION;
+	monster.mode = MonsterMode::Heal;
+	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
+}
+
+bool AiPlanPath(Monster &monster)
+{
+	if (monster.type().type != MT_GOLEM) {
+		if (monster.activeForTicks == 0)
+			return false;
+		if (monster.mode != MonsterMode::Stand)
+			return false;
+		if (IsNoneOf(monster.goal, MonsterGoal::Normal, MonsterGoal::Move, MonsterGoal::Attack))
+			return false;
+		if (monster.position.tile == GolemHoldingCell)
+			return false;
+	}
+
+	const bool clear = LineClear(
+	    [&monster](Point position) { return (IsTileWalkable(position) && IsTileSafe(monster, position)); },
+	    monster.position.tile,
+	    monster.enemyPosition);
+	if (!clear || (monster.pathCount >= 5 && monster.pathCount < 8)) {
+		if ((monster.flags & MFLAG_CAN_OPEN_DOOR) != 0)
+			MonstCheckDoors(monster);
+		monster.pathCount++;
+		if (monster.pathCount < 5)
+			return false;
+		if (AiPlanWalk(monster))
+			return true;
+	}
+
+	if (monster.type().type != MT_GOLEM)
+		monster.pathCount = 0;
+
+	return false;
+}
+
+std::optional<Point> ScavengerFindCorpse(const Monster &scavenger)
+{
+	const bool reverseSearch = FlipCoin();
+	const int first = reverseSearch ? 4 : -4;
+	const int last = reverseSearch ? -4 : 4;
+	const int increment = reverseSearch ? -1 : 1;
+
+	for (int y = first; y <= last; y += increment) {
+		for (int x = first; x <= last; x += increment) {
+			Point position = scavenger.position.tile + Displacement { x, y };
+			if (!InDungeonBounds(position))
+				continue;
+			if (dCorpse[position.x][position.y] == 0)
+				continue;
+			if (!IsLineNotSolid(scavenger.position.tile, position))
+				continue;
+			return position;
+		}
+	}
+	return {};
+}
+
 // Lua mod support
 void ChangeMonsterToGolem(Monster &monster)
 {
@@ -4182,6 +4183,28 @@ bool Walk(Monster &monster, Direction md)
 	return true;
 }
 
+// Lua mod support
+void StartGolemRangedAttack(Monster &monster, MissileID missileType)
+{
+	StartRangedAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
+}
+
+// Lua mod support: fire a charge missile targeting monsters (not players), matching RhinoAi/BatAi/SnakeAi
+// behaviour except the target is TARGET_MONSTERS. Returns true if the charge was started.
+bool StartGolemCharge(Monster &monster)
+{
+	if (!LineClear([&monster](Point position) { return IsTileAvailable(monster, position); }, monster.position.tile, monster.enemyPosition))
+		return false;
+	const Direction md = GetDirection(monster.position.tile, monster.enemyPosition);
+	if (AddMissile(monster.position.tile, monster.enemyPosition, md, MissileID::Rhino, TARGET_MONSTERS, monster, 0, 0) == nullptr)
+		return false;
+	if (monster.data().hasSpecialSound)
+		PlayEffect(monster, MonsterSound::Special);
+	monster.occupyTile(monster.position.tile, true);
+	monster.mode = MonsterMode::Charge;
+	return true;
+}
+
 void GolumAi(Monster &golem)
 {
 	if (golem.position.tile.x == 1 && golem.position.tile.y == 0) {
@@ -4195,8 +4218,26 @@ void GolumAi(Monster &golem)
 	if ((golem.flags & MFLAG_TARGETS_MONSTER) == 0)
 		UpdateEnemy(golem);
 
-	if (golem.mode == MonsterMode::MeleeAttack) {
+	// Lua mod support: don't interrupt ongoing attack or special-animation modes
+	if (IsAnyOf(golem.mode, MonsterMode::MeleeAttack, MonsterMode::RangedAttack,
+	        MonsterMode::SpecialMeleeAttack, MonsterMode::Heal, MonsterMode::Charge)) {
 		return;
+	}
+
+	// Lua mod support
+	{
+		const bool hasTarget = (golem.flags & MFLAG_NO_ENEMY) == 0;
+		int dist = -1;
+		bool hasLOS = false;
+		if (hasTarget) {
+			const Monster &enemy = Monsters[golem.enemy];
+			const int dx = std::abs(golem.position.tile.x - enemy.position.future.x);
+			const int dy = std::abs(golem.position.tile.y - enemy.position.future.y);
+			dist = std::max(dx, dy);
+			hasLOS = LineClearMovingMissile(golem.position.tile, enemy.position.tile);
+		}
+		if (lua::OnGolemChooseAction(&golem, hasTarget, dist, hasLOS))
+			return;
 	}
 
 	if ((golem.flags & MFLAG_NO_ENEMY) == 0) {
@@ -4230,6 +4271,7 @@ void GolumAi(Monster &golem)
 				return;
 		} else {
 			golem.flags &= ~MFLAG_TARGETS_MONSTER; // Lua mod support: allow re-evaluation next tick
+			golem.flags |= MFLAG_NO_ENEMY;          // Lua mod support: prevent stale monster index from being read as player index before next UpdateEnemy
 		}
 	}
 

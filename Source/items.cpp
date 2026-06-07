@@ -194,6 +194,18 @@ enum class PlayerArmorGraphic : uint8_t {
 
 Item curruitem;
 
+// Lua mod support: populated by Lua via SetLuaUniqueInfoBox() when OnPrepareUniqueInfoBox returns true.
+// curruitem._iUid is set to UITEM_LUA_CUSTOM at that point so DrawUniqueInfo uses this slot.
+namespace {
+struct { std::string name; std::vector<std::string> lines; } g_luaUniqueSlot;
+} // namespace
+
+void SetLuaUniqueInfoBox(std::string_view name, const std::vector<std::string> &lines) // Lua mod support
+{
+	g_luaUniqueSlot.name = name;
+	g_luaUniqueSlot.lines.assign(lines.begin(), lines.begin() + std::min(static_cast<int>(lines.size()), 6));
+}
+
 /** Holds item get records, tracking items being recently looted. This is in an effort to prevent items being picked up more than once. */
 ItemGetRecordStruct itemrecord[MAXITEMS];
 
@@ -4155,8 +4167,28 @@ bool DoOil(Player &player, int cii)
 void DrawUniqueInfo(const Surface &out)
 {
 	const Point position = DrawUniqueInfoWindow(out);
-
 	Rectangle rect { position + Displacement { 32, 56 }, { 257, 0 } };
+
+	// Lua mod support: render Lua-supplied content instead of UniqueItems[_iUid] when the slot is active.
+	if (curruitem._iUid == UITEM_LUA_CUSTOM) {
+		DrawString(out, g_luaUniqueSlot.name, rect, { .flags = UiFlags::AlignCenter });
+		const Rectangle divLine { position + Displacement { 26, 25 }, { 267, 3 } };
+		out.BlitFrom(out, MakeSdlRect(divLine), divLine.position + Displacement { 0, (5 * 12) + 13 });
+		const TextRenderOptions opts { .flags = UiFlags::ColorWhite | UiFlags::AlignCenter };
+		const GameFontTables fontSize = GetFontSizeFromUiFlags(opts.flags);
+		rect.position.y += (10 - static_cast<int>(g_luaUniqueSlot.lines.size())) * 12;
+		for (const auto &line : g_luaUniqueSlot.lines) {
+			rect.position.y += 2 * 12;
+			const std::string wrapped = WordWrapString(line, rect.size.width);
+			DrawString(out, wrapped, rect, opts);
+			for (const std::string_view sv : SplitByChar(wrapped, '\n')) {
+				if (sv.data() + sv.size() == wrapped.data() + wrapped.size()) break;
+				rect.position.y += GetLineHeight(sv, fontSize);
+			}
+		}
+		return;
+	}
+
 	const UniqueItem &uitem = UniqueItems[curruitem._iUid];
 	DrawString(out, _(uitem.UIName), rect, { .flags = UiFlags::AlignCenter });
 
@@ -4218,6 +4250,7 @@ void PrintItemDetails(const Item &item)
 		AddItemInfoBoxString(_("unique item"));
 		ShowUniqueItemInfoBox = true;
 		curruitem = item;
+		if (lua::OnPrepareUniqueInfoBox(curruitem)) curruitem._iUid = UITEM_LUA_CUSTOM; // Lua mod support
 	}
 	PrintItemInfo(item);
 }

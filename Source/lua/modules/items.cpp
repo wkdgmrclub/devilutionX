@@ -92,6 +92,7 @@ void InitItemUserType(sol::state_view &lua)
 	LuaSetDocProperty(itemType, "statFlag", "boolean", "Equippable flag", &Item::_iStatFlag);
 	LuaSetDocProperty(itemType, "damAcFlags", "ItemSpecialEffectHf", "Secondary special effect flags", &Item::_iDamAcFlags);
 	LuaSetDocProperty(itemType, "buff", "number", "Secondary creation flags", &Item::dwBuff);
+	LuaSetDocProperty(itemType, "modData", "number", "Mod-data slot (uint32); persisted through save/load; base game never reads or writes this field", &Item::_iLuaData); // Lua mod support
 
 	// Member functions
 	LuaSetDocFn(itemType, "pop", "() -> Item", "Clears this item and returns the old value", &Item::pop);
@@ -568,7 +569,7 @@ int LuaRegisterCursorGraphic(const std::string &path, int width)
 	return RegisterCustomCursorGraphic(std::move(sprite));
 }
 
-void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride)
+void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride) // Lua mod support
 {
 	if (ActiveItemCount >= MAXITEMS)
 		return;
@@ -592,6 +593,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	item._iCreateInfo = 0;
 	item._iIdentified = true;
 	if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
+	if (modDataOverride.has_value()) item._iLuaData = *modDataOverride; // Lua mod support
 
 	if (nameOverride.has_value()) {
 		CopyUtf8(item._iName, *nameOverride, sizeof(item._iName));
@@ -671,12 +673,25 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addItemData", "(itemData: table[], baseMappingId: number)", "Add item definitions from a list of Lua tables. Required field: name. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, skipSpeedbook, value.", AddItemData);
 	LuaSetDocFn(table, "addUniqueItemData", "(itemData: table[], baseMappingId: number)", "Add unique item definitions from a list of Lua tables. Required field: name. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID (pass to item's cursorGraphic field).", LuaRegisterCursorGraphic);
-	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer)",
-	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (preserved through save/load; use to encode mod-specific data; bit 0 must be 0).",
+	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: integer)",
+	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (uint32; persisted through save/load; base game ignores this field).",
 	    LuaSpawnItemAt);
 	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer)",
 	    "Add a custom item to the healer's buy list at the given identified value (shop price). Idempotent — calling again while the item is already in stock is a no-op. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so the item reappears after purchase.",
 	    LuaAddToHealerStock);
+	// Lua mod support: populate the custom unique info box slot.
+	// Call inside OnPrepareUniqueInfoBox then return true to redirect DrawUniqueInfo to this content.
+	LuaSetDocFn(table, "setCustomUniqueBox",
+	    "(name: string, lines: string[]) -> void",
+	    "Set the title and up to 6 content lines for the Lua-custom unique item info popup. Call inside OnPrepareUniqueInfoBox before returning true.",
+	    [](std::string_view name, sol::table lines) {
+		    std::vector<std::string> lineVec;
+		    for (std::size_t i = 1; i <= lines.size() && lineVec.size() < 6; ++i) {
+			    sol::optional<std::string> s = lines.get<sol::optional<std::string>>(i);
+			    if (s) lineVec.push_back(*s);
+		    }
+		    SetLuaUniqueInfoBox(name, lineVec);
+	    });
 
 	// Expose enums through the module table
 	table["ItemIndex"] = lua["ItemIndex"];

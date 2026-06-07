@@ -129,6 +129,11 @@ local events = {
   OnSpellCast = CreateEvent(),
   __doc_OnSpellCast = "Called when a player casts a spell or uses a skill. spellType: 0=Skill 1=Spell 2=Scroll 3=Charges. targetMonster is nil for non-monster-targeted casts.",
 
+  ---Called at the mid-animation release frame of a spell cast (equivalent to _pSFNum). Same parameters as OnSpellCast.
+  ---Fires after the vanilla CastSpell call. targetMonster is looked up by target position and may be nil if the monster moved.
+  OnSpellActionFrame = CreateEvent(),
+  __doc_OnSpellActionFrame = "Called at the spell fire frame (_pSFNum) during cast animation. Same args as OnSpellCast. Use this instead of OnSpellCast when the effect should sync with the animation.",
+
   ---Called when Player takes damage.
   OnPlayerTakeDamage = CreateEvent(),
   __doc_OnPlayerTakeDamage = "Called when Player takes damage.",
@@ -317,6 +322,12 @@ local events = {
   OnGolemIdle = CreateQueryEvent(),
   __doc_OnGolemIdle = "Query: return Point to walk (AiPlanPath first, RandomWalk fallback), false to stand still, nil for engine default. Args: ally, hasTarget (bool), enemyPosition (Point).",
 
+  ---Query event fired from GolumAi after UpdateEnemy, before the melee-attack and chase block.
+  ---Args: ally (Monster), hasTarget (bool), distanceToTarget (int, -1 if no target), hasLOS (bool).
+  ---Return true to signal Lua handled this tick entirely (engine skips attack/chase/idle). Return nil or false to let engine proceed normally.
+  OnGolemChooseAction = CreateQueryEvent(),
+  __doc_OnGolemChooseAction = "Query: return true to consume the GolumAi tick (skip melee/chase/idle). Args: ally, hasTarget (bool), distanceToTarget (int), hasLOS (bool).",
+
   ---Query event fired from SpawnBoy (Wirt's item generation) for classes not handled by the built-in switch.
   ---itemType is one of: "LightArmor", "MediumArmor", "HeavyArmor", "Shield", "Axe", "Bow", "Mace", "Sword", "Helm", "Staff", "Ring", "Amulet".
   ---Return true to exclude this item type (forces a reroll). Return nil or false to allow.
@@ -370,6 +381,13 @@ local events = {
   OnGetMiscItemDescription = CreateQueryEvent(),
   __doc_OnGetMiscItemDescription = "Query: return a string to add or override the description line for any misc item in the info box. Receives (item). Return nil for default behavior.",
 
+  ---Query event fired from PrintItemDetails when an ITEM_QUALITY_UNIQUE item is hovered, after curruitem is set.
+  ---Call items.setCustomUniqueBox(name, lines) inside this handler to populate the slot, then return true.
+  ---Returning true causes DrawUniqueInfo to use the Lua-populated slot instead of UniqueItems[_iUid].
+  ---Returning nil or false uses the normal engine rendering (UniqueItems table data).
+  OnPrepareUniqueInfoBox = CreateQueryEvent(),
+  __doc_OnPrepareUniqueInfoBox = "Query: fired when a unique item is hovered. Call items.setCustomUniqueBox(name, lines) then return true to replace the unique popup. Return nil for default engine rendering.",
+
   ---Event fired when a MFLAG_GOLEM monster kills another monster via melee.
   ---Args: ally (Monster), victim (Monster).
   OnGolemKilledMonster = CreateEvent(),
@@ -410,6 +428,17 @@ local events = {
   ---Args: monster. Return true to signal the action was handled (cursor resets to hand); return nil or false to leave cursor active.
   OnCursorMonsterTarget = CreateQueryEvent(),
   __doc_OnCursorMonsterTarget = "Query: called when a monster is clicked while the HealOther cursor is active. Args: monster. Return true to consume the click and dismiss cursor; return nil or false to leave cursor active.",
+
+  ---Called when the player's save file is written. Return a sequence table of uint32 values to persist.
+  ---Stored in a separate \"luamoddata\" entry in the save MPQ; the base game item format is not modified.
+  ---Use OnLoadPlayerData to restore the values on the next load.
+  OnSavePlayerData = CreateEvent(),
+  __doc_OnSavePlayerData = "Called on save. Return a sequence table of uint32 values to persist in a separate mod-data file. Use OnLoadPlayerData to restore on load.",
+
+  ---Called when the player's save file is loaded. Receives the flat uint32 sequence previously returned
+  ---by OnSavePlayerData. Not called for old saves that predate the mod-data file.
+  OnLoadPlayerData = CreateEvent(),
+  __doc_OnLoadPlayerData = "Called on load with the flat uint32 sequence from the previous OnSavePlayerData return. Not called for old saves lacking mod data.",
 }
 
 ---Registers a custom event type with the given name.

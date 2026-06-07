@@ -16,6 +16,7 @@
 #include "engine/render/clx_render.hpp"
 #include "engine/render/primitive_render.hpp"
 #include "game_mode.hpp"
+#include "lua/lua_event.hpp" // Lua mod support
 #include "options.h"
 #include "utils/language.h"
 #include "utils/str_cat.hpp"
@@ -143,8 +144,9 @@ void DrawMonsterHealthBar(const Surface &out)
 		UnsafeDrawVerticalLine(out, { position.x + width - border - 1, position.y + border + 1 }, borderHeight, borderColor);
 	}
 
+	const std::string displayName = lua::OnGetMonsterDisplayName(&monster); // Lua mod support
 	UiFlags style = UiFlags::AlignCenter | UiFlags::VerticalCenter;
-	DrawString(out, monster.name(), { position + Displacement { -1, 1 }, { width, height } },
+	DrawString(out, displayName, { position + Displacement { -1, 1 }, { width, height } },
 	    { .flags = style | UiFlags::ColorBlack });
 	if (monster.isUnique())
 		style |= UiFlags::ColorWhitegold;
@@ -152,7 +154,7 @@ void DrawMonsterHealthBar(const Surface &out)
 		style |= UiFlags::ColorBlue;
 	else
 		style |= UiFlags::ColorWhite;
-	DrawString(out, monster.name(), { position, { width, height } },
+	DrawString(out, displayName, { position, { width, height } },
 	    { .flags = style });
 
 	if (multiplier > 0)
