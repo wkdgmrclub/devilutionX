@@ -551,6 +551,8 @@ void StartGolemRangedAttack(Monster &monster, MissileID missileType); // Lua mod
 bool StartGolemCharge(Monster &monster);                              // Lua mod support
 void StartHeal(Monster &monster);                                     // Lua mod support
 void StartEating(Monster &monster);                                   // Lua mod support
+void StartFadeout(Monster &monster, Direction md, bool backwards);    // Lua mod support
+void StartFadein(Monster &monster, Direction md, bool backwards);     // Lua mod support
 std::optional<Point> ScavengerFindCorpse(const Monster &monster);    // Lua mod support
 void GolumAi(Monster &golem);
 void DeleteMonsterList();

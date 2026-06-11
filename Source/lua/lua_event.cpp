@@ -503,6 +503,16 @@ bool OnCanSelectSpellBookEntry(const Player *player, int spellId)
 	return CallLuaEventReturn<bool>(true, "OnCanSelectSpellBookEntry", player, spellId);
 }
 
+int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t selectedSeed, int defaultSlot)
+{
+	return CallLuaEventReturn<int>(defaultSlot, "OnResolveCustomScrollSlot", player, spellId, selectedSeed, defaultSlot);
+}
+
+bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed)
+{
+	return CallLuaEventReturn<bool>(true, "OnCanCastScroll", player, spellId, selectedSeed);
+}
+
 std::vector<uint32_t> OnSavePlayerData() // Lua mod support
 {
 	sol::table *events = GetLuaEvents();

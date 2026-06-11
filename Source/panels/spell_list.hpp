@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,7 @@ struct SpellListItem {
 	bool isSelected;
 	std::string displayName {};      // non-empty: override spell name in info box
 	int customScrollCount = -1;      // ≥0: override scroll count in info box
+	uint32_t customScrollSeed = 0;   // Lua mod support: seed of the custom speedbook scroll entry (0 = none)
 };
 
 /**

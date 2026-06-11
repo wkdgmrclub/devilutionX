@@ -62,6 +62,10 @@ std::optional<size_t> EnsureMonsterType(_monster_id type, placeflag pflag)
 	for (size_t i = 0; i < LevelMonsterTypeCount; i++) {
 		if (LevelMonsterTypes[i].type == type) return i;
 	}
+	// AddMonsterType does not bounds-check the level type table; registering a new type
+	// at capacity would index LevelMonsterTypes[MaxLvlMTypes] out of bounds. Fail
+	// gracefully so the caller returns nil (and the mod refunds the scroll). // Lua mod support
+	if (LevelMonsterTypeCount >= MaxLvlMTypes) return std::nullopt;
 	auto result = AddMonsterType(type, pflag);
 	if (!result) return std::nullopt;
 	const size_t idx = *result;
@@ -180,6 +184,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster) -> bool {
 		    return (monster.flags & MFLAG_GOLEM) != 0;
 	    });
+	LuaSetDocReadonlyProperty(monsterType, "isHidden", "boolean",
+	    "Whether this monster has the MFLAG_HIDDEN flag set (faded out / invisible, e.g. a cloaked Sneak monster). readonly // Lua mod support",
+	    [](const Monster &monster) -> bool {
+		    return (monster.flags & MFLAG_HIDDEN) != 0;
+	    });
 	LuaSetDocReadonlyProperty(monsterType, "hasRangedAttack", "boolean",
 	    "Whether this monster type has a ranged attack (based on original AI type; unchanged by taming). readonly",
 	    [](const Monster &monster) -> bool {
@@ -256,7 +265,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    StartGolemRangedAttack(monster, static_cast<MissileID>(missileIdInt));
 	    });
 	LuaSetDocFn(monsterType, "startCharge", "() -> boolean",
-	    "Fire a Rhino-missile charge at the current enemy target, using TARGET_MONSTERS (ally-safe). Returns true if the charge started. // Lua mod support",
+	    "Fire a Rhino-missile charge at the current enemy target. Ally-safe via the monster's MFLAG_TARGETS_MONSTER flag (not the missile caster). Returns true if the charge started. // Lua mod support",
 	    [](const Monster &constMonster) -> bool {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    return StartGolemCharge(monster);
@@ -272,6 +281,18 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    StartEating(monster);
+	    });
+	LuaSetDocFn(monsterType, "startFadeout", "()",
+	    "Trigger the Sneak fade-out animation (enters FadeOut mode; sets MFLAG_HIDDEN when the animation completes). Used to cloak a tamed stealth ally. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartFadeout(monster, monster.direction, true);
+	    });
+	LuaSetDocFn(monsterType, "startFadein", "()",
+	    "Trigger the Sneak fade-in animation (enters FadeIn mode; clears MFLAG_HIDDEN immediately). Used to materialise a tamed stealth ally. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartFadein(monster, monster.direction, false);
 	    });
 	LuaSetDocFn(monsterType, "findNearbyCorpse", "() -> Point|nil",
 	    "Search within 4 tiles for a corpse tile with line-of-sight. Returns the tile position or nil. // Lua mod support",
@@ -488,6 +509,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	// Lua mod support: MonsterAIID constants for use with monster.originalAiId
 	{
 		sol::table aiIdTable = lua.create_table();
+		aiIdTable["Sneak"]        = static_cast<int>(MonsterAIID::Sneak);
 		aiIdTable["Scavenger"]    = static_cast<int>(MonsterAIID::Scavenger);
 		aiIdTable["Rhino"]        = static_cast<int>(MonsterAIID::Rhino);
 		aiIdTable["Gargoyle"]     = static_cast<int>(MonsterAIID::Gargoyle);

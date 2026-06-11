@@ -74,9 +74,9 @@ bool IsValidMonsterForSelection(const Monster &monster)
 {
 	if (monster.hasNoLife())
 		return false;
+	if (monster.isPlayerMinion()) // Lua mod support — delegate to hook so cloaked (hidden) allies stay selectable
+		return lua::OnGolemCanSelect(&monster, false);
 	if ((monster.flags & MFLAG_HIDDEN) != 0)
-		return false;
-	if (monster.isPlayerMinion() && !lua::OnGolemCanSelect(&monster, false)) // Lua mod support
 		return false;
 	return true;
 }

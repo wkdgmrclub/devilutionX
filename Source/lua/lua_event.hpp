@@ -104,6 +104,8 @@ std::string OnGetSpeedbookSelectionType(const Player *player, int spellId, std::
 std::string OnGetSpeedbookSpellName(const Player *player, int spellId, std::string_view defaultName);
 bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_view spellType);
 bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
+int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t selectedSeed, int defaultSlot);
+bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed);
 
 // Mod data persistence hooks — Lua mod support
 // OnSavePlayerData: all handlers run; return values (tables of uint32) are concatenated into a flat vector.

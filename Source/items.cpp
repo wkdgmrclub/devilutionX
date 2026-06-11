@@ -200,12 +200,6 @@ namespace {
 struct { std::string name; std::vector<std::string> lines; } g_luaUniqueSlot;
 } // namespace
 
-void SetLuaUniqueInfoBox(std::string_view name, const std::vector<std::string> &lines) // Lua mod support
-{
-	g_luaUniqueSlot.name = name;
-	g_luaUniqueSlot.lines.assign(lines.begin(), lines.begin() + std::min(static_cast<int>(lines.size()), 6));
-}
-
 /** Holds item get records, tracking items being recently looted. This is in an effort to prevent items being picked up more than once. */
 ItemGetRecordStruct itemrecord[MAXITEMS];
 
@@ -2395,6 +2389,14 @@ std::string GetTranslatedItemNameMagical(const Item &item, bool hellfireItem, bo
 }
 
 } // namespace
+
+// Lua mod support: populated by Lua via SetLuaUniqueInfoBox() when OnPrepareUniqueInfoBox returns true.
+// curruitem._iUid is set to UITEM_LUA_CUSTOM at that point so DrawUniqueInfo uses g_luaUniqueSlot.
+void SetLuaUniqueInfoBox(std::string_view name, const std::vector<std::string> &lines) // Lua mod support
+{
+	g_luaUniqueSlot.name = name;
+	g_luaUniqueSlot.lines.assign(lines.begin(), lines.begin() + std::min(static_cast<int>(lines.size()), 6));
+}
 
 bool IsItemAvailable(int i)
 {

@@ -321,6 +321,8 @@ public:
 	int8_t spellFrom;
 	SpellID _pRSpell;
 	SpellType _pRSplType;
+	/** @brief Lua mod support: seed of the custom speedbook scroll entry last selected (0 = none). Local-only; not saved/synced. */
+	uint32_t selectedCustomScrollSeed = 0;
 	SpellID _pSBkSpell;
 	uint8_t _pSplLvl[64];
 	/** @brief Bitmask of staff spell */

@@ -3259,7 +3259,9 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 		addflag = spellcheck == SpellCheckResult::Success;
 		break;
 	case SpellType::Scroll:
-		addflag = pcurs == CURSOR_HAND && CanUseScroll(myPlayer, spellID);
+		// Lua mod support: let a mod veto a scroll cast before it is committed/consumed.
+		addflag = pcurs == CURSOR_HAND && CanUseScroll(myPlayer, spellID)
+		    && lua::OnCanCastScroll(&myPlayer, static_cast<int>(spellID), myPlayer.selectedCustomScrollSeed);
 		break;
 	case SpellType::Charges:
 		addflag = pcurs == CURSOR_HAND && CanUseStaff(myPlayer, spellID);
@@ -3286,7 +3288,10 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 		return;
 	}
 
-	const int spellFrom = 0;
+	// Lua mod support: let a mod resolve which inventory/belt slot a scroll cast targets
+	// (default 0 = vanilla "first matching scroll"). Lets mods that overload one scroll
+	// SpellID across many distinct scrolls cast the exact one the player selected.
+	const int spellFrom = lua::OnResolveCustomScrollSlot(&myPlayer, static_cast<int>(spellID), myPlayer.selectedCustomScrollSeed, 0);
 	if (IsWallSpell(spellID)) {
 		LastPlayerAction = PlayerActionType::Spell;
 		const Direction sd = GetDirection(myPlayer.position.tile, cursPosition);

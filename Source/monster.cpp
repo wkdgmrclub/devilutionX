@@ -1015,31 +1015,6 @@ void StartDeathFromMonster(Monster &attacker, Monster &target)
 		M_StartStand(attacker, attacker.direction);
 }
 
-void StartFadein(Monster &monster, Direction md, bool backwards)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, md);
-	monster.mode = MonsterMode::FadeIn;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-	monster.flags &= ~MFLAG_HIDDEN;
-	if (backwards) {
-		monster.flags |= MFLAG_LOCK_ANIMATION;
-		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
-	}
-}
-
-void StartFadeout(Monster &monster, Direction md, bool backwards)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, md);
-	monster.mode = MonsterMode::FadeOut;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-	if (backwards) {
-		monster.flags |= MFLAG_LOCK_ANIMATION;
-		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
-	}
-}
-
 /**
  * @brief Starts the monster healing procedure.
  *
@@ -3241,6 +3216,31 @@ void StartHeal(Monster &monster)
 	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
 }
 
+void StartFadein(Monster &monster, Direction md, bool backwards)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, md);
+	monster.mode = MonsterMode::FadeIn;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+	monster.flags &= ~MFLAG_HIDDEN;
+	if (backwards) {
+		monster.flags |= MFLAG_LOCK_ANIMATION;
+		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
+	}
+}
+
+void StartFadeout(Monster &monster, Direction md, bool backwards)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, md);
+	monster.mode = MonsterMode::FadeOut;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+	if (backwards) {
+		monster.flags |= MFLAG_LOCK_ANIMATION;
+		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
+	}
+}
+
 bool AiPlanPath(Monster &monster)
 {
 	if (monster.type().type != MT_GOLEM) {
@@ -4189,14 +4189,15 @@ void StartGolemRangedAttack(Monster &monster, MissileID missileType)
 	StartRangedAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
 }
 
-// Lua mod support: fire a charge missile targeting monsters (not players), matching RhinoAi/BatAi/SnakeAi
-// behaviour except the target is TARGET_MONSTERS. Returns true if the charge was started.
+// Lua mod support: fire a Rhino charge missile, matching RhinoAi/BatAi/SnakeAi. Uses
+// TARGET_PLAYERS like the vanilla casts so Missile::sourceMonster() resolves. Returns true
+// if the charge started.
 bool StartGolemCharge(Monster &monster)
 {
 	if (!LineClear([&monster](Point position) { return IsTileAvailable(monster, position); }, monster.position.tile, monster.enemyPosition))
 		return false;
 	const Direction md = GetDirection(monster.position.tile, monster.enemyPosition);
-	if (AddMissile(monster.position.tile, monster.enemyPosition, md, MissileID::Rhino, TARGET_MONSTERS, monster, 0, 0) == nullptr)
+	if (AddMissile(monster.position.tile, monster.enemyPosition, md, MissileID::Rhino, TARGET_PLAYERS, monster, 0, 0) == nullptr)
 		return false;
 	if (monster.data().hasSpecialSound)
 		PlayEffect(monster, MonsterSound::Special);
@@ -4218,9 +4219,13 @@ void GolumAi(Monster &golem)
 	if ((golem.flags & MFLAG_TARGETS_MONSTER) == 0)
 		UpdateEnemy(golem);
 
-	// Lua mod support: don't interrupt ongoing attack or special-animation modes
+	// Lua mod support: don't interrupt ongoing attack or special-animation modes.
+	// FadeIn/FadeOut are uninterruptible fades (Sneak stealth allies): if the AI ran
+	// during a fade it would re-trigger the fade every tick and the animation would
+	// never complete. The fade finishes via UpdateModeStance regardless of the AI.
 	if (IsAnyOf(golem.mode, MonsterMode::MeleeAttack, MonsterMode::RangedAttack,
-	        MonsterMode::SpecialMeleeAttack, MonsterMode::Heal, MonsterMode::Charge)) {
+	        MonsterMode::SpecialMeleeAttack, MonsterMode::Heal, MonsterMode::Charge,
+	        MonsterMode::FadeIn, MonsterMode::FadeOut)) {
 		return;
 	}
 

@@ -178,6 +178,19 @@ void InitPlayerUserType(sol::state_view &lua)
 		    }
 		    return nullptr;
 	    });
+	LuaSetDocFn(playerType, "findScrollSlotBySeed", "(seed: integer) -> integer|nil",
+	    "Return the INVITEM_* slot index (inventory 7-46, belt 47-54) of the item whose _iSeed matches the given seed, or nil if not found.",
+	    [](Player &player, uint32_t seed) -> std::optional<int> {
+		    for (int i = 0; i < player._pNumInv; i++) {
+			    if (!player.InvList[i].isEmpty() && player.InvList[i]._iSeed == seed)
+				    return INVITEM_INV_FIRST + i;
+		    }
+		    for (int i = 0; i < MaxBeltItems; i++) {
+			    if (!player.SpdList[i].isEmpty() && player.SpdList[i]._iSeed == seed)
+				    return INVITEM_BELT_FIRST + i;
+		    }
+		    return std::nullopt;
+	    });
 	LuaSetDocFn(playerType, "iterateInventory", "(callback: function) -> void",
 	    "Call callback(item) for each non-empty Item in the player's inventory and belt. The Item usertype is passed by reference; modifications are live.",
 	    [](Player &player, sol::function callback) {

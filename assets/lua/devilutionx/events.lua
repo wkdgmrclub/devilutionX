@@ -376,6 +376,20 @@ local events = {
   OnCanSelectSpellBookEntry = CreateQueryEvent(),
   __doc_OnCanSelectSpellBookEntry = "Query: return false to block a learned spell from being selected as the active cast spell via the spellbook. Only fires for SpellType::Spell entries. Args: player, spellId (int). Return nil or true to allow.",
 
+  ---Query event fired from CheckPlrSpell for every SpellType::Scroll cast, before the cast command is sent.
+  ---Lets a mod that overloads one scroll SpellID across many distinct scrolls target the exact scroll the player selected.
+  ---Args: player, spellId (int), selectedSeed (int — seed of the custom speedbook entry chosen, 0 if none), defaultSlot (int — 0 = vanilla "first matching scroll").
+  ---Return an INVITEM_* slot index (inventory 7-46, belt 47-54) to cast from that exact slot; return nil or defaultSlot to keep vanilla behavior.
+  OnResolveCustomScrollSlot = CreateQueryEvent(),
+  __doc_OnResolveCustomScrollSlot = "Query: return the INVITEM_* slot a scroll cast should consume/resolve from. Args: player, spellId (int), selectedSeed (int), defaultSlot (int). Return nil or defaultSlot for vanilla first-match behavior.",
+
+  ---Query event fired from CheckPlrSpell while validating a SpellType::Scroll cast, before the cast is committed or the scroll is consumed.
+  ---Lets a mod veto a scroll cast up front (e.g. when its custom effect cannot proceed) so the engine refuses the cast and nothing is consumed.
+  ---Args: player, spellId (int), selectedSeed (int — seed of the custom speedbook entry chosen, 0 if none).
+  ---Return false to block the cast (the mod is responsible for any "I can't do that" feedback); return nil or true to allow.
+  OnCanCastScroll = CreateQueryEvent(),
+  __doc_OnCanCastScroll = "Query: return false to block a scroll cast before it is committed/consumed. Args: player, spellId (int), selectedSeed (int). Return nil or true to allow.",
+
   ---Query event fired when the item info box is rendering an item's description line.
   ---Args: item. Return a string to override the default miscId-derived description; return nil for default.
   OnGetMiscItemDescription = CreateQueryEvent(),

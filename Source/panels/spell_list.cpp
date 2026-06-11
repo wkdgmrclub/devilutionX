@@ -71,6 +71,9 @@ bool GetSpellListSelection(SpellID &pSpell, SpellType &pSplType)
 		if (spellListItem.isSelected) {
 			pSpell = spellListItem.id;
 			pSplType = spellListItem.type;
+			// Lua mod support: remember which custom scroll entry was selected so the cast
+			// can target that exact scroll (0 for non-custom entries).
+			MyPlayer->selectedCustomScrollSeed = spellListItem.customScrollSeed;
 			if (spellListItem.id == GetPlayerStartingLoadoutForClass(myPlayer._pClass).skill)
 				pSplType = SpellType::Skill;
 			// Lua mod support: allow overriding the resolved spell type for this entry
@@ -294,6 +297,7 @@ std::vector<SpellListItem> GetSpellListItems()
 		item.isSelected = isSelected;
 		item.displayName = entry.displayName;
 		item.customScrollCount = entry.scrollCount;
+		item.customScrollSeed = entry.scrollSeed; // Lua mod support
 		spellListItems.push_back(std::move(item));
 		x -= SPLICONLENGTH;
 		if (x == mainPanelPosition.x + 12 - SPLICONLENGTH) {
@@ -383,6 +387,9 @@ void ToggleSpell(size_t slot)
 		Player &myPlayer = *MyPlayer;
 		myPlayer._pRSpell = myPlayer._pSplHotKey[slot];
 		myPlayer._pRSplType = myPlayer._pSplTHotKey[slot];
+		// Lua mod support: hotkeys carry no custom scroll identity; clear any stale
+		// selection so the cast falls back to the engine default (first matching scroll).
+		myPlayer.selectedCustomScrollSeed = 0;
 		RedrawEverything();
 	}
 }
