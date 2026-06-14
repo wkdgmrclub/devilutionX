@@ -298,10 +298,12 @@ local events = {
   __doc_OnGetPlayerArmorGraphic = "Query: return \"Light\", \"Medium\", or \"Heavy\" to override the resolved armor sprite tier. Receives (player, currentGraphic). AC bonuses still apply. Return nil for default behavior.",
 
   ---Query event fired from UpdateEnemy for every MFLAG_GOLEM monster evaluating a new target.
-  ---Args: ally (Monster), candidate (Monster), hasLOS (bool — true when a clear missile line exists between ally and candidate).
+  ---Args: ally (Monster), candidate (Monster).
+  ---Runs once per active monster per ally per tick, so keep the handler cheap: gate on distance first
+  ---and query line of sight lazily via ally:hasLineOfSightTo(candidate) only for candidates worth it.
   ---Return false to reject the candidate. Return nil or true to allow (default: true).
   OnGolemCanTargetMonster = CreateQueryEvent(),
-  __doc_OnGolemCanTargetMonster = "Query: return false to prevent a golem/ally from targeting the candidate monster. Args: ally, candidate, hasLOS (bool). Return nil or true to allow.",
+  __doc_OnGolemCanTargetMonster = "Query: return false to prevent a golem/ally from targeting the candidate monster. Args: ally, candidate. Runs per active monster per ally per tick — gate on distance first, use ally:hasLineOfSightTo(candidate) for lazy LOS. Return nil or true to allow.",
 
   ---Query event fired from UpdateEnemy when a golem/player-minion evaluates ANOTHER golem/player-minion as a target.
   ---Vanilla always prevents golems from fighting each other; this hook can permit it (e.g. pets of mutually-hostile players).
@@ -363,6 +365,11 @@ local events = {
   ---Args: player, item (the floor item). Return false to forbid this player from picking it up (e.g. class-restricted items); the pickup silently cancels. Return nil or true to allow (default: true).
   OnPlayerCanPickUpItem = CreateQueryEvent(),
   __doc_OnPlayerCanPickUpItem = "Query: return false to forbid a player from picking up a floor item (silently cancels). Args: player, item. Return nil or true to allow (default: true).",
+
+  ---Query event fired in UseInvItem before the Auto Refill Belt redirect, for the belt item being used.
+  ---Args: player, item (the selected belt item). Return false to exempt this item from auto-refill so the exact selected belt slot is used (e.g. seeded custom scrolls that must not be swapped for an identical-looking copy). Return nil or true to allow the default redirect (default: true).
+  OnCanAutoRefillBeltItem = CreateQueryEvent(),
+  __doc_OnCanAutoRefillBeltItem = "Query: return false to exempt a belt item from the Auto Refill Belt redirect (the exact selected belt slot is used). Args: player, item. Return nil or true to allow (default: true).",
 
   ---Query event fired from GetSpellListSelection after the built-in starting-skill type promotion.
   ---Args: player, spellId (int), originalType (string), promotedType (string).

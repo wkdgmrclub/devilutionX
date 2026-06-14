@@ -729,6 +729,7 @@ void delta_init();
 void DeltaClearLevel(uint8_t level);
 void delta_kill_monster(const Monster &monster, Point position, const Player &player);
 void delta_monster_hp(const Monster &monster, const Player &player);
+void DeltaRemoveSpawnedMonster(const Monster &monster); // Lua mod support
 void delta_sync_monster(const TSyncMonster &monsterSync, uint8_t level);
 uint8_t GetLevelForMultiplayer(const Player &player);
 bool IsValidLevelForMultiplayer(uint8_t level);

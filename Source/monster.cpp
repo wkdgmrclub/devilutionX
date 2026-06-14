@@ -335,7 +335,11 @@ void PlaceGroup(size_t typeIndex, size_t num, Monster *leader = nullptr, bool le
 		const int y1 = yp;
 
 		if (num + ActiveMonsterCount > totalmonsters) {
-			num = totalmonsters - ActiveMonsterCount;
+			// Lua mod support: clamp without size_t underflow. `totalmonsters` is the level's
+			// monster target fixed at generation time; placing a pack-leader unique once
+			// ActiveMonsterCount has already grown past it would otherwise wrap the unsigned
+			// `totalmonsters - ActiveMonsterCount` to a huge value and overrun the monster array.
+			num = (totalmonsters > ActiveMonsterCount) ? (totalmonsters - ActiveMonsterCount) : 0;
 		}
 
 		unsigned j = 0;
@@ -733,10 +737,10 @@ void UpdateEnemy(Monster &monster)
 		        && (otherMonster.flags & MFLAG_GOLEM) == 0)) {
 			continue;
 		}
-		// Lua mod support: pass hasLOS so Lua can allow ranged allies to acquire out-of-LR targets
+		// Lua mod support: let Lua veto this golem's target candidate. Line of sight is not
+		// precomputed here; a handler can query it on demand via monster:hasLineOfSightTo().
 		if ((monster.flags & MFLAG_GOLEM) != 0) {
-			const bool hasLOS = LineClearMovingMissile(monster.position.tile, otherMonster.position.tile);
-			if (!lua::OnGolemCanTargetMonster(&monster, &otherMonster, hasLOS, true))
+			if (!lua::OnGolemCanTargetMonster(&monster, &otherMonster, true))
 				continue;
 		}
 
@@ -4337,7 +4341,7 @@ void GolumAi(Monster &golem)
 		UpdateEnemy(golem);
 
 	// Lua mod support: don't interrupt ongoing attack or special-animation modes.
-	// FadeIn/FadeOut are uninterruptible fades (Sneak stealth allies): if the AI ran
+	// FadeIn/FadeOut are uninterruptible fade animations: if the AI ran
 	// during a fade it would re-trigger the fade every tick and the animation would
 	// never complete. The fade finishes via UpdateModeStance regardless of the AI.
 	if (IsAnyOf(golem.mode, MonsterMode::MeleeAttack, MonsterMode::RangedAttack,
@@ -5036,7 +5040,7 @@ void SpawnGolem(const Player &player, Point position, uint8_t spellLevel)
 	}
 	// 3. Use normal monster slot
 	if (golem == nullptr) {
-		if (ActiveMonsterCount >= GetMaxMonsters()) // Lua mod support: allies may use the extended slots
+		if (ActiveMonsterCount >= GetMaxMonsters()) // Lua mod support: golems may use the extended slots
 			return;
 		const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
 		ActiveMonsterCount += 1;

@@ -2120,8 +2120,13 @@ bool UseInvItem(int cii)
 		item = &player.SpdList[c];
 		speedlist = true;
 
+		// Lua mod support: a mod may exempt this belt item from the Auto Refill Belt redirect so the
+		// exact selected slot is used (e.g. seeded custom scrolls that must not be swapped for an
+		// identical-looking copy). Default true = vanilla auto-refill behaviour.
+		const bool allowAutoRefill = *GetOptions().Gameplay.autoRefillBelt && lua::OnCanAutoRefillBeltItem(&player, item, true);
+
 		// If selected speedlist item exists in InvList, use the InvList item.
-		for (int i = 0; i < player._pNumInv && *GetOptions().Gameplay.autoRefillBelt; i++) {
+		for (int i = 0; i < player._pNumInv && allowAutoRefill; i++) {
 			if (player.InvList[i]._iMiscId == item->_iMiscId && player.InvList[i]._iSpell == item->_iSpell) {
 				c = i;
 				item = &player.InvList[c];
@@ -2132,7 +2137,7 @@ bool UseInvItem(int cii)
 		}
 
 		// If speedlist item is not inventory, use same item at the end of the speedlist if exists.
-		if (speedlist && *GetOptions().Gameplay.autoRefillBelt) {
+		if (speedlist && allowAutoRefill) {
 			for (int i = INVITEM_BELT_LAST - INVITEM_BELT_FIRST; i > c; i--) {
 				Item &candidate = player.SpdList[i];
 

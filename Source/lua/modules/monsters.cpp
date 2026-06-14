@@ -161,6 +161,10 @@ void InitMonsterUserType(sol::state_view &lua)
 		    M_ClearSquares(monster);
 		    dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
 		    monster.isInvalid = true;
+		    // Drop any multiplayer delta record of this monster so it is not re-created on level
+		    // reload. No-op in singleplayer. (Singleplayer persistence is handled by removing the
+		    // monster from ActiveMonsters before SaveLevel, below.)
+		    DeltaRemoveSpawnedMonster(monster);
 		    // Remove from ActiveMonsters immediately so SaveLevel does not persist this monster.
 		    // (DeleteMonsterList normally runs next tick, but that is after pfile_save_level.)
 		    DeleteMonsterList();
@@ -170,6 +174,12 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &constMonster, int hp) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.hitPoints = hp << 6;
+	    });
+	LuaSetDocFn(monsterType, "setMaxHitPoints", "(hp: integer)",
+	    "Set this monster's maximum hit points (pass display value; stored as fixed-point internally). Use to restore a persisted max HP instead of the value re-rolled from the type's range at spawn. // Lua mod support",
+	    [](const Monster &constMonster, int hp) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.maxHitPoints = hp << 6;
 	    });
 	LuaSetDocFn(monsterType, "makeGolem", "()",
 	    "Convert this monster to a golem (switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour)",
@@ -197,7 +207,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return static_cast<int>(monster.goalVar3);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isHidden", "boolean",
-	    "Whether this monster has the MFLAG_HIDDEN flag set (faded out / invisible, e.g. a cloaked Sneak monster). readonly // Lua mod support",
+	    "Whether this monster has the MFLAG_HIDDEN flag set (faded out / invisible, e.g. a cloaked Sneak monster). readonly",
 	    [](const Monster &monster) -> bool {
 		    return (monster.flags & MFLAG_HIDDEN) != 0;
 	    });
@@ -236,7 +246,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    const Point targetPos = player.position.tile;
 		    // Search outward from the player tile for the nearest unoccupied walkable tile.
-		    // Multiple allies snapping in the same frame each get a unique tile because
+		    // Multiple monsters snapping in the same frame each get a unique tile because
 		    // occupyTile updates dMonster before the next snap runs.
 		    const auto freePos = Crawl(0, MaxCrawlRadius, [&](Displacement d) -> std::optional<Point> {
 			    const Point candidate = targetPos + d;
@@ -271,6 +281,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Returns the Chebyshev tile distance between this monster and the given player.",
 	    [](const Monster &monster, const Player &player) {
 		    return monster.position.tile.WalkingDistance(player.position.tile);
+	    });
+	LuaSetDocFn(monsterType, "hasLineOfSightTo", "(other: Monster) -> boolean",
+	    "Returns true if a clear missile line of sight exists between this monster and the other monster. // Lua mod support",
+	    [](const Monster &monster, const Monster &other) -> bool {
+		    return LineClearMovingMissile(monster.position.tile, other.position.tile);
 	    });
 	LuaSetDocFn(monsterType, "startRangedAttack", "(missileId: integer)",
 	    "Fire a ranged attack at the monster's current target using the given MissileID integer. Damage is drawn from the monster's natural min/max damage range. Use monsters.MissileID for missile ID constants.",
@@ -321,13 +336,13 @@ void InitMonsterUserType(sol::state_view &lua)
 		    StartEating(monster);
 	    });
 	LuaSetDocFn(monsterType, "startFadeout", "()",
-	    "Trigger the Sneak fade-out animation (enters FadeOut mode; sets MFLAG_HIDDEN when the animation completes). Used to cloak a tamed stealth ally. // Lua mod support",
+	    "Trigger the Sneak fade-out animation (enters FadeOut mode; sets MFLAG_HIDDEN when the animation completes). Used to cloak a monster.",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    StartFadeout(monster, monster.direction, true);
 	    });
 	LuaSetDocFn(monsterType, "startFadein", "()",
-	    "Trigger the Sneak fade-in animation (enters FadeIn mode; clears MFLAG_HIDDEN immediately). Used to materialise a tamed stealth ally. // Lua mod support",
+	    "Trigger the Sneak fade-in animation (enters FadeIn mode; clears MFLAG_HIDDEN immediately). Used to materialise a monster.",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    StartFadein(monster, monster.direction, false);
@@ -562,16 +577,50 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	}
 	// Lua mod support: MonsterAIID constants for use with monster.originalAiId
 	{
+		// Expose the complete MonsterAIID enum so mods can reference any AI by name.
+		// (A missing key reads back as nil; using one as a Lua table key — e.g. in a
+		// constructor literal — raises "table index is nil" at mod-load time.)
 		sol::table aiIdTable = lua.create_table();
-		aiIdTable["Sneak"]        = static_cast<int>(MonsterAIID::Sneak);
-		aiIdTable["Scavenger"]    = static_cast<int>(MonsterAIID::Scavenger);
-		aiIdTable["Rhino"]        = static_cast<int>(MonsterAIID::Rhino);
-		aiIdTable["Gargoyle"]     = static_cast<int>(MonsterAIID::Gargoyle);
-		aiIdTable["Bat"]          = static_cast<int>(MonsterAIID::Bat);
-		aiIdTable["Snake"]        = static_cast<int>(MonsterAIID::Snake);
-		aiIdTable["SkeletonKing"] = static_cast<int>(MonsterAIID::SkeletonKing);
-		aiIdTable["HorkDemon"]    = static_cast<int>(MonsterAIID::HorkDemon);
-		aiIdTable["GoatMelee"]    = static_cast<int>(MonsterAIID::GoatMelee);
+		aiIdTable["Zombie"]          = static_cast<int>(MonsterAIID::Zombie);
+		aiIdTable["Fat"]             = static_cast<int>(MonsterAIID::Fat);
+		aiIdTable["SkeletonMelee"]   = static_cast<int>(MonsterAIID::SkeletonMelee);
+		aiIdTable["SkeletonRanged"]  = static_cast<int>(MonsterAIID::SkeletonRanged);
+		aiIdTable["Scavenger"]       = static_cast<int>(MonsterAIID::Scavenger);
+		aiIdTable["Rhino"]           = static_cast<int>(MonsterAIID::Rhino);
+		aiIdTable["GoatMelee"]       = static_cast<int>(MonsterAIID::GoatMelee);
+		aiIdTable["GoatRanged"]      = static_cast<int>(MonsterAIID::GoatRanged);
+		aiIdTable["Fallen"]          = static_cast<int>(MonsterAIID::Fallen);
+		aiIdTable["Magma"]           = static_cast<int>(MonsterAIID::Magma);
+		aiIdTable["SkeletonKing"]    = static_cast<int>(MonsterAIID::SkeletonKing);
+		aiIdTable["Bat"]             = static_cast<int>(MonsterAIID::Bat);
+		aiIdTable["Gargoyle"]        = static_cast<int>(MonsterAIID::Gargoyle);
+		aiIdTable["Butcher"]         = static_cast<int>(MonsterAIID::Butcher);
+		aiIdTable["Succubus"]        = static_cast<int>(MonsterAIID::Succubus);
+		aiIdTable["Sneak"]           = static_cast<int>(MonsterAIID::Sneak);
+		aiIdTable["Storm"]           = static_cast<int>(MonsterAIID::Storm);
+		aiIdTable["FireMan"]         = static_cast<int>(MonsterAIID::FireMan);
+		aiIdTable["Gharbad"]         = static_cast<int>(MonsterAIID::Gharbad);
+		aiIdTable["Acid"]            = static_cast<int>(MonsterAIID::Acid);
+		aiIdTable["AcidUnique"]      = static_cast<int>(MonsterAIID::AcidUnique);
+		aiIdTable["Golem"]           = static_cast<int>(MonsterAIID::Golem);
+		aiIdTable["Zhar"]            = static_cast<int>(MonsterAIID::Zhar);
+		aiIdTable["Snotspill"]       = static_cast<int>(MonsterAIID::Snotspill);
+		aiIdTable["Snake"]           = static_cast<int>(MonsterAIID::Snake);
+		aiIdTable["Counselor"]       = static_cast<int>(MonsterAIID::Counselor);
+		aiIdTable["Mega"]            = static_cast<int>(MonsterAIID::Mega);
+		aiIdTable["Diablo"]          = static_cast<int>(MonsterAIID::Diablo);
+		aiIdTable["Lazarus"]         = static_cast<int>(MonsterAIID::Lazarus);
+		aiIdTable["LazarusSuccubus"] = static_cast<int>(MonsterAIID::LazarusSuccubus);
+		aiIdTable["Lachdanan"]       = static_cast<int>(MonsterAIID::Lachdanan);
+		aiIdTable["Warlord"]         = static_cast<int>(MonsterAIID::Warlord);
+		aiIdTable["FireBat"]         = static_cast<int>(MonsterAIID::FireBat);
+		aiIdTable["Torchant"]        = static_cast<int>(MonsterAIID::Torchant);
+		aiIdTable["HorkDemon"]       = static_cast<int>(MonsterAIID::HorkDemon);
+		aiIdTable["Lich"]            = static_cast<int>(MonsterAIID::Lich);
+		aiIdTable["ArchLich"]        = static_cast<int>(MonsterAIID::ArchLich);
+		aiIdTable["Psychorb"]        = static_cast<int>(MonsterAIID::Psychorb);
+		aiIdTable["Necromorb"]       = static_cast<int>(MonsterAIID::Necromorb);
+		aiIdTable["BoneDemon"]       = static_cast<int>(MonsterAIID::BoneDemon);
 		table["AIID"] = aiIdTable;
 	}
 	return table;

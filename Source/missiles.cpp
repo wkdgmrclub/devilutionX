@@ -505,6 +505,9 @@ void CheckMissileCol(Missile &missile, DamageType damageType, int minDamage, int
 			            ))) {
 				// then the missile can potentially hit this target
 				isMonsterHit = MonsterTrapHit(monster, minDamage, maxDamage, missile._midist, missile._mitype, damageType, isDamageShifted);
+				// Lua mod support — mirror the melee StartDeathFromMonster golem-kill call-out for ranged/special kills
+				if (Monster *missileSource = missile.sourceMonster(); isMonsterHit && monster.hasNoLife() && missileSource != nullptr && (missileSource->flags & MFLAG_GOLEM) != 0)
+					lua::OnGolemKilledMonster(missileSource, &monster);
 			} else if (IsAnyOf(missile._micaster, TARGET_BOTH, TARGET_MONSTERS)) {
 				isMonsterHit = MonsterMHit(*missile.sourcePlayer(), monster, minDamage, maxDamage, missile._midist, missile._mitype, missile.position.start, damageType, isDamageShifted);
 			}

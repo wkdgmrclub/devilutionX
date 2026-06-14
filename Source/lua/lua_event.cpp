@@ -96,19 +96,19 @@ void OnMonsterDeath(const Monster *monster)
 	CallLuaEvent("OnMonsterDeath", monster);
 }
 
-bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool hasLOS, bool defaultValue)
+bool OnGolemCanTargetMonster(const Monster *golem, const Monster *candidate, bool defaultValue)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetMonster", ally, candidate, hasLOS);
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetMonster", golem, candidate);
 }
 
-bool OnGolemCanTargetGolem(const Monster *ally, const Monster *candidate, bool defaultValue)
+bool OnGolemCanTargetGolem(const Monster *golem, const Monster *candidate, bool defaultValue)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetGolem", ally, candidate);
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetGolem", golem, candidate);
 }
 
-bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue)
+bool OnGolemCanChaseTarget(const Monster *golem, const Monster *target, bool defaultValue)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanChaseTarget", ally, target);
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanChaseTarget", golem, target);
 }
 
 bool OnGolemCanSelect(const Monster *monster, bool defaultValue)
@@ -406,14 +406,14 @@ bool OnPrepareUniqueInfoBox(const Item &item){
 	return CallLuaEventReturn<bool>(false, "OnPrepareUniqueInfoBox", &item);
 }
 
-void OnGolemKilledMonster(const Monster *ally, const Monster *victim)
+void OnGolemKilledMonster(const Monster *golem, const Monster *victim)
 {
-	CallLuaEvent("OnGolemKilledMonster", ally, victim);
+	CallLuaEvent("OnGolemKilledMonster", golem, victim);
 }
 
-void OnGolemSpawnedMinion(const Monster *ally, const Monster *newMonster)
+void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster)
 {
-	CallLuaEvent("OnGolemSpawnedMinion", ally, newMonster);
+	CallLuaEvent("OnGolemSpawnedMinion", golem, newMonster);
 }
 
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster){
@@ -443,27 +443,38 @@ int OnGetMonsterOutlineColor(const Monster *monster) // -1 = no outline
 	return CallLuaEventReturn<int>(-1, "OnGetMonsterOutlineColor", monster);
 }
 
-bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue){
+bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanCompleteQuest", monster);
 }
 
-bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue){
+bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster);
 }
 
-bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue){
+bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerAttackMonster", player, monster);
 }
 
-bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue){
+bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanPickUpItem", player, item);
 }
 
-bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue){
+bool OnCanAutoRefillBeltItem(const Player *player, const Item *item, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnCanAutoRefillBeltItem", player, item);
+}
+
+bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnCanSelectMonsterWithCursor", cursorId);
 }
 
-bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue){
+bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue)
+{
 	return CallLuaEventReturn<bool>(defaultValue, "OnCursorMonsterTarget", monster);
 }
 

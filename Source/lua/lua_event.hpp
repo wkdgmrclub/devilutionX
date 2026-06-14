@@ -28,9 +28,9 @@ void StoreOpened(std::string_view name);
 
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 void OnMonsterDeath(const Monster *monster);
-bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool hasLOS, bool defaultValue);
-bool OnGolemCanTargetGolem(const Monster *ally, const Monster *candidate, bool defaultValue);
-bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue);
+bool OnGolemCanTargetMonster(const Monster *golem, const Monster *candidate, bool defaultValue);
+bool OnGolemCanTargetGolem(const Monster *golem, const Monster *candidate, bool defaultValue);
+bool OnGolemCanChaseTarget(const Monster *golem, const Monster *target, bool defaultValue);
 bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 // Returns: nullopt = engine default wander; empty optional<Point> = stand still; Point = walk toward.
 // When a Point is returned, GolumAi sets enemyPosition to it and tries AiPlanPath first (wall routing),
@@ -79,12 +79,17 @@ void OnNewCharacter(const Player &player);
 void OnCreatePlrItems(Player &player);void OnLevelExit();
 void OnLevelEnter();
 
-void OnGolemKilledMonster(const Monster *ally, const Monster *victim);
-void OnGolemSpawnedMinion(const Monster *ally, const Monster *newMonster);
+void OnGolemKilledMonster(const Monster *golem, const Monster *victim);
+void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
 int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
-bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue);bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue);
+bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
+bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue);
+bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
+bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);
+bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);
+bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue);
 // Speedbook hooks
 struct CustomSpeedbookEntry {
 	std::string displayName;
@@ -99,6 +104,7 @@ bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_v
 bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
 int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t selectedSeed, int defaultSlot);
 bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed);
+bool OnCanAutoRefillBeltItem(const Player *player, const Item *item, bool defaultValue);
 
 // Mod data persistence hooks
 // OnSavePlayerData: all handlers run; return values (tables of uint32) are concatenated into a flat vector.

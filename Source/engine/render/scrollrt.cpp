@@ -761,7 +761,7 @@ void DrawMonsterHelper(const Surface &out, Point tilePosition, Point targetBuffe
 	const auto &monster = Monsters[mi];
 	if ((monster.flags & MFLAG_HIDDEN) != 0) {
 		// Lua mod support — a hidden monster draws no sprite, but a mod may still want an
-		// outline (e.g. tamed stealth allies) so the player can see and select them.
+		// outline (e.g. hidden golems) so the player can see and select them.
 		const int luaHiddenOutlineColor = lua::OnGetMonsterOutlineColor(&monster);
 		if (luaHiddenOutlineColor >= 0) {
 			const ClxSprite sprite = monster.animInfo.currentSprite();
