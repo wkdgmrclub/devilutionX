@@ -101,6 +101,11 @@ bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool
 	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetMonster", ally, candidate, hasLOS);
 }
 
+bool OnGolemCanTargetGolem(const Monster *ally, const Monster *candidate, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetGolem", ally, candidate);
+}
+
 bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanChaseTarget", ally, target);
@@ -220,8 +225,7 @@ void OnCustomItemRecreated(Item &item)
 	CallLuaEvent("OnCustomItemRecreated", &item);
 }
 
-void OnItemPickedUp(const Player &player, const Item &item) // Lua mod support
-{
+void OnItemPickedUp(const Player &player, const Item &item){
 	CallLuaEvent("OnItemPickedUp", &player, &item);
 }
 
@@ -394,13 +398,11 @@ void OnItemUsed(const Player &player, int mid, int spellID)
 	CallLuaEvent("OnItemUsed", &player, mid, spellID);
 }
 
-std::string OnGetMiscItemDescription(const Item *item) // Lua mod support
-{
+std::string OnGetMiscItemDescription(const Item *item){
 	return CallLuaEventReturn<std::string>(std::string {}, "OnGetMiscItemDescription", item);
 }
 
-bool OnPrepareUniqueInfoBox(const Item &item) // Lua mod support
-{
+bool OnPrepareUniqueInfoBox(const Item &item){
 	return CallLuaEventReturn<bool>(false, "OnPrepareUniqueInfoBox", &item);
 }
 
@@ -409,8 +411,12 @@ void OnGolemKilledMonster(const Monster *ally, const Monster *victim)
 	CallLuaEvent("OnGolemKilledMonster", ally, victim);
 }
 
-std::vector<std::string> OnGetMonsterInfo(const Monster *monster) // Lua mod support
+void OnGolemSpawnedMinion(const Monster *ally, const Monster *newMonster)
 {
+	CallLuaEvent("OnGolemSpawnedMinion", ally, newMonster);
+}
+
+std::vector<std::string> OnGetMonsterInfo(const Monster *monster){
 	sol::table *events = GetLuaEvents();
 	if (events == nullptr) return {};
 	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGetMonsterInfo", "trigger");
@@ -428,33 +434,36 @@ std::vector<std::string> OnGetMonsterInfo(const Monster *monster) // Lua mod sup
 	return lines;
 }
 
-std::string OnGetMonsterDisplayName(const Monster *monster) // Lua mod support
-{
+std::string OnGetMonsterDisplayName(const Monster *monster){
 	return CallLuaEventReturn<std::string>(std::string(monster->name()), "OnGetMonsterDisplayName", monster);
 }
 
-int OnGetMonsterOutlineColor(const Monster *monster) // Lua mod support; -1 = no outline
+int OnGetMonsterOutlineColor(const Monster *monster) // -1 = no outline
 {
 	return CallLuaEventReturn<int>(-1, "OnGetMonsterOutlineColor", monster);
 }
 
-bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue) // Lua mod support
-{
+bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue){
+	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanCompleteQuest", monster);
+}
+
+bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue){
 	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster);
 }
 
-bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue) // Lua mod support
-{
+bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue){
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerAttackMonster", player, monster);
 }
 
-bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue) // Lua mod support
-{
+bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue){
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanPickUpItem", player, item);
+}
+
+bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue){
 	return CallLuaEventReturn<bool>(defaultValue, "OnCanSelectMonsterWithCursor", cursorId);
 }
 
-bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue) // Lua mod support
-{
+bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue){
 	return CallLuaEventReturn<bool>(defaultValue, "OnCursorMonsterTarget", monster);
 }
 
@@ -513,8 +522,7 @@ bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed)
 	return CallLuaEventReturn<bool>(true, "OnCanCastScroll", player, spellId, selectedSeed);
 }
 
-std::vector<uint32_t> OnSavePlayerData() // Lua mod support
-{
+std::vector<uint32_t> OnSavePlayerData(){
 	sol::table *events = GetLuaEvents();
 	if (events == nullptr) return {};
 	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnSavePlayerData", "trigger");
@@ -532,8 +540,7 @@ std::vector<uint32_t> OnSavePlayerData() // Lua mod support
 	return data;
 }
 
-void OnLoadPlayerData(const std::vector<uint32_t> &data) // Lua mod support
-{
+void OnLoadPlayerData(const std::vector<uint32_t> &data){
 	sol::table *events = GetLuaEvents();
 	if (events == nullptr) return;
 	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnLoadPlayerData", "trigger");

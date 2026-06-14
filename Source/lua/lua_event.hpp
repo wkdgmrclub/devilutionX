@@ -29,6 +29,7 @@ void StoreOpened(std::string_view name);
 void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 void OnMonsterDeath(const Monster *monster);
 bool OnGolemCanTargetMonster(const Monster *ally, const Monster *candidate, bool hasLOS, bool defaultValue);
+bool OnGolemCanTargetGolem(const Monster *ally, const Monster *candidate, bool defaultValue);
 bool OnGolemCanChaseTarget(const Monster *ally, const Monster *target, bool defaultValue);
 bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 // Returns: nullopt = engine default wander; empty optional<Point> = stand still; Point = walk toward.
@@ -37,14 +38,12 @@ bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition);
 bool OnGolemChooseAction(const Monster *golem, bool hasTarget, int distanceToTarget, bool hasLOS);
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
-void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY); // Lua mod support
-
+void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY);
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
 
 void OnCustomItemRecreated(Item &item);
-void OnItemPickedUp(const Player &player, const Item &item); // Lua mod support
-
+void OnItemPickedUp(const Player &player, const Item &item);
 int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip);
 int8_t OnGetPlayerIdleFrames(const Player *player, int weaponGraphic, bool isInTown);
 
@@ -71,27 +70,21 @@ int OnGetBlockChanceBonus(const Player *player, int blockBonus);
 void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue);
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
-void OnItemUsed(const Player &player, int mid, int spellID); // Lua mod support
-std::string OnGetMiscItemDescription(const Item *item); // Lua mod support
-bool OnPrepareUniqueInfoBox(const Item &item);          // Lua mod support; true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
+void OnItemUsed(const Player &player, int mid, int spellID);std::string OnGetMiscItemDescription(const Item *item);bool OnPrepareUniqueInfoBox(const Item &item);          // true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
 
 void LoadModsComplete();
 void GameDrawComplete();
 void GameStart();
 void OnNewCharacter(const Player &player);
-void OnCreatePlrItems(Player &player); // Lua mod support
-void OnLevelExit();
+void OnCreatePlrItems(Player &player);void OnLevelExit();
 void OnLevelEnter();
 
 void OnGolemKilledMonster(const Monster *ally, const Monster *victim);
+void OnGolemSpawnedMinion(const Monster *ally, const Monster *newMonster);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
-std::string OnGetMonsterDisplayName(const Monster *monster); // Lua mod support; default = monster.name()
-int OnGetMonsterOutlineColor(const Monster *monster); // Lua mod support; -1 = no outline
-bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue); // Lua mod support
-bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue); // Lua mod support
-bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue); // Lua mod support
-bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue); // Lua mod support
-
+std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
+int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
+bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue);bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue);
 // Speedbook hooks
 struct CustomSpeedbookEntry {
 	std::string displayName;
@@ -107,7 +100,7 @@ bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
 int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t selectedSeed, int defaultSlot);
 bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed);
 
-// Mod data persistence hooks — Lua mod support
+// Mod data persistence hooks
 // OnSavePlayerData: all handlers run; return values (tables of uint32) are concatenated into a flat vector.
 // OnLoadPlayerData: the same flat vector is passed back to all handlers on load.
 std::vector<uint32_t> OnSavePlayerData();

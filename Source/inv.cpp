@@ -2199,6 +2199,12 @@ bool UseInvItem(int cii)
 		return true;
 	}
 
+	// Lua mod support: let a mod veto a scroll cast before it is committed/consumed —
+	// the same gate as CheckPlrSpell, for the direct inventory/belt use path. Passes the
+	// exact scroll's seed so the mod can identify which custom scroll is being cast.
+	if (item->isScroll() && !lua::OnCanCastScroll(&player, static_cast<int>(item->_iSpell), item->_iSeed))
+		return true;
+
 	const int idata = GetItemAnimIndex(item->_iCurs);
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
@@ -2269,7 +2275,9 @@ void DoTelekinesis()
 {
 	if (ObjectUnderCursor != nullptr && !ObjectUnderCursor->IsDisabled())
 		NetSendCmdLoc(MyPlayerId, true, CMD_OPOBJT, cursPosition);
-	if (pcursitem != -1)
+	// Lua mod support: respect the same pickup gate as walk-up pickup so a mod can forbid
+	// telekinesis from grabbing a class-restricted item. On veto, the item is simply not pulled.
+	if (pcursitem != -1 && lua::OnPlayerCanPickUpItem(MyPlayer, &Items[pcursitem], true))
 		NetSendCmdGItem(true, CMD_REQUESTAGITEM, *MyPlayer, pcursitem);
 	if (pcursmonst != -1) {
 		const Monster &monter = Monsters[pcursmonst];

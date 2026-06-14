@@ -109,10 +109,10 @@
 
 namespace devilution {
 
-CMonster LevelMonsterTypes[MaxLvlMTypes];
+std::vector<CMonster> LevelMonsterTypes; // Lua mod support: sized to GetMaxLvlMTypes() in InitLevelMonsters
 size_t LevelMonsterTypeCount;
-Monster Monsters[MaxMonsters];
-unsigned ActiveMonsters[MaxMonsters];
+Monster Monsters[AbsoluteMaxMonsters];          // Lua mod support: ceiling-sized; logical cap GetMaxMonsters()
+unsigned ActiveMonsters[AbsoluteMaxMonsters];   // Lua mod support
 size_t ActiveMonsterCount;
 /** Tracks the total number of monsters killed per monster_id. */
 int MonsterKillCounts[NUM_MAX_MTYPES];
@@ -715,8 +715,13 @@ void UpdateEnemy(Monster &monster)
 			continue;
 		if (otherMonster.talkMsg != TEXT_NONE && M_Talker(otherMonster))
 			continue;
-		if (isPlayerMinion && otherMonster.isPlayerMinion()) // prevent golems from fighting each other
-			continue;
+		// Lua mod support: vanilla always prevents golems/player-minions from fighting each other.
+		// A mod may permit it (e.g. pets of mutually-hostile players) by returning true; default
+		// false preserves vanilla behaviour.
+		if (isPlayerMinion && otherMonster.isPlayerMinion()) {
+			if (!lua::OnGolemCanTargetGolem(&monster, &otherMonster, false))
+				continue;
+		}
 
 		const int dist = otherMonster.position.tile.WalkingDistance(position);
 		if (((monster.flags & MFLAG_GOLEM) == 0
@@ -3159,8 +3164,8 @@ MonsterSpritesData LoadMonsterSpritesData(const MonsterData &monsterData)
 
 void EnsureMonsterIndexIsActive(size_t monsterId)
 {
-	assert(monsterId < MaxMonsters);
-	for (size_t index = 0; index < MaxMonsters; index++) {
+	assert(monsterId < GetMaxMonsters()); // Lua mod support
+	for (size_t index = 0; index < GetMaxMonsters(); index++) {
 		if (ActiveMonsters[index] != monsterId)
 			continue;
 		if (index < ActiveMonsterCount)
@@ -3440,8 +3445,40 @@ tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonst
 	return {};
 }
 
+// Lua mod support: extra level monster-type slots requested by mods at load time.
+static size_t LevelMonsterTypeExtension = 0;
+
+size_t GetMaxLvlMTypes()
+{
+	return MaxLvlMTypes + LevelMonsterTypeExtension;
+}
+
+void RequestExtraLevelMonsterTypes(size_t count)
+{
+	LevelMonsterTypeExtension += count;
+}
+
+// Lua mod support: extra live-monster slots requested by mods at load time.
+static size_t MonsterCountExtension = 0;
+
+size_t GetMaxMonsters()
+{
+	return std::min(MaxMonsters + MonsterCountExtension, AbsoluteMaxMonsters);
+}
+
+void RequestExtraMonsters(size_t count)
+{
+	MonsterCountExtension += count;
+}
+
 void InitLevelMonsters()
 {
+	// Lua mod support: size the type table to the base cap plus any mod-requested extension.
+	// The extension is fixed at mod-load, so this grows the (initially empty) vector exactly
+	// once and is a no-op on every later level — existing elements are never moved/reallocated.
+	if (LevelMonsterTypes.size() < GetMaxLvlMTypes())
+		LevelMonsterTypes.resize(GetMaxLvlMTypes());
+
 	LevelMonsterTypeCount = 0;
 	monstimgtot = 0;
 
@@ -3519,7 +3556,7 @@ tl::expected<void, std::string> GetLevelMTypes()
 			typelist[nt++] = (_monster_id)i;
 		}
 
-		while (nt > 0 && LevelMonsterTypeCount < MaxLvlMTypes && monstimgtot < 4000) {
+		while (nt > 0 && LevelMonsterTypeCount < GetMaxLvlMTypes() && monstimgtot < 4000) {
 			for (int i = 0; i < nt;) {
 				if (MonstersData[typelist[i]].image > 4000 - monstimgtot) {
 					typelist[i] = typelist[--nt];
@@ -4053,7 +4090,10 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 	monster.position.future = monster.position.old;
 	M_ClearSquares(monster);
 	monster.occupyTile(monster.position.tile, false);
-	CheckQuestKill(monster, sendmsg);
+	// Lua mod support: a mod may veto quest completion for this death (e.g. a golem/player-minion
+	// dying should not complete a quest). Default true = vanilla.
+	if (lua::OnMonsterCanCompleteQuest(&monster, true))
+		CheckQuestKill(monster, sendmsg);
 	M_FallenFear(monster.position.tile);
 	if (IsAnyOf(monster.type().type, MT_NACID, MT_RACID, MT_BACID, MT_XACID, MT_SPIDLORD))
 		AddMissile(monster.position.tile, { 0, 0 }, Direction::South, MissileID::AcidPuddle, TARGET_PLAYERS, monster, monster.intelligence + 1, 0);
@@ -4206,6 +4246,83 @@ bool StartGolemCharge(Monster &monster)
 	return true;
 }
 
+// Lua mod support: spawn a skeleton the way LeoricAi does, but invokable on a golem (which runs
+// GolumAi, not LeoricAi). Mirrors the LeoricAi spawn block: pick the tile toward the current
+// enemy, spawn a random skeleton, and play the special-stand. Fires OnGolemSpawnedMinion so a
+// mod can react to the spawn. Returns true if a skeleton was actually spawned (false if blocked,
+// no skeleton type, or the spawn cap is hit).
+bool StartGolemSpawnSkeleton(Monster &monster)
+{
+	const Direction md = GetDirection(monster.position.tile, monster.enemyPosition);
+	const Point newPosition = monster.position.tile + md;
+	if (!IsTileAvailable(monster, newPosition))
+		return false;
+	std::optional<size_t> typeIndex = GetRandomSkeletonTypeIndex();
+	if (!typeIndex)
+		return false;
+	const size_t activeCountBefore = ActiveMonsterCount;
+	SpawnMonster(newPosition, md, *typeIndex);
+	if (ActiveMonsterCount == activeCountBefore) // SpawnMonster bailed (cap reached / not level owner)
+		return false;
+	StartSpecialStand(monster, md);
+	Monster &spawned = Monsters[ActiveMonsters[activeCountBefore]];
+	lua::OnGolemSpawnedMinion(&monster, &spawned);
+	return true;
+}
+
+// Lua mod support: fire a special ranged attack (Special animation + SpecialRangedAttack mode),
+// matching monsters like the Hork Demon's Hork Spawn. The engine's MonsterRangedSpecialAttack
+// mode handler creates the missile with TARGET_PLAYERS + this monster as source, so a spawn
+// missile (HorkSpawn) resolves its parent via Missile::sourceMonster() when it lands.
+void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType)
+{
+	StartRangedSpecialAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
+}
+
+// Lua mod support: fire this golem's *authentic* ranged/special attack — the same missile and
+// animation its original AI would use — instead of the generic golem arrow. Mirrors AiRanged /
+// AiRangedAvoidance / CounselorAi / MegaAi:
+//   - Counselor/Advocate: cast Firebolt/ChargedBolt/LightningControl/Fireball by intelligence
+//   - Mega: InfernoControl (special-ranged)
+//   - Magma/Storm/Acid/AcidUnique/Diablo/BoneDemon: GetMissileType, special-ranged animation
+//   - everyone else (Succubus, Lich, FireBat, archers, ...): GetMissileType, normal ranged anim
+// Uses monster.data().ai (the original AI), since a golem's live ai is Golem.
+void StartGolemNaturalRangedAttack(Monster &monster)
+{
+	const MonsterAIID ai = monster.data().ai;
+	const int dam = RandomIntBetween(monster.minDamage, monster.maxDamage);
+	switch (ai) {
+	case MonsterAIID::Counselor: {
+		constexpr MissileID MissileTypes[4] = { MissileID::Firebolt, MissileID::ChargedBolt, MissileID::LightningControl, MissileID::Fireball };
+		int idx = monster.intelligence;
+		if (idx < 0) idx = 0;
+		if (idx > 3) idx = 3;
+		StartRangedAttack(monster, MissileTypes[idx], dam);
+		break;
+	}
+	case MonsterAIID::Mega:
+		StartRangedSpecialAttack(monster, MissileID::InfernoControl, dam);
+		break;
+	case MonsterAIID::Magma:
+	case MonsterAIID::Storm:
+	case MonsterAIID::Acid:
+	case MonsterAIID::AcidUnique:
+	case MonsterAIID::Diablo:
+	case MonsterAIID::BoneDemon:
+		StartRangedSpecialAttack(monster, GetMissileType(ai), dam);
+		break;
+	default:
+		StartRangedAttack(monster, GetMissileType(ai), dam);
+		break;
+	}
+}
+
+// Lua mod support: trigger the monster's special melee attack (e.g. GoatMelee's low-HP special).
+void StartGolemSpecialAttack(Monster &monster)
+{
+	StartSpecialAttack(monster);
+}
+
 void GolumAi(Monster &golem)
 {
 	if (golem.position.tile.x == 1 && golem.position.tile.y == 0) {
@@ -4224,8 +4341,8 @@ void GolumAi(Monster &golem)
 	// during a fade it would re-trigger the fade every tick and the animation would
 	// never complete. The fade finishes via UpdateModeStance regardless of the AI.
 	if (IsAnyOf(golem.mode, MonsterMode::MeleeAttack, MonsterMode::RangedAttack,
-	        MonsterMode::SpecialMeleeAttack, MonsterMode::Heal, MonsterMode::Charge,
-	        MonsterMode::FadeIn, MonsterMode::FadeOut)) {
+	        MonsterMode::SpecialRangedAttack, MonsterMode::SpecialMeleeAttack, MonsterMode::Heal,
+	        MonsterMode::Charge, MonsterMode::FadeIn, MonsterMode::FadeOut)) {
 		return;
 	}
 
@@ -4352,7 +4469,7 @@ void ProcessMonsters()
 {
 	DeleteMonsterList();
 
-	assert(ActiveMonsterCount <= MaxMonsters);
+	assert(ActiveMonsterCount <= GetMaxMonsters()); // Lua mod support
 	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		Monster &monster = Monsters[ActiveMonsters[i]];
 		FollowTheLeader(monster);
@@ -4391,7 +4508,7 @@ void ProcessMonsters()
 
 		if ((monster.flags & MFLAG_NO_ENEMY) == 0) {
 			if ((monster.flags & MFLAG_TARGETS_MONSTER) != 0) {
-				assert(monster.enemy >= 0 && monster.enemy < MaxMonsters);
+				assert(monster.enemy >= 0 && monster.enemy < GetMaxMonsters()); // Lua mod support
 				monster.position.last = Monsters[monster.enemy].position.future;
 				monster.enemyPosition = monster.position.last;
 			} else {
@@ -4673,7 +4790,7 @@ void PlayEffect(Monster &monster, MonsterSound mode)
 
 void MissToMonst(Missile &missile, Point position)
 {
-	assert(static_cast<size_t>(missile._misource) < MaxMonsters);
+	assert(static_cast<size_t>(missile._misource) < GetMaxMonsters()); // Lua mod support
 	Monster &monster = Monsters[missile._misource];
 
 	const Point oldPosition = missile.position.tile;
@@ -4919,7 +5036,7 @@ void SpawnGolem(const Player &player, Point position, uint8_t spellLevel)
 	}
 	// 3. Use normal monster slot
 	if (golem == nullptr) {
-		if (ActiveMonsterCount >= MaxMonsters)
+		if (ActiveMonsterCount >= GetMaxMonsters()) // Lua mod support: allies may use the extended slots
 			return;
 		const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
 		ActiveMonsterCount += 1;
@@ -4947,13 +5064,13 @@ uint8_t encode_enemy(Monster &monster)
 	if ((monster.flags & MFLAG_TARGETS_MONSTER) != 0)
 		return monster.enemy;
 
-	return monster.enemy + MaxMonsters;
+	return monster.enemy + GetMaxMonsters(); // Lua mod support: offset must exceed max monster id
 }
 
 void decode_enemy(Monster &monster, uint8_t enemyId)
 {
-	if (enemyId >= MaxMonsters) {
-		enemyId -= MaxMonsters;
+	if (enemyId >= GetMaxMonsters()) { // Lua mod support
+		enemyId -= GetMaxMonsters();
 		monster.flags &= ~MFLAG_TARGETS_MONSTER;
 		monster.enemy = enemyId;
 		monster.enemyPosition = Players[enemyId].position.future;

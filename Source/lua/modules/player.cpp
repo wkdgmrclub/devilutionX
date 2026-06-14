@@ -146,6 +146,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "className", "string",
 	    "Player class name (readonly)",
 	    [](const Player &player) -> std::string { return std::string(GetPlayerDataForClass(player._pClass).className); });
+	LuaSetDocReadonlyProperty(playerType, "friendlyMode", "boolean",
+	    "Whether this player is in friendly (non-hostile) mode. False = hostile, i.e. PvP is enabled toward other players. readonly",
+	    [](const Player &player) -> bool { return player.friendlyMode; });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride) -> bool {
@@ -295,6 +298,16 @@ sol::table LuaPlayerModule(sol::state_view &lua)
 	    "The current player",
 	    []() {
 		    return MyPlayer;
+	    });
+	LuaSetDocFn(table, "get", "(id: integer) -> Player|nil",
+	    "The player with the given id (0-based index into the Players array), or nil if the id is out of range or that player is not active.",
+	    [](int id) -> Player * {
+		    if (id < 0 || static_cast<size_t>(id) >= Players.size())
+			    return nullptr;
+		    Player &player = Players[id];
+		    if (!player.plractive)
+			    return nullptr;
+		    return &player;
 	    });
 	LuaSetDocFn(table, "walk_to", "(x: integer, y: integer)",
 	    "Walk to the given coordinates",

@@ -263,7 +263,7 @@ struct MonsterConversionData {
 };
 
 struct LevelConversionData {
-	MonsterConversionData monsterConversionData[MaxMonsters];
+	MonsterConversionData monsterConversionData[AbsoluteMaxMonsters]; // Lua mod support: ceiling-sized
 };
 
 [[nodiscard]] bool LoadItemData(LoadHelper &file, Item &item)

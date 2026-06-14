@@ -303,6 +303,13 @@ local events = {
   OnGolemCanTargetMonster = CreateQueryEvent(),
   __doc_OnGolemCanTargetMonster = "Query: return false to prevent a golem/ally from targeting the candidate monster. Args: ally, candidate, hasLOS (bool). Return nil or true to allow.",
 
+  ---Query event fired from UpdateEnemy when a golem/player-minion evaluates ANOTHER golem/player-minion as a target.
+  ---Vanilla always prevents golems from fighting each other; this hook can permit it (e.g. pets of mutually-hostile players).
+  ---Args: ally (Monster), candidate (Monster — also a golem/player-minion).
+  ---Return true to allow targeting. Return nil or false to keep them from fighting (default: false).
+  OnGolemCanTargetGolem = CreateQueryEvent(),
+  __doc_OnGolemCanTargetGolem = "Query: return true to allow a golem/ally to target another golem/ally (e.g. mutually-hostile players' pets). Args: ally, candidate. Return nil or false to prevent (default: false).",
+
   ---Query event fired from GolumAi when a golem has a target not yet in melee range, before pathing toward it.
   ---Args: ally (Monster), target (Monster).
   ---Return false to block the ally from walking toward the target this tick (falls through to idle walk).
@@ -351,6 +358,11 @@ local events = {
   ---Fires before the floor entry is cleaned up, so item.seed and all attributes are still valid for identification.
   OnItemPickedUp = CreateEvent(),
   __doc_OnItemPickedUp = "Called after a floor item is picked up. Args: player, item (floor item snapshot). Use player:findScrollBySeed(item.seed) to get the live inventory copy.",
+
+  ---Query event fired when a player reaches a floor item to pick it up, before the network request is sent.
+  ---Args: player, item (the floor item). Return false to forbid this player from picking it up (e.g. class-restricted items); the pickup silently cancels. Return nil or true to allow (default: true).
+  OnPlayerCanPickUpItem = CreateQueryEvent(),
+  __doc_OnPlayerCanPickUpItem = "Query: return false to forbid a player from picking up a floor item (silently cancels). Args: player, item. Return nil or true to allow (default: true).",
 
   ---Query event fired from GetSpellListSelection after the built-in starting-skill type promotion.
   ---Args: player, spellId (int), originalType (string), promotedType (string).
@@ -407,6 +419,13 @@ local events = {
   OnGolemKilledMonster = CreateEvent(),
   __doc_OnGolemKilledMonster = "Fired when a golem/ally kills a monster in melee. Args: ally, victim.",
 
+  ---Event fired when a MFLAG_GOLEM monster spawns another monster via a special ability
+  ---(e.g. a tamed Skeleton King spawning skeletons, a tamed Hork Demon's Hork Spawn).
+  ---Args: ally (Monster — the spawner), newMonster (Monster — the freshly spawned monster).
+  ---Use to adopt the spawn as an owned minion (`newMonster:makeGolem()` + track it).
+  OnGolemSpawnedMinion = CreateEvent(),
+  __doc_OnGolemSpawnedMinion = "Fired when a golem/ally spawns a new monster via a special ability. Args: ally (spawner), newMonster. Adopt as a minion if desired.",
+
   ---Query event fired from the monster info box in place of PrintMonstHistory.
   ---Args: monster. Return a table of strings to fully replace the info block; return nil for default (PrintMonstHistory).
   OnGetMonsterInfo = CreateQueryEvent(),
@@ -422,6 +441,12 @@ local events = {
   ---PAL16_YELLOW+2 = 194 (gold/object color). PAL16_BLUE+7 = 183 (blue). PAL16_GRAY+5 = 245 (silver).
   OnGetMonsterOutlineColor = CreateQueryEvent(),
   __doc_OnGetMonsterOutlineColor = "Query: return a palette color index (0-255) to draw a colored outline around a monster sprite. Return nil for no outline.",
+
+  ---Query event fired from MonsterDeath before CheckQuestKill, for any dying monster.
+  ---Args: monster. Return false to skip quest completion for this death (e.g. a tamed quest boss
+  ---dying as a player-minion should not re-trigger its quest). Return nil or true to allow (default: true).
+  OnMonsterCanCompleteQuest = CreateQueryEvent(),
+  __doc_OnMonsterCanCompleteQuest = "Query: return false to prevent a dying monster from completing its quest (CheckQuestKill). Args: monster. Return nil or true to allow (default: true).",
 
   ---Query event fired by FindClosest before a monster is selected as a missile bounce target.
   ---Args: monster. Return false to skip this monster; return nil or true to allow (default: true).

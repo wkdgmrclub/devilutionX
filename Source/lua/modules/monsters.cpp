@@ -23,6 +23,7 @@
 #include "msg.h"
 #include "multi.h"
 #include "player.h"
+#include "quests.h"
 #include "tables/monstdat.h"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -43,7 +44,7 @@ struct MonsterPlacement {
 // Does NOT call InitializeSpawnedMonster — callers do that after setting difficulty.
 std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
 {
-	if (ActiveMonsterCount >= MaxMonsters) return std::nullopt;
+	if (ActiveMonsterCount >= GetMaxMonsters()) return std::nullopt; // Lua mod support
 	if (!MyPlayer->isLevelOwnedByLocalClient()) return std::nullopt;
 	const Point requestedPos { x, y };
 	const auto freePos = Crawl(0, MaxCrawlRadius, [&requestedPos](Displacement d) -> std::optional<Point> {
@@ -63,9 +64,10 @@ std::optional<size_t> EnsureMonsterType(_monster_id type, placeflag pflag)
 		if (LevelMonsterTypes[i].type == type) return i;
 	}
 	// AddMonsterType does not bounds-check the level type table; registering a new type
-	// at capacity would index LevelMonsterTypes[MaxLvlMTypes] out of bounds. Fail
-	// gracefully so the caller returns nil (and the mod refunds the scroll). // Lua mod support
-	if (LevelMonsterTypeCount >= MaxLvlMTypes) return std::nullopt;
+	// at capacity would index LevelMonsterTypes out of bounds. Fail gracefully so the
+	// caller returns nil (and the mod refunds the scroll). GetMaxLvlMTypes() includes any
+	// mod-requested extension, so mods that reserved extra slots get the headroom. // Lua mod support
+	if (LevelMonsterTypeCount >= GetMaxLvlMTypes()) return std::nullopt;
 	auto result = AddMonsterType(type, pflag);
 	if (!result) return std::nullopt;
 	const size_t idx = *result;
@@ -103,7 +105,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return Point { monster.position.tile };
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "id", "integer",
-	    "Monster's index in the Monsters array (readonly). Stable within a session; range 0..MaxMonsters-1.",
+	    "Monster's index in the Monsters array (readonly). Stable within a session; range 0..GetMaxMonsters()-1.",
 	    [](const Monster &monster) {
 		    return static_cast<int>(&monster - &Monsters[0]);
 	    });
@@ -174,6 +176,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](Monster &monster) {
 		    ChangeMonsterToGolem(monster);
 	    });
+	LuaSetDocFn(monsterType, "checkQuestKill", "()",
+	    "Run this monster's quest-completion side effects as if it had been killed (quest state + death speech, e.g. Skeleton King -> Q_SKELKING done + 'Rest well, Leoric'; Lazarus -> opens the path to Diablo). No-op for non-quest monsters. Wraps the engine's CheckQuestKill. // Lua mod support",
+	    [](const Monster &monster) {
+		    CheckQuestKill(monster, true);
+	    });
 	LuaSetDocReadonlyProperty(monsterType, "isLit", "boolean",
 	    "Whether the tile this monster stands on is currently illuminated by any light source (readonly)",
 	    [](const Monster &monster) {
@@ -183,6 +190,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Whether this monster has the MFLAG_GOLEM flag set (Golem spell or player-controlled ally). readonly",
 	    [](const Monster &monster) -> bool {
 		    return (monster.flags & MFLAG_GOLEM) != 0;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "ownerPlayerId", "integer",
+	    "The id of the player that owns this monster, stored in goalVar3 (set when it becomes a golem/player-controlled ally; the caster becomes owner). Only meaningful when isGolem is true. Use to filter golem hooks by ownership. readonly",
+	    [](const Monster &monster) -> int {
+		    return static_cast<int>(monster.goalVar3);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isHidden", "boolean",
 	    "Whether this monster has the MFLAG_HIDDEN flag set (faded out / invisible, e.g. a cloaked Sneak monster). readonly // Lua mod support",
@@ -209,7 +221,9 @@ void InitMonsterUserType(sol::state_view &lua)
 		        || ai == MonsterAIID::ArchLich
 		        || ai == MonsterAIID::Psychorb
 		        || ai == MonsterAIID::Necromorb
-		        || ai == MonsterAIID::BoneDemon;
+		        || ai == MonsterAIID::BoneDemon
+		        || ai == MonsterAIID::Counselor
+		        || ai == MonsterAIID::Mega;
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "originalAiId", "integer",
 	    "The monster type's original AI ID as a MonsterAIID integer. Stable after taming (GolemAi overwrites monster.ai but not the type data). Use monsters.AIID constants. readonly // Lua mod support",
@@ -270,6 +284,30 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    return StartGolemCharge(monster);
 	    });
+	LuaSetDocFn(monsterType, "spawnSkeletonMinion", "() -> boolean",
+	    "Spawn a skeleton next to this monster toward its current enemy, the way Skeleton King's LeoricAi does. Fires OnGolemSpawnedMinion with (this monster, spawned skeleton). Returns true if a skeleton spawned. // Lua mod support",
+	    [](const Monster &constMonster) -> bool {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    return StartGolemSpawnSkeleton(monster);
+	    });
+	LuaSetDocFn(monsterType, "startSpecialRangedAttack", "(missileId: integer)",
+	    "Fire a special ranged attack (Special animation + SpecialRangedAttack mode) at the current target, e.g. the Hork Demon's HorkSpawn. The missile uses TARGET_PLAYERS with this monster as source. Use monsters.MissileID.* for missile IDs. // Lua mod support",
+	    [](const Monster &constMonster, int missileIdInt) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartGolemSpecialRangedAttack(monster, static_cast<MissileID>(missileIdInt));
+	    });
+	LuaSetDocFn(monsterType, "startNaturalRangedAttack", "()",
+	    "Fire this monster's authentic ranged/special attack — the same missile and animation its native AI uses (based on originalAiId): Succubus->BloodStar, Storm->lightning, Magma->MagmaBall, Lich->flare, Counselor/Advocate->cast by intelligence, Mega->Inferno, etc. Use instead of startRangedAttack to avoid the generic arrow. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartGolemNaturalRangedAttack(monster);
+	    });
+	LuaSetDocFn(monsterType, "startSpecialAttack", "()",
+	    "Trigger this monster's special melee attack (Special animation + SpecialMeleeAttack mode), e.g. the Goat Melee low-HP special. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    StartGolemSpecialAttack(monster);
+	    });
 	LuaSetDocFn(monsterType, "startHeal", "()",
 	    "Trigger the Gargoyle self-heal animation (reverses Special animation, enters Heal mode). // Lua mod support",
 	    [](const Monster &constMonster) {
@@ -321,6 +359,21 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	sol::table table = lua.create_table();
 	LuaSetDocFn(table, "addMonsterDataFromTsv", "(path: string)", AddMonsterDataFromTsv);
 	LuaSetDocFn(table, "addUniqueMonsterDataFromTsv", "(path: string)", AddUniqueMonsterDataFromTsv);
+	LuaSetDocFn(table, "requestExtraTypes", "(count: integer)",
+	    "Reserve additional per-level monster-type slots for this session (on top of the base cap). "
+	    "Call at mod-load time, before any level is generated. Cumulative across mods; unmodded play is unchanged. // Lua mod support",
+	    [](int count) {
+		    if (count > 0)
+			    RequestExtraLevelMonsterTypes(static_cast<size_t>(count));
+	    });
+	LuaSetDocFn(table, "requestExtraMonsters", "(count: integer)",
+	    "Reserve additional live-monster slots for this session (on top of the base cap of 200). "
+	    "Call at mod-load time, before any level is generated. Cumulative across mods; the effective cap "
+	    "is clamped to the engine's hard ceiling of 252 (the uint8 enemy-encoding limit). Unmodded play is unchanged. // Lua mod support",
+	    [](int count) {
+		    if (count > 0)
+			    RequestExtraMonsters(static_cast<size_t>(count));
+	    });
 	LuaSetDocFn(table, "getNameByTypeId", "(typeId: integer) -> string|nil",
 	    "Get the base display name of a monster type by its numeric type ID. Returns nil if the type ID is out of range.",
 	    [](int typeIdInt) -> sol::optional<std::string> {
@@ -405,7 +458,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    RegisterLateMonsterTypeCorpse(LevelMonsterTypes[typeIndex]);
 		    }
 
-		    if (ActiveMonsterCount >= MaxMonsters) return nullptr;
+		    if (ActiveMonsterCount >= GetMaxMonsters()) return nullptr; // Lua mod support
 		    if (!MyPlayer->isLevelOwnedByLocalClient()) return nullptr;
 
 		    const Point requestedPos { x, y };
@@ -491,7 +544,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
 	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",
 	    []() -> Monster * {
-		    if (pcursmonst < 0 || pcursmonst >= static_cast<int>(MaxMonsters)) return nullptr;
+		    if (pcursmonst < 0 || pcursmonst >= static_cast<int>(GetMaxMonsters())) return nullptr; // Lua mod support
 		    return &Monsters[pcursmonst];
 	    });
 	// Lua mod support: missile ID constants for use with monster:startRangedAttack()
@@ -504,6 +557,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		missileIdTable["ChargedBolt"]    = static_cast<int>(MissileID::ChargedBolt);
 		missileIdTable["HolyBolt"]       = static_cast<int>(MissileID::HolyBolt);
 		missileIdTable["Fireball"]       = static_cast<int>(MissileID::Fireball);
+		missileIdTable["HorkSpawn"]      = static_cast<int>(MissileID::HorkSpawn);
 		table["MissileID"] = missileIdTable;
 	}
 	// Lua mod support: MonsterAIID constants for use with monster.originalAiId

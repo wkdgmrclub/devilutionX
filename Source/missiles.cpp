@@ -3180,7 +3180,14 @@ void ProcessHorkSpawn(Missile &missile)
 
 		if (spawnPosition) {
 			auto facing = static_cast<Direction>(missile.var1);
+			const size_t activeCountBefore = ActiveMonsterCount;
 			SpawnMonster(*spawnPosition, facing, 1);
+			// Lua mod support: if a golem fired this Hork Spawn, notify Lua of the freshly
+			// spawned monster. SpawnMonster bumps ActiveMonsterCount only on success; the new
+			// monster is Monsters[ActiveMonsters[activeCountBefore]].
+			Monster *parent = missile.sourceMonster();
+			if (parent != nullptr && (parent->flags & MFLAG_GOLEM) != 0 && ActiveMonsterCount > activeCountBefore)
+				lua::OnGolemSpawnedMinion(parent, &Monsters[ActiveMonsters[activeCountBefore]]);
 		}
 	} else {
 		missile._midist++;

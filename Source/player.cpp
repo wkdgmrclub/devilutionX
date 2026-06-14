@@ -1307,8 +1307,14 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 				x = std::abs(player.position.tile.x - item->position.x);
 				y = std::abs(player.position.tile.y - item->position.y);
 				if (x <= 1 && y <= 1 && pcurs == CURSOR_HAND && !item->_iRequest) {
-					NetSendCmdGItem(true, CMD_REQUESTGITEM, player, targetId);
-					item->_iRequest = true;
+					// Lua mod support: a mod may forbid this player from picking up this item
+					// (e.g. class-restricted items). Default true = vanilla.
+					if (lua::OnPlayerCanPickUpItem(&player, item, true)) {
+						NetSendCmdGItem(true, CMD_REQUESTGITEM, player, targetId);
+						item->_iRequest = true;
+					} else {
+						player.destAction = ACTION_NONE;
+					}
 				}
 			}
 			break;
@@ -1317,7 +1323,13 @@ void CheckNewPath(Player &player, bool pmWillBeCalled)
 				x = std::abs(player.position.tile.x - item->position.x);
 				y = std::abs(player.position.tile.y - item->position.y);
 				if (x <= 1 && y <= 1 && pcurs == CURSOR_HAND) {
-					NetSendCmdGItem(true, CMD_REQUESTAGITEM, player, targetId);
+					// Lua mod support: a mod may forbid this player from picking up this item
+					// (e.g. class-restricted items). Default true = vanilla.
+					if (lua::OnPlayerCanPickUpItem(&player, item, true)) {
+						NetSendCmdGItem(true, CMD_REQUESTAGITEM, player, targetId);
+					} else {
+						player.destAction = ACTION_NONE;
+					}
 				}
 			}
 			break;
