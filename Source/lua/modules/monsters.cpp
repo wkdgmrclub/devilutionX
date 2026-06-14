@@ -196,6 +196,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster) {
 		    return dLight[monster.position.tile.x][monster.position.tile.y] < LightsMax;
 	    });
+	LuaSetDocReadonlyProperty(monsterType, "hasNoLife", "boolean",
+	    "Whether this monster is at 0 hit points (dead or playing its death animation). readonly",
+	    [](const Monster &monster) -> bool {
+		    return monster.hasNoLife();
+	    });
 	LuaSetDocReadonlyProperty(monsterType, "isGolem", "boolean",
 	    "Whether this monster has the MFLAG_GOLEM flag set (Golem spell or player-controlled ally). readonly",
 	    [](const Monster &monster) -> bool {

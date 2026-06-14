@@ -162,7 +162,7 @@ Monster *FindClosest(Point source, int rad)
 		    const int mid = dMonster[target.x][target.y];
 		    if (mid <= 0) return false;
 		    if (CheckBlock(source, target)) return false;
-		    return lua::OnMissileCanTargetMonster(&Monsters[mid - 1], true); // Lua mod support
+		    return lua::OnMissileCanTargetMonster(&Monsters[mid - 1], source, true); // Lua mod support
 	    },
 	    source, 1, rad);
 
@@ -2385,7 +2385,7 @@ void AddStoneCurse(Missile &missile, AddMissileParameter &parameter)
 			    return false;
 		    }
 
-		    return true;
+		    return lua::OnMissileCanTargetMonster(&monster, target, true); // Lua mod support
 	    },
 	    parameter.dst, 0, 5);
 
@@ -3602,7 +3602,8 @@ void ProcessChainLightning(Missile &missile)
 	const int rad = std::min<int>(missile._mispllvl + 3, MaxCrawlRadius);
 	Crawl(1, rad, [&](Displacement displacement) {
 		const Point target = position + displacement;
-		if (InDungeonBounds(target) && dMonster[target.x][target.y] > 0) {
+		if (InDungeonBounds(target) && dMonster[target.x][target.y] > 0
+		    && lua::OnMissileCanTargetMonster(&Monsters[dMonster[target.x][target.y] - 1], position, true)) { // Lua mod support
 			dir = GetDirection(position, target);
 			AddMissile(position, target, dir, MissileID::LightningControl, TARGET_MONSTERS, id, 1, missile._mispllvl);
 		}

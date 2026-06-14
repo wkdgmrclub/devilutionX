@@ -448,9 +448,9 @@ bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)
 	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanCompleteQuest", monster);
 }
 
-bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue)
+bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster);
+	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster, source);
 }
 
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue)

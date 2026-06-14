@@ -455,10 +455,12 @@ local events = {
   OnMonsterCanCompleteQuest = CreateQueryEvent(),
   __doc_OnMonsterCanCompleteQuest = "Query: return false to prevent a dying monster from completing its quest (CheckQuestKill). Args: monster. Return nil or true to allow (default: true).",
 
-  ---Query event fired by FindClosest before a monster is selected as a missile bounce target.
-  ---Args: monster. Return false to skip this monster; return nil or true to allow (default: true).
+  ---Query event fired when an auto-targeting missile picks a monster to fire at: the Chain
+  ---Lightning spread and FindClosest (Chain Lightning / Lightning bolt bounce, Bone Spirit homing).
+  ---Args: monster, source (Point — the missile/cast origin tile). Return false to skip this
+  ---monster (no bolt fired at it); return nil or true to allow (default: true).
   OnMissileCanTargetMonster = CreateQueryEvent(),
-  __doc_OnMissileCanTargetMonster = "Query: return false to prevent a bouncing missile (Chain Lightning, Bone Spirit) from targeting this monster. Args: monster. Return nil or true to allow.",
+  __doc_OnMissileCanTargetMonster = "Query: return false to stop an auto-targeting missile (Chain Lightning, Bone Spirit) from targeting this monster. Args: monster, source (Point, the cast/bounce origin). Use source to also reject targets behind a protected monster. Return nil or true to allow.",
 
   ---Query event fired before a player's left-click attack or offensive spell cast is queued on a monster.
   ---Args: player, monster. Return false to cancel (silently no-op); return nil or true to allow (default: true).

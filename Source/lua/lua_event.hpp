@@ -85,7 +85,7 @@ std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
 int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
-bool OnMissileCanTargetMonster(const Monster *monster, bool defaultValue);
+bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);
 bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);

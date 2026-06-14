@@ -31,9 +31,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	    "Player's name (readonly)",
 	    &Player::name);
 	LuaSetDocReadonlyProperty(playerType, "id", "integer",
-	    "Player's unique ID (readonly)",
+	    "Player's 0-based index into the Players array (readonly). Matches player.get(id) and monster.ownerPlayerId.",
 	    [](const Player &player) {
-		    return static_cast<int>(reinterpret_cast<uintptr_t>(&player));
+		    return static_cast<int>(player.getId());
 	    });
 	LuaSetDocReadonlyProperty(playerType, "position", "Point",
 	    "Player's current position (readonly)",
