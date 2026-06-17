@@ -403,11 +403,18 @@ local events = {
   __doc_OnResolveCustomScrollSlot = "Query: return the INVITEM_* slot a scroll cast should consume/resolve from. Args: player, spellId (int), selectedSeed (int), defaultSlot (int). Return nil or defaultSlot for vanilla first-match behavior.",
 
   ---Query event fired from CheckPlrSpell while validating a SpellType::Scroll cast, before the cast is committed or the scroll is consumed.
-  ---Lets a mod veto a scroll cast up front (e.g. when its custom effect cannot proceed) so the engine refuses the cast and nothing is consumed.
-  ---Args: player, spellId (int), selectedSeed (int — seed of the custom speedbook entry chosen, 0 if none).
+  ---Lets a mod veto a scroll cast up front (e.g. when its custom effect cannot proceed, or to stop an offensive scroll hitting a protected monster) so the engine refuses the cast and nothing is consumed.
+  ---Args: player, spellId (int), selectedSeed (int — seed of the custom speedbook entry chosen, 0 if none), target (monster — the cursor-targeted monster, or nil if none / not a monster-aimed cast such as the inventory/belt use-gate).
   ---Return false to block the cast (the mod is responsible for any "I can't do that" feedback); return nil or true to allow.
   OnCanCastScroll = CreateQueryEvent(),
-  __doc_OnCanCastScroll = "Query: return false to block a scroll cast before it is committed/consumed. Args: player, spellId (int), selectedSeed (int). Return nil or true to allow.",
+  __doc_OnCanCastScroll = "Query: return false to block a scroll cast before it is committed/consumed. Args: player, spellId (int), selectedSeed (int), target (monster or nil). Return nil or true to allow.",
+
+  ---Query event fired from CheckPlrSpell while validating a SpellType::Skill cast, before the cast is committed.
+  ---Lets a mod veto a skill cast up front (e.g. a targeting gate on the cursor-targeted monster).
+  ---Args: player, spellId (int), target (monster — the cursor-targeted monster, or nil if none hovered).
+  ---Return false to block the cast (the mod is responsible for any "I can't do that" feedback); return nil or true to allow.
+  OnCanCastSkill = CreateQueryEvent(),
+  __doc_OnCanCastSkill = "Query: return false to block a skill cast before it is committed. Args: player, spellId (int), target (monster or nil). Return nil or true to allow.",
 
   ---Query event fired when the item info box is rendering an item's description line.
   ---Args: item. Return a string to override the default miscId-derived description; return nil for default.
@@ -454,6 +461,18 @@ local events = {
   ---dying as a player-minion should not re-trigger its quest). Return nil or true to allow (default: true).
   OnMonsterCanCompleteQuest = CreateQueryEvent(),
   __doc_OnMonsterCanCompleteQuest = "Query: return false to prevent a dying monster from completing its quest (CheckQuestKill). Args: monster. Return nil or true to allow (default: true).",
+
+  ---Query event fired from MonsterDeath on the final death-animation frame, before the monster's
+  ---corpse is placed on the floor. Args: monster. Return false to suppress corpse placement for this
+  ---death (the monster still vanishes and is reaped); return nil or true to place the corpse (default: true).
+  OnMonsterCanPlaceCorpse = CreateQueryEvent(),
+  __doc_OnMonsterCanPlaceCorpse = "Query: return false to suppress a dying monster's corpse placement. Args: monster. Return nil or true to place the corpse (default: true).",
+
+  ---Query event fired when the monster healthbar decides whether to draw the resistance/immunity
+  ---icon row. Vanilla shows it only for uniques or monster types killed 15+ times; return true to
+  ---force it on (e.g. for tamed allies that reveal full stats). Args: monster. Default: false.
+  OnMonsterCanShowResistances = CreateQueryEvent(),
+  __doc_OnMonsterCanShowResistances = "Query: return true to force the monster healthbar's resistance/immunity icons to show, overriding the vanilla unique-or-15-kills gate. Args: monster. Return nil or false for vanilla behaviour (default: false).",
 
   ---Query event fired when an auto-targeting missile picks a monster to fire at: the Chain
   ---Lightning spread and FindClosest (Chain Lightning / Lightning bolt bounce, Bone Spirit homing).

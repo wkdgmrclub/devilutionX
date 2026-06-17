@@ -42,6 +42,5 @@ struct CMonster;
 void InitCorpses();
 void AddCorpse(Point tilePosition, int8_t dv, Direction ddir);
 void MoveLightsToCorpses();
-void RegisterLateMonsterTypeCorpse(CMonster &monsterType); // Lua mod support
 
 } // namespace devilution

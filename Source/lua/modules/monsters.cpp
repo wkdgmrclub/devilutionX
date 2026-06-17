@@ -1,5 +1,6 @@
 #include "lua/modules/monsters.hpp"
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 #include "levels/tile_properties.hpp"
 #include "lighting.h"
 #include "lua/metadoc.hpp"
+#include "missiles.h"
 #include "monster.h"
 #include "msg.h"
 #include "multi.h"
@@ -72,7 +74,6 @@ std::optional<size_t> EnsureMonsterType(_monster_id type, placeflag pflag)
 	if (!result) return std::nullopt;
 	const size_t idx = *result;
 	if (!InitMonsterGFX(LevelMonsterTypes[idx])) return std::nullopt;
-	RegisterLateMonsterTypeCorpse(LevelMonsterTypes[idx]);
 	return idx;
 }
 
@@ -165,9 +166,26 @@ void InitMonsterUserType(sol::state_view &lua)
 		    // reload. No-op in singleplayer. (Singleplayer persistence is handled by removing the
 		    // monster from ActiveMonsters before SaveLevel, below.)
 		    DeltaRemoveSpawnedMonster(monster);
-		    // Remove from ActiveMonsters immediately so SaveLevel does not persist this monster.
-		    // (DeleteMonsterList normally runs next tick, but that is after pfile_save_level.)
-		    DeleteMonsterList();
+		    // DeleteMonsterList() compacts ActiveMonsters and decrements ActiveMonsterCount. Doing
+		    // that here while a game-logic step is in flight — e.g. this remove() runs from an
+		    // OnMonsterDeath handler despawning a dead ally's minions while ProcessMonsters /
+		    // ProcessMissiles is still iterating ActiveMonsters by index — mutates the array the
+		    // engine is mid-iteration over, leaving a stale slot / out-of-range monster id that the
+		    // renderer then dereferences (the DrawDungeon `mid < GetMaxMonsters()` and null-sprite
+		    // asserts). Mirror the engine's own MonsterDeath: during a tick, only flag the monster
+		    // invalid and park it in the golem holding cell so its AI cannot re-occupy a tile before
+		    // it is reaped; the engine's DeleteMonsterList (top & bottom of ProcessMonsters) then
+		    // compacts it safely next tick.
+		    if (gGameLogicStep == GameLogicStep::None) {
+			    // Outside the game-logic tick (level-exit recall, or any removal requested while no
+			    // step is in flight): compact immediately so SaveLevel does not persist this monster
+			    // (DeleteMonsterList would otherwise not run until next tick, after pfile_save_level).
+			    DeleteMonsterList();
+		    } else {
+			    monster.position.tile = GolemHoldingCell;
+			    monster.position.future = GolemHoldingCell;
+			    monster.position.old = GolemHoldingCell;
+		    }
 	    });
 	LuaSetDocFn(monsterType, "setHitPoints", "(hp: integer)",
 	    "Set this monster's current hit points (pass display value; stored as fixed-point internally).",
@@ -180,6 +198,61 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &constMonster, int hp) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.maxHitPoints = hp << 6;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "minDamage", "integer",
+	    "Monster's current minimum melee damage (readonly). // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return monster.minDamage;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "maxDamage", "integer",
+	    "Monster's current maximum melee damage (readonly). // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return monster.maxDamage;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "armorClass", "integer",
+	    "Monster's current armor class (readonly). // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return monster.armorClass;
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "toHit", "integer",
+	    "Monster's effective chance-to-hit at the current difficulty (readonly). For a golem/player-minion this is the golemToHit value set when it became a golem. // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return static_cast<int>(monster.toHit(static_cast<_difficulty>(sgGameInitInfo.nDifficulty)));
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "resistance", "integer",
+	    "Monster's raw resistance/immunity bitfield (readonly). Test against monsters.Resistance.* flags. // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return monster.resistance;
+	    });
+	LuaSetDocFn(monsterType, "setMinDamage", "(value: integer)",
+	    "Set this monster's minimum melee damage (clamped to 0..255). Generic; used to apply transient stat buffs. // Lua mod support",
+	    [](const Monster &constMonster, int value) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.minDamage = static_cast<uint8_t>(std::clamp(value, 0, 255));
+	    });
+	LuaSetDocFn(monsterType, "setMaxDamage", "(value: integer)",
+	    "Set this monster's maximum melee damage (clamped to 0..255). Generic; used to apply transient stat buffs. // Lua mod support",
+	    [](const Monster &constMonster, int value) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.maxDamage = static_cast<uint8_t>(std::clamp(value, 0, 255));
+	    });
+	LuaSetDocFn(monsterType, "setArmorClass", "(value: integer)",
+	    "Set this monster's armor class (clamped to 0..255). Generic; used to apply transient stat buffs. // Lua mod support",
+	    [](const Monster &constMonster, int value) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.armorClass = static_cast<uint8_t>(std::clamp(value, 0, 255));
+	    });
+	LuaSetDocFn(monsterType, "setToHit", "(value: integer)",
+	    "Set this monster's golemToHit value (clamped to 0..65535). Only affects effective to-hit for a golem/player-minion (Monster::toHit returns golemToHit for player minions). Generic; used to apply transient stat buffs. // Lua mod support",
+	    [](const Monster &constMonster, int value) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.golemToHit = static_cast<uint16_t>(std::clamp(value, 0, 65535));
+	    });
+	LuaSetDocFn(monsterType, "setResistance", "(flags: integer)",
+	    "Set this monster's raw resistance/immunity bitfield. Compose from monsters.Resistance.* flags. Generic; used to grant/remove resistances and immunities. // Lua mod support",
+	    [](const Monster &constMonster, int flags) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.resistance = static_cast<uint16_t>(flags);
 	    });
 	LuaSetDocFn(monsterType, "makeGolem", "()",
 	    "Convert this monster to a golem (switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour)",
@@ -200,6 +273,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Whether this monster is at 0 hit points (dead or playing its death animation). readonly",
 	    [](const Monster &monster) -> bool {
 		    return monster.hasNoLife();
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "isActive", "boolean",
+	    "Whether this monster is awake/activated (activeForTicks > 0). A monster sleeps (activeForTicks == 0) until the player makes it visible, and the engine's own AI does not run for a sleeping monster. Use as a cheap gate so a golem/ally never wakes or chases monsters the player has not engaged. readonly // Lua mod support",
+	    [](const Monster &monster) -> bool {
+		    return monster.activeForTicks != 0;
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isGolem", "boolean",
 	    "Whether this monster has the MFLAG_GOLEM flag set (Golem spell or player-controlled ally). readonly",
@@ -475,7 +553,6 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    // which breaks spawning two types from the same family (e.g. two drake
 			    // colors). Loading just the new type always works correctly. // Lua mod support
 			    if (!InitMonsterGFX(LevelMonsterTypes[typeIndex])) return nullptr;
-			    RegisterLateMonsterTypeCorpse(LevelMonsterTypes[typeIndex]);
 		    }
 
 		    if (ActiveMonsterCount >= GetMaxMonsters()) return nullptr; // Lua mod support
@@ -579,6 +656,18 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		missileIdTable["Fireball"]       = static_cast<int>(MissileID::Fireball);
 		missileIdTable["HorkSpawn"]      = static_cast<int>(MissileID::HorkSpawn);
 		table["MissileID"] = missileIdTable;
+	}
+	// Lua mod support: monster_resistance bitflags for use with monster.resistance / monster:setResistance()
+	{
+		sol::table resistanceTable = lua.create_table();
+		resistanceTable["ResistMagic"]     = static_cast<int>(RESIST_MAGIC);
+		resistanceTable["ResistFire"]       = static_cast<int>(RESIST_FIRE);
+		resistanceTable["ResistLightning"]  = static_cast<int>(RESIST_LIGHTNING);
+		resistanceTable["ImmuneMagic"]      = static_cast<int>(IMMUNE_MAGIC);
+		resistanceTable["ImmuneFire"]       = static_cast<int>(IMMUNE_FIRE);
+		resistanceTable["ImmuneLightning"]  = static_cast<int>(IMMUNE_LIGHTNING);
+		resistanceTable["ImmuneAcid"]       = static_cast<int>(IMMUNE_ACID);
+		table["Resistance"] = resistanceTable;
 	}
 	// Lua mod support: MonsterAIID constants for use with monster.originalAiId
 	{

@@ -160,7 +160,7 @@ void DrawMonsterHealthBar(const Surface &out)
 	if (multiplier > 0)
 		DrawString(out, StrCat("x", multiplier), { position, { width - 2, height } },
 		    { .flags = UiFlags::ColorWhite | UiFlags::AlignRight | UiFlags::VerticalCenter });
-	if (monster.isUnique() || MonsterKillCounts[monster.type().type] >= 15) {
+	if (monster.isUnique() || MonsterKillCounts[monster.type().type] >= 15 || lua::OnMonsterCanShowResistances(&monster, false)) { // Lua mod support
 		const monster_resistance immunes[] = { IMMUNE_MAGIC, IMMUNE_FIRE, IMMUNE_LIGHTNING };
 		const monster_resistance resists[] = { RESIST_MAGIC, RESIST_FIRE, RESIST_LIGHTNING };
 

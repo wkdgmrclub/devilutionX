@@ -448,6 +448,16 @@ bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)
 	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanCompleteQuest", monster);
 }
 
+bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanPlaceCorpse", monster);
+}
+
+bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanShowResistances", monster);
+}
+
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnMissileCanTargetMonster", monster, source);
@@ -456,6 +466,17 @@ bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaul
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerAttackMonster", player, monster);
+}
+
+bool OnPlayerAttackMonster(const Player *player, int monsterId, bool defaultValue)
+{
+	// Resolve the cursor-targeted monster index (pcursmonst, -1 when none) to a monster
+	// object so callers that only hold the raw index can reuse the same event safely,
+	// mirroring OnCanCastSkill's resolution.
+	const Monster *target = nullptr;
+	if (monsterId >= 0 && monsterId < static_cast<int>(GetMaxMonsters()))
+		target = &Monsters[monsterId];
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerAttackMonster", player, target);
 }
 
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue)
@@ -528,9 +549,24 @@ int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t select
 	return CallLuaEventReturn<int>(defaultSlot, "OnResolveCustomScrollSlot", player, spellId, selectedSeed, defaultSlot);
 }
 
-bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed)
+bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed, int monsterId)
 {
-	return CallLuaEventReturn<bool>(true, "OnCanCastScroll", player, spellId, selectedSeed);
+	// Resolve the cursor-targeted monster index (pcursmonst, -1 when none) to a monster
+	// object so the handler can gate an offensive scroll on its target, mirroring OnCanCastSkill.
+	const Monster *target = nullptr;
+	if (monsterId >= 0 && monsterId < static_cast<int>(GetMaxMonsters()))
+		target = &Monsters[monsterId];
+	return CallLuaEventReturn<bool>(true, "OnCanCastScroll", player, spellId, selectedSeed, target);
+}
+
+bool OnCanCastSkill(const Player *player, int spellId, int monsterId)
+{
+	// Resolve the cursor-targeted monster index (pcursmonst, -1 when none) to a monster
+	// object so the handler receives one, mirroring OnSpellActionFrame's target lookup.
+	const Monster *target = nullptr;
+	if (monsterId >= 0 && monsterId < static_cast<int>(GetMaxMonsters()))
+		target = &Monsters[monsterId];
+	return CallLuaEventReturn<bool>(true, "OnCanCastSkill", player, spellId, target);
 }
 
 std::vector<uint32_t> OnSavePlayerData(){

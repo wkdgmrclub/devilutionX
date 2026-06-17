@@ -1490,10 +1490,14 @@ void MonsterDeath(Monster &monster)
 		if (monster.var1 == 140)
 			PrepDoEnding();
 	} else if (monster.animInfo.isLastFrame()) {
-		if (monster.isUnique())
-			AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
-		else
-			AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
+		// Lua mod support: a mod may veto corpse placement for this monster (default true = vanilla).
+		// The monster still clears its tile and is reaped regardless of the corpse decision.
+		if (lua::OnMonsterCanPlaceCorpse(&monster, true)) {
+			if (monster.isUnique())
+				AddCorpse(monster.position.tile, monster.corpseId, monster.direction);
+			else
+				AddCorpse(monster.position.tile, monster.type().corpseId, monster.direction);
+		}
 
 		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
 		monster.isInvalid = true;

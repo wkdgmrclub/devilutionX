@@ -2206,8 +2206,9 @@ bool UseInvItem(int cii)
 
 	// Lua mod support: let a mod veto a scroll cast before it is committed/consumed —
 	// the same gate as CheckPlrSpell, for the direct inventory/belt use path. Passes the
-	// exact scroll's seed so the mod can identify which custom scroll is being cast.
-	if (item->isScroll() && !lua::OnCanCastScroll(&player, static_cast<int>(item->_iSpell), item->_iSeed))
+	// exact scroll's seed so the mod can identify which custom scroll is being cast. No
+	// monster target here (-1): a targeted scroll re-enters CheckPlrSpell to pick its victim.
+	if (item->isScroll() && !lua::OnCanCastScroll(&player, static_cast<int>(item->_iSpell), item->_iSeed, -1))
 		return true;
 
 	const int idata = GetItemAnimIndex(item->_iCurs);

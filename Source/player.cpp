@@ -3266,17 +3266,25 @@ void CheckPlrSpell(bool isShiftHeld, SpellID spellID, SpellType spellType)
 	SpellCheckResult spellcheck = SpellCheckResult::Success;
 	switch (spellType) {
 	case SpellType::Skill:
+		spellcheck = CheckSpell(*MyPlayer, spellID, spellType, false);
+		// Lua mod support: let a mod veto a skill cast on the cursor-targeted monster before it is committed.
+		addflag = spellcheck == SpellCheckResult::Success
+		    && lua::OnCanCastSkill(&myPlayer, static_cast<int>(spellID), pcursmonst);
+		break;
 	case SpellType::Spell:
 		spellcheck = CheckSpell(*MyPlayer, spellID, spellType, false);
 		addflag = spellcheck == SpellCheckResult::Success;
 		break;
 	case SpellType::Scroll:
-		// Lua mod support: let a mod veto a scroll cast before it is committed/consumed.
+		// Lua mod support: let a mod veto a scroll cast before it is committed/consumed
+		// (pcursmonst lets it reject an offensive scroll aimed at the cursor-targeted monster).
 		addflag = pcurs == CURSOR_HAND && CanUseScroll(myPlayer, spellID)
-		    && lua::OnCanCastScroll(&myPlayer, static_cast<int>(spellID), myPlayer.selectedCustomScrollSeed);
+		    && lua::OnCanCastScroll(&myPlayer, static_cast<int>(spellID), myPlayer.selectedCustomScrollSeed, pcursmonst);
 		break;
 	case SpellType::Charges:
-		addflag = pcurs == CURSOR_HAND && CanUseStaff(myPlayer, spellID);
+		// Lua mod support: let a mod veto an offensive staff-charge cast on the cursor-targeted monster.
+		addflag = pcurs == CURSOR_HAND && CanUseStaff(myPlayer, spellID)
+		    && lua::OnPlayerAttackMonster(&myPlayer, pcursmonst, true);
 		break;
 	case SpellType::Invalid:
 		return;

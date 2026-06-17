@@ -85,8 +85,11 @@ std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
 int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
+bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue);
+bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue);
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
+bool OnPlayerAttackMonster(const Player *player, int monsterId, bool defaultValue);
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);
 bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);
 bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue);
@@ -103,7 +106,8 @@ std::string OnGetSpeedbookSpellName(const Player *player, int spellId, std::stri
 bool OnShouldHideSpeedbookSpell(const Player *player, int spellId, std::string_view spellType);
 bool OnCanSelectSpellBookEntry(const Player *player, int spellId);
 int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t selectedSeed, int defaultSlot);
-bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed);
+bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed, int monsterId);
+bool OnCanCastSkill(const Player *player, int spellId, int monsterId);
 bool OnCanAutoRefillBeltItem(const Player *player, const Item *item, bool defaultValue);
 
 // Mod data persistence hooks
