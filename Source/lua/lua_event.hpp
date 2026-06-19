@@ -41,6 +41,7 @@ void OnSpellCast(const Player *player, int spellId, int spellType, const Monster
 void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY);
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
 void OnPlayerTakeDamage(const Player *player, int damage, int damageType);
+void OnCalcPlayerResistances(const Player *player, int fire, int lightning, int magic);
 
 void OnCustomItemRecreated(Item &item);
 void OnItemPickedUp(const Player &player, const Item &item);
@@ -84,10 +85,26 @@ void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
 int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
+// Query: a mod may override a monster's palette-remap (TRN) for the frame. Returns the buffer to use,
+// or nullptr for the engine default. The Lua handler returns a handle previously obtained from
+// RegisterMonsterTRN (-1 = none); this resolves it to the stored 256-byte buffer.
+uint8_t *OnGetMonsterTRN(const Monster *monster);
+// Store a 256-byte TRN buffer (copied) and return a handle a Lua OnGetMonsterTRN handler can return.
+int RegisterMonsterTRN(const uint8_t *data256);
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
 bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue);
 bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue);
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
+int OnGolemMissileDamage(const Monster *golem, int missileId, int dam);
+// Bracket a missile's target-side damage resolution against another monster, fired when either the
+// source or the target is a player-minion (MFLAG_GOLEM); source may be null (e.g. a trap). PreResolve
+// fires before the engine reads the target's resistance/immunity: a mod may transiently adjust the
+// target's resistance bitfield (restored in PostResolve) and returns the DamageType the engine should
+// resolve this hit as (default = the passed-in damageType). The engine's own immune/resist math is
+// unchanged — it runs against the returned element. PostResolve fires right after so the mod can restore
+// the bitfield (changes must only span this one synchronous resolution).
+int OnGolemMissilePreResolve(const Monster *source, const Monster *target, int missileId, int damageType);
+void OnGolemMissilePostResolve(const Monster *target);
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
 bool OnPlayerAttackMonster(const Player *player, int monsterId, bool defaultValue);
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);

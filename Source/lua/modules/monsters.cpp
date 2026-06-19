@@ -1,6 +1,7 @@
 #include "lua/modules/monsters.hpp"
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,6 +20,7 @@
 #include "levels/gendung.h"
 #include "levels/tile_properties.hpp"
 #include "lighting.h"
+#include "lua/lua_event.hpp"
 #include "lua/metadoc.hpp"
 #include "missiles.h"
 #include "monster.h"
@@ -400,6 +402,42 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    StartGolemNaturalRangedAttack(monster);
 	    });
+	LuaSetDocFn(monsterType, "naturalRangedMissileId", "() -> integer",
+	    "Returns the MissileID integer this monster's authentic ranged/special attack would fire (the same missile startNaturalRangedAttack uses), without firing it. Combine with monsters.getMissileDamageType to derive the attack's element. // Lua mod support",
+	    [](const Monster &monster) -> int {
+		    return static_cast<int>(GetGolemNaturalMissile(monster));
+	    });
+	LuaSetDocFn(monsterType, "castFlashSelf", "()",
+	    "Cast a Flash burst (the FlashBottom+FlashTop missile pair of the Flash spell) centered on this "
+	    "monster's own tile, sourced from this monster (TARGET_PLAYERS — ally-safe vs other player-minions "
+	    "via the engine's faction check in CheckMissileCol). Damage is the engine's native monster-Flash "
+	    "value. Fires immediately (no cast animation), for an instant area burst at the monster's location. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    const int dam = RandomIntBetween(monster.minDamage, monster.maxDamage);
+		    AddMissile(monster.position.tile, monster.position.tile, monster.direction, MissileID::FlashBottom, TARGET_PLAYERS, monster, dam, 0);
+		    AddMissile(monster.position.tile, monster.position.tile, monster.direction, MissileID::FlashTop, TARGET_PLAYERS, monster, dam, 0);
+	    });
+	LuaSetDocFn(monsterType, "setLightRadius", "(radius: integer)",
+	    "Give this monster a light source of the given radius (the same mechanic 'lighted' unique monsters "
+	    "use), or change its radius if it already has one; radius <= 0 removes the light. The engine moves "
+	    "the light with the monster automatically (MonsterWalk / SyncLightPosition) and frees it on "
+	    "death/removal, so no per-frame upkeep is needed. // Lua mod support",
+	    [](const Monster &constMonster, int radius) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    if (radius <= 0) {
+			    if (monster.lightId != NO_LIGHT) {
+				    AddUnLight(monster.lightId);
+				    monster.lightId = NO_LIGHT;
+			    }
+			    return;
+		    }
+		    const uint8_t r = static_cast<uint8_t>(radius);
+		    if (monster.lightId == NO_LIGHT)
+			    monster.lightId = AddLight(monster.position.tile, r);
+		    else
+			    ChangeLightRadius(monster.lightId, r);
+	    });
 	LuaSetDocFn(monsterType, "startSpecialAttack", "()",
 	    "Trigger this monster's special melee attack (Special animation + SpecialMeleeAttack mode), e.g. the Goat Melee low-HP special. // Lua mod support",
 	    [](const Monster &constMonster) {
@@ -530,6 +568,22 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    t["immuneFire"]      = (res & IMMUNE_FIRE) != 0;
 		    t["immuneLightning"] = (res & IMMUNE_LIGHTNING) != 0;
 		    return t;
+	    });
+	LuaSetDocFn(table, "getMissileDamageType", "(missileId: integer) -> integer",
+	    "Returns the DamageType integer (monsters.DamageType.*) of the given MissileID. Use to derive a missile's element (Fire/Lightning/Magic/Physical/Acid), e.g. for resistance-scaled mechanics. // Lua mod support",
+	    [](int missileId) -> int {
+		    return static_cast<int>(GetMissileData(static_cast<MissileID>(missileId)).damageType());
+	    });
+	LuaSetDocFn(table, "registerTrn", "(bytes: integer[256]) -> integer",
+	    "Register a 256-byte TRN (palette-remap) table and return a handle. Pass a Lua array of 256 "
+	    "color indices (1-based; entry i is the color every pixel of index i-1 is drawn as). Return the "
+	    "handle from an OnGetMonsterTRN handler to remap a monster's palette for the frame (e.g. a blink). "
+	    "Call once at load and reuse the handle; the buffer is copied and kept for the session. // Lua mod support",
+	    [](const sol::table &bytes) -> int {
+		    std::array<uint8_t, 256> trn {};
+		    for (int i = 0; i < 256; i++)
+			    trn[static_cast<size_t>(i)] = static_cast<uint8_t>(bytes.get_or(i + 1, i));
+		    return lua::RegisterMonsterTRN(trn.data());
 	    });
 	LuaSetDocFn(table, "spawnAt", "(typeId: integer, x: integer, y: integer) -> Monster|nil",
 	    "Spawn a monster of the given type ID at the given tile. Returns the new Monster or nil on failure.",
@@ -668,6 +722,16 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		resistanceTable["ImmuneLightning"]  = static_cast<int>(IMMUNE_LIGHTNING);
 		resistanceTable["ImmuneAcid"]       = static_cast<int>(IMMUNE_ACID);
 		table["Resistance"] = resistanceTable;
+	}
+	// Lua mod support: DamageType constants for use with monsters.getMissileDamageType
+	{
+		sol::table damageTypeTable = lua.create_table();
+		damageTypeTable["Physical"]  = static_cast<int>(DamageType::Physical);
+		damageTypeTable["Fire"]      = static_cast<int>(DamageType::Fire);
+		damageTypeTable["Lightning"] = static_cast<int>(DamageType::Lightning);
+		damageTypeTable["Magic"]     = static_cast<int>(DamageType::Magic);
+		damageTypeTable["Acid"]      = static_cast<int>(DamageType::Acid);
+		table["DamageType"] = damageTypeTable;
 	}
 	// Lua mod support: MonsterAIID constants for use with monster.originalAiId
 	{

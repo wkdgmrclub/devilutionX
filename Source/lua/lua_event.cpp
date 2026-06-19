@@ -1,5 +1,8 @@
 #include "lua/lua_event.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -211,6 +214,10 @@ void OnPlayerTakeDamage(const Player *player, int damage, int damageType)
 {
 	CallLuaEvent("OnPlayerTakeDamage", player, damage, damageType);
 }
+void OnCalcPlayerResistances(const Player *player, int fire, int lightning, int magic)
+{
+	CallLuaEvent("OnCalcPlayerResistances", player, fire, lightning, magic);
+}
 
 void LoadModsComplete()
 {
@@ -282,6 +289,21 @@ int OnGetPlayerDamageMod(const Player *player, int strMod, int strDexMod, int to
 int OnGetManaCost(const Player *player, int baseCost, int defaultValue)
 {
 	return CallLuaEventReturn<int>(defaultValue, "OnGetManaCost", player, baseCost);
+}
+
+int OnGolemMissileDamage(const Monster *golem, int missileId, int dam)
+{
+	return CallLuaEventReturn<int>(dam, "OnGolemMissileDamage", golem, missileId, dam);
+}
+
+int OnGolemMissilePreResolve(const Monster *source, const Monster *target, int missileId, int damageType)
+{
+	return CallLuaEventReturn<int>(damageType, "OnGolemMissilePreResolve", source, target, missileId, damageType);
+}
+
+void OnGolemMissilePostResolve(const Monster *target)
+{
+	CallLuaEvent("OnGolemMissilePostResolve", target);
 }
 
 bool OnPlayerHasCriticalStrike(const Player *player, bool defaultValue)
@@ -441,6 +463,28 @@ std::string OnGetMonsterDisplayName(const Monster *monster){
 int OnGetMonsterOutlineColor(const Monster *monster) // -1 = no outline
 {
 	return CallLuaEventReturn<int>(-1, "OnGetMonsterOutlineColor", monster);
+}
+
+namespace {
+// Mod-registered TRN (palette-remap) buffers, addressed by handle. Append-only for the session,
+// so a handle stays valid for the lifetime of the process.
+std::vector<std::array<uint8_t, 256>> MonsterTRNs;
+} // namespace
+
+int RegisterMonsterTRN(const uint8_t *data256)
+{
+	std::array<uint8_t, 256> trn;
+	std::copy(data256, data256 + 256, trn.begin());
+	MonsterTRNs.push_back(trn);
+	return static_cast<int>(MonsterTRNs.size()) - 1;
+}
+
+uint8_t *OnGetMonsterTRN(const Monster *monster)
+{
+	const int handle = CallLuaEventReturn<int>(-1, "OnGetMonsterTRN", monster);
+	if (handle < 0 || handle >= static_cast<int>(MonsterTRNs.size()))
+		return nullptr;
+	return MonsterTRNs[static_cast<size_t>(handle)].data();
 }
 
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)

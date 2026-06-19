@@ -142,6 +142,11 @@ local events = {
   OnPlayerGainExperience = CreateEvent(),
   __doc_OnPlayerGainExperience = "Called when Player gains experience.",
 
+  ---Called when a player's resistances are recalculated (CalcPlrInv). Args: player, fire, lightning,
+  ---magic — the UNCAPPED pre-clamp totals (may exceed the 75% display cap shown on the character sheet).
+  OnCalcPlayerResistances = CreateEvent(),
+  __doc_OnCalcPlayerResistances = "Called when player resistances are recalculated. Args: player, fire, lightning, magic (uncapped pre-clamp totals).",
+
   ---Called just before the current level is saved and unloaded (level exit, warp, or player death).
   ---All monsters and items are still accessible. Drop or recall anything before this returns.
   OnLevelExit = CreateEvent(),
@@ -456,6 +461,14 @@ local events = {
   OnGetMonsterOutlineColor = CreateQueryEvent(),
   __doc_OnGetMonsterOutlineColor = "Query: return a palette color index (0-255) to draw a colored outline around a monster sprite. Return nil for no outline.",
 
+  ---Query event fired once per monster per rendered frame (in DrawMonster).
+  ---Args: monster. Return a TRN handle (from monsters.registerTrn) to remap this monster's palette
+  ---for the frame, e.g. a transient blink; return nil for the engine default. Wins over the
+  ---unique/petrified/infravision TRN when set (but a monster on an unlit tile is drawn with the
+  ---infravision TRN before this fires).
+  OnGetMonsterTRN = CreateQueryEvent(),
+  __doc_OnGetMonsterTRN = "Query: return a TRN handle (monsters.registerTrn) to override a monster's palette-remap for the frame. Return nil for default.",
+
   ---Query event fired from MonsterDeath before CheckQuestKill, for any dying monster.
   ---Args: monster. Return false to skip quest completion for this death (e.g. a tamed quest boss
   ---dying as a player-minion should not re-trigger its quest). Return nil or true to allow (default: true).
@@ -480,6 +493,34 @@ local events = {
   ---monster (no bolt fired at it); return nil or true to allow (default: true).
   OnMissileCanTargetMonster = CreateQueryEvent(),
   __doc_OnMissileCanTargetMonster = "Query: return false to stop an auto-targeting missile (Chain Lightning, Bone Spirit) from targeting this monster. Args: monster, source (Point, the cast/bounce origin). Use source to also reject targets behind a protected monster. Return nil or true to allow.",
+
+  ---Query event fired when a golem / player-minion (MFLAG_GOLEM) missile's damage is finalized (at
+  ---missile creation, after the missile's own damage roll). Args: golem (the casting monster),
+  ---missileId (int), dam (int). Return an integer to override the missile's damage; return nil to keep
+  ---dam. Gated to MFLAG_GOLEM sources, so wild-monster missiles never fire it. Fires once per missile,
+  ---including each segment of a multi-tick spell (every Inferno/Lightning spawn). Melee never fires this.
+  OnGolemMissileDamage = CreateQueryEvent(),
+  __doc_OnGolemMissileDamage = "Query: return integer to override a golem/player-minion missile's damage. Args: golem, missileId (int), dam (int). MFLAG_GOLEM sources only; fires per missile incl. each spell segment. Return nil to keep dam.",
+
+  ---Query event fired just BEFORE a golem/player-minion (MFLAG_GOLEM) missile's damage is resolved
+  ---against another monster (the MonsterTrapHit path, e.g. a player-minion's cast hitting an enemy
+  ---monster), before the engine reads the target's resistance/immunity. Fired when either the source OR
+  ---the target is a player-minion (MFLAG_GOLEM); wild-vs-wild missiles never fire it.
+  ---Args: source (Monster — the source monster, may be nil for a trap), target (Monster — the monster
+  ---being hit), missileId (int), damageType (int — monsters.DamageType.*). A handler may transiently
+  ---mutate the target's resistance bitfield (restore it in the paired OnGolemMissilePostResolve so it
+  ---only spans this one synchronous resolution) AND/OR return a DamageType int to reclassify the element
+  ---the engine resolves this hit as (the engine's own immune/resist math then runs against that element).
+  ---Return nil to keep the original damageType. Use to express resistance an element lacks (e.g. resolve
+  ---acid as Magic so a monster's magic resistance applies — monster-side acid has no resist tier).
+  OnGolemMissilePreResolve = CreateQueryEvent(),
+  __doc_OnGolemMissilePreResolve = "Query (MFLAG_GOLEM on either end — source or target): fired before that missile resolves against the target monster. Args: source (may be nil), target, missileId (int), damageType (int). Transiently mutate target resistance (restore in OnGolemMissilePostResolve) and/or return a DamageType int to reclassify the resolved element (nil = keep damageType).",
+
+  ---Event fired immediately AFTER the golem-missile-vs-monster resolution that OnGolemMissilePreResolve
+  ---bracketed (same gate). Args: target (Monster). Use to restore any transient resistance change made
+  ---in the pre hook.
+  OnGolemMissilePostResolve = CreateEvent(),
+  __doc_OnGolemMissilePostResolve = "Fired right after a golem-missile-vs-monster resolution (pairs with OnGolemMissilePreResolve). Args: target. Restore any transient resistance change here.",
 
   ---Query event fired before a player's left-click attack or offensive spell cast is queued on a monster.
   ---Args: player, monster. Return false to cancel (silently no-op); return nil or true to allow (default: true).

@@ -4287,6 +4287,29 @@ void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType)
 	StartRangedSpecialAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
 }
 
+// Lua mod support: resolve the missile a golem's *authentic* ranged/special attack would fire,
+// mirroring StartGolemNaturalRangedAttack's selection (Counselor/Advocate by intelligence,
+// Mega->Inferno, everyone else via GetMissileType). Single source of truth so a mod can read the
+// missile (and thus its element) without firing it. Uses monster.data().ai (the original AI),
+// since a golem's live ai is Golem.
+MissileID GetGolemNaturalMissile(const Monster &monster)
+{
+	const MonsterAIID ai = monster.data().ai;
+	switch (ai) {
+	case MonsterAIID::Counselor: {
+		constexpr MissileID MissileTypes[4] = { MissileID::Firebolt, MissileID::ChargedBolt, MissileID::LightningControl, MissileID::Fireball };
+		int idx = monster.intelligence;
+		if (idx < 0) idx = 0;
+		if (idx > 3) idx = 3;
+		return MissileTypes[idx];
+	}
+	case MonsterAIID::Mega:
+		return MissileID::InfernoControl;
+	default:
+		return GetMissileType(ai);
+	}
+}
+
 // Lua mod support: fire this golem's *authentic* ranged/special attack — the same missile and
 // animation its original AI would use — instead of the generic golem arrow. Mirrors AiRanged /
 // AiRangedAvoidance / CounselorAi / MegaAi:
@@ -4294,33 +4317,24 @@ void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType)
 //   - Mega: InfernoControl (special-ranged)
 //   - Magma/Storm/Acid/AcidUnique/Diablo/BoneDemon: GetMissileType, special-ranged animation
 //   - everyone else (Succubus, Lich, FireBat, archers, ...): GetMissileType, normal ranged anim
-// Uses monster.data().ai (the original AI), since a golem's live ai is Golem.
+// The missile choice is delegated to GetGolemNaturalMissile (shared with the Lua binding).
 void StartGolemNaturalRangedAttack(Monster &monster)
 {
 	const MonsterAIID ai = monster.data().ai;
 	const int dam = RandomIntBetween(monster.minDamage, monster.maxDamage);
+	const MissileID missile = GetGolemNaturalMissile(monster);
 	switch (ai) {
-	case MonsterAIID::Counselor: {
-		constexpr MissileID MissileTypes[4] = { MissileID::Firebolt, MissileID::ChargedBolt, MissileID::LightningControl, MissileID::Fireball };
-		int idx = monster.intelligence;
-		if (idx < 0) idx = 0;
-		if (idx > 3) idx = 3;
-		StartRangedAttack(monster, MissileTypes[idx], dam);
-		break;
-	}
 	case MonsterAIID::Mega:
-		StartRangedSpecialAttack(monster, MissileID::InfernoControl, dam);
-		break;
 	case MonsterAIID::Magma:
 	case MonsterAIID::Storm:
 	case MonsterAIID::Acid:
 	case MonsterAIID::AcidUnique:
 	case MonsterAIID::Diablo:
 	case MonsterAIID::BoneDemon:
-		StartRangedSpecialAttack(monster, GetMissileType(ai), dam);
+		StartRangedSpecialAttack(monster, missile, dam);
 		break;
 	default:
-		StartRangedAttack(monster, GetMissileType(ai), dam);
+		StartRangedAttack(monster, missile, dam);
 		break;
 	}
 }

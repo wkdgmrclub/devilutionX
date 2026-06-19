@@ -397,6 +397,10 @@ void DrawMonster(const Surface &out, Point tilePosition, Point targetBufferPosit
 		trn = GetStoneTRN();
 	if (MyPlayer->_pInfraFlag && lightTableIndex > 8)
 		trn = GetInfravisionTRN();
+	// Lua mod support — let a mod override this monster's palette-remap (TRN) for the frame, e.g. a
+	// transient blink. Returns nullptr by default, so vanilla rendering is byte-for-byte unchanged.
+	if (uint8_t *luaTrn = lua::OnGetMonsterTRN(&monster); luaTrn != nullptr)
+		trn = luaTrn;
 	if (trn != nullptr)
 		ClxDrawTRN(out, targetBufferPosition, sprite, trn);
 	else

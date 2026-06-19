@@ -137,12 +137,41 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "magic", "integer",
 	    "Base magic stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseMag); });
+	LuaSetDocReadonlyProperty(playerType, "magicCurrent", "integer",
+	    "Effective (current) magic stat as shown on the character sheet — base plus equipment bonuses (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pMagic); });
 	LuaSetDocReadonlyProperty(playerType, "dexterity", "integer",
 	    "Base dexterity stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseDex); });
 	LuaSetDocReadonlyProperty(playerType, "vitality", "integer",
 	    "Base vitality stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseVit); });
+	// Effective combat stats as shown on the character sheet (readonly). These read the player's
+	// already-accumulated combat accessors/fields (GetArmor/GetMeleeToHit/GetRangedToHit and the
+	// CalcPlrInv-cached _pI* damage fields) and combine them exactly as charpanel.cpp does for
+	// display — no inventory iteration of our own. // Lua mod support
+	LuaSetDocReadonlyProperty(playerType, "armorClass", "integer",
+	    "Effective armor class as shown on the character sheet (readonly)",
+	    [](const Player &player) { return player.GetArmor() + (player.getCharacterLevel() * 2); });
+	LuaSetDocReadonlyProperty(playerType, "toHit", "integer",
+	    "Effective to-hit percentage as shown on the character sheet (ranged when a bow is equipped, else melee) (readonly)",
+	    [](const Player &player) {
+		    return player.UsesRangedWeapon() ? player.GetRangedToHit() : player.GetMeleeToHit();
+	    });
+	LuaSetDocReadonlyProperty(playerType, "minDamage", "integer",
+	    "Effective minimum attack damage as shown on the character sheet (readonly)",
+	    [](const Player &player) {
+		    int damageMod = player._pIBonusDamMod;
+		    damageMod += (player.UsesRangedWeapon() && player._pClass != HeroClass::Rogue) ? player._pDamageMod / 2 : player._pDamageMod;
+		    return player._pIMinDam + (player._pIBonusDam * player._pIMinDam / 100) + damageMod;
+	    });
+	LuaSetDocReadonlyProperty(playerType, "maxDamage", "integer",
+	    "Effective maximum attack damage as shown on the character sheet (readonly)",
+	    [](const Player &player) {
+		    int damageMod = player._pIBonusDamMod;
+		    damageMod += (player.UsesRangedWeapon() && player._pClass != HeroClass::Rogue) ? player._pDamageMod / 2 : player._pDamageMod;
+		    return player._pIMaxDam + (player._pIBonusDam * player._pIMaxDam / 100) + damageMod;
+	    });
 	LuaSetDocReadonlyProperty(playerType, "className", "string",
 	    "Player class name (readonly)",
 	    [](const Player &player) -> std::string { return std::string(GetPlayerDataForClass(player._pClass).className); });

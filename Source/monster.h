@@ -599,6 +599,7 @@ bool StartGolemCharge(Monster &monster);                              // Lua mod
 bool StartGolemSpawnSkeleton(Monster &monster);                       // Lua mod support
 void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType); // Lua mod support
 void StartGolemNaturalRangedAttack(Monster &monster);                 // Lua mod support
+MissileID GetGolemNaturalMissile(const Monster &monster);             // Lua mod support
 void StartGolemSpecialAttack(Monster &monster);                       // Lua mod support
 void StartHeal(Monster &monster);                                     // Lua mod support
 void StartEating(Monster &monster);                                   // Lua mod support

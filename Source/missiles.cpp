@@ -504,9 +504,20 @@ void CheckMissileCol(Missile &missile, DamageType damageType, int minDamage, int
 			            || (monster.flags & MFLAG_BERSERK) != 0                                  //  or the target is berserked
 			            ))) {
 				// then the missile can potentially hit this target
-				isMonsterHit = MonsterTrapHit(monster, minDamage, maxDamage, missile._midist, missile._mitype, damageType, isDamageShifted);
+				// Lua mod support — bracket the target-side resolution so a mod can reclassify the resolved
+				// element (default = damageType) and/or transiently adjust the target's resistance (restored in
+				// the paired post call-out). Fires when either the source or the target is a player-minion
+				// (MFLAG_GOLEM). Monster-only local keeps damageType intact for the player-hit branch.
+				DamageType resolveType = damageType;
+				Monster *missileSource = missile.sourceMonster();
+				const bool resolveHook = (missileSource != nullptr && (missileSource->flags & MFLAG_GOLEM) != 0) || (monster.flags & MFLAG_GOLEM) != 0;
+				if (resolveHook)
+					resolveType = static_cast<DamageType>(lua::OnGolemMissilePreResolve(missileSource, &monster, static_cast<int>(missile._mitype), static_cast<int>(damageType)));
+				isMonsterHit = MonsterTrapHit(monster, minDamage, maxDamage, missile._midist, missile._mitype, resolveType, isDamageShifted);
+				if (resolveHook)
+					lua::OnGolemMissilePostResolve(&monster);
 				// Lua mod support — mirror the melee StartDeathFromMonster golem-kill call-out for ranged/special kills
-				if (Monster *missileSource = missile.sourceMonster(); isMonsterHit && monster.hasNoLife() && missileSource != nullptr && (missileSource->flags & MFLAG_GOLEM) != 0)
+				if (isMonsterHit && monster.hasNoLife() && missileSource != nullptr && (missileSource->flags & MFLAG_GOLEM) != 0)
 					lua::OnGolemKilledMonster(missileSource, &monster);
 			} else if (IsAnyOf(missile._micaster, TARGET_BOTH, TARGET_MONSTERS)) {
 				isMonsterHit = MonsterMHit(*missile.sourcePlayer(), monster, minDamage, maxDamage, missile._midist, missile._mitype, missile.position.start, damageType, isDamageShifted);
@@ -2856,6 +2867,14 @@ Missile *AddMissile(WorldTilePosition src, WorldTilePosition dst, Direction midi
 	missileData.addFn(missile, parameter);
 	if (parameter.spellFizzled) {
 		return nullptr;
+	}
+
+	// Lua mod support: golem / player-minion missiles only — let a mod read/replace this missile's
+	// final damage after its own roll. Returns the damage unchanged when no mod handles it, so base
+	// behaviour is identical. Gated to MFLAG_GOLEM sources so wild-monster missiles never cross into
+	// Lua. Fires once per created missile (each spawned segment included).
+	if (Monster *src = missile.sourceMonster(); src != nullptr && (src->flags & MFLAG_GOLEM) != 0) {
+		missile._midam = lua::OnGolemMissileDamage(src, static_cast<int>(missile._mitype), missile._midam);
 	}
 
 	return &missile;

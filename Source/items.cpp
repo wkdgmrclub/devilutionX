@@ -197,7 +197,10 @@ Item curruitem;
 // Lua mod support: populated by Lua via SetLuaUniqueInfoBox() when OnPrepareUniqueInfoBox returns true.
 // curruitem._iUid is set to UITEM_LUA_CUSTOM at that point so DrawUniqueInfo uses this slot.
 namespace {
-struct { std::string name; std::vector<std::string> lines; } g_luaUniqueSlot;
+struct {
+	std::string name;
+	std::vector<std::string> lines;
+} g_luaUniqueSlot;
 } // namespace
 
 /** Holds item get records, tracking items being recently looted. This is in an effort to prevent items being picked up more than once. */
@@ -2670,6 +2673,10 @@ void CalcPlrResistances(Player &player, ItemSpecialEffect iflgs, int fire, int l
 		lightning = 0;
 	}
 
+	// Lua mod support: forward the uncapped pre-clamp totals (may exceed the MaxResistance display
+	// cap) so mods can read the true resistance values.
+	lua::OnCalcPlayerResistances(&player, fire, lightning, magic);
+
 	player._pMagResist = std::clamp(magic, 0, MaxResistance);
 	player._pFireResist = std::clamp(fire, 0, MaxResistance);
 	player._pLghtResist = std::clamp(lightning, 0, MaxResistance);
@@ -2705,7 +2712,7 @@ void CalcPlrBlockFlag(Player &player)
 	const bool isHoldingStaff = player.isHoldingItem(ItemType::Staff);
 	const bool isUnarmed = leftHandItem.isEmpty() && rightHandItem.isEmpty();
 	const bool isSingleHanded = (leftHandItem._iClass == ICLASS_WEAPON && leftHandItem._iLoc != ILOC_TWOHAND && rightHandItem.isEmpty())
-	                         || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty());
+	    || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty());
 	if (player._pClass == HeroClass::Monk
 	    || lua::OnPlayerCanBlockWithoutShield(&player, isHoldingStaff, isUnarmed, false)) { // Lua mod support
 		if (isHoldingStaff) {
@@ -2793,8 +2800,8 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 
 	// Lua mod support: allow mods to override the resolved armor sprite tier
 	const char *defaultStr = armorGraphic == PlayerArmorGraphic::Heavy ? "Heavy"
-	    : armorGraphic == PlayerArmorGraphic::Medium                    ? "Medium"
-	                                                                     : "Light";
+	    : armorGraphic == PlayerArmorGraphic::Medium                   ? "Medium"
+	                                                                   : "Light";
 	const std::string result = lua::OnGetPlayerArmorGraphic(&player, defaultStr);
 	if (result == "Heavy") return PlayerArmorGraphic::Heavy;
 	if (result == "Medium") return PlayerArmorGraphic::Medium;
@@ -3603,7 +3610,7 @@ void RecreateItem(const Player &player, Item &item, _item_indexes idx, uint16_t 
 		InitializeItem(item, idx);
 		item._iSeed = iseed;
 		if (idx >= IDI_NUM_DEFAULT_ITEMS) { // Lua mod support: custom item registered via mod system
-			item.dwBuff = dwBuff; // restore after InitializeItem zeroed the struct
+			item.dwBuff = dwBuff;           // restore after InitializeItem zeroed the struct
 			lua::OnCustomItemRecreated(item);
 		}
 		gbIsHellfire = tmpIsHellfire;
