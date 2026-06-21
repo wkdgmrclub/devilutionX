@@ -157,6 +157,13 @@ local events = {
   OnLevelEnter = CreateEvent(),
   __doc_OnLevelEnter = "Called after a level finishes loading and all players are initialized. Fires on every level entry including first load.",
 
+  ---Called when a generic mod net message (system.netSend) is received from another client.
+  ---Args: senderId (integer player id the message came from), payload (string — the opaque bytes
+  ---the sender passed to system.netSend; binary-safe, may contain embedded zeros).
+  ---The engine does not interpret the payload; encode/decode it however the mod likes.
+  NetMessage = CreateEvent(),
+  __doc_NetMessage = "Called when a system.netSend message is received from another client. Args: senderId (int), payload (string). Payload is opaque mod-defined bytes.",
+
   ---Called inside RecreateItem for any item whose IDidx >= IDI_NUM_DEFAULT_ITEMS (Lua-registered custom items).
   ---Fires after InitializeItem and seed/dwBuff are restored, so item.seed and item.buff are valid.
   ---Use this to restore fields that InitializeItem resets (e.g. the display name).
@@ -337,16 +344,23 @@ local events = {
   __doc_OnGolemIdle = "Query: return Point to walk (AiPlanPath first, RandomWalk fallback), false to stand still, nil for engine default. Args: ally, hasTarget (bool), enemyPosition (Point).",
 
   ---Query event fired from GolumAi after UpdateEnemy, before the melee-attack and chase block.
-  ---Args: ally (Monster), hasTarget (bool), distanceToTarget (int, -1 if no target), hasLOS (bool).
+  ---Args: ally (Monster), enemy (Monster|nil — the ally's current target, nil if none). Derive
+  ---distance via ally.position/enemy.position and line of sight via ally:hasLineOfSightTo(enemy).
   ---Return true to signal Lua handled this tick entirely (engine skips attack/chase/idle). Return nil or false to let engine proceed normally.
   OnGolemChooseAction = CreateQueryEvent(),
-  __doc_OnGolemChooseAction = "Query: return true to consume the GolumAi tick (skip melee/chase/idle). Args: ally, hasTarget (bool), distanceToTarget (int), hasLOS (bool).",
+  __doc_OnGolemChooseAction = "Query: return true to consume the GolumAi tick (skip melee/chase/idle). Args: ally, enemy (Monster|nil).",
 
   ---Query event fired from SpawnBoy (Wirt's item generation) for classes not handled by the built-in switch.
   ---itemType is one of: "LightArmor", "MediumArmor", "HeavyArmor", "Shield", "Axe", "Bow", "Mace", "Sword", "Helm", "Staff", "Ring", "Amulet".
   ---Return true to exclude this item type (forces a reroll). Return nil or false to allow.
   OnShouldExcludeWirtItem = CreateQueryEvent(),
   __doc_OnShouldExcludeWirtItem = "Query: return true to exclude an item type from Wirt's item for this player. itemType: \"Bow\"/\"Staff\"/\"Sword\" etc. Return nil or false to allow.",
+
+  ---Query event fired from a vendor's "will buy this item?" check (e.g. SmithWillBuy / WitchWillBuy)
+  ---when deciding whether an inventory item appears in that vendor's buy-from-player list. Args: item.
+  ---Return false to stop the vendor buying this item; return nil or true to defer to the default.
+  OnVendorWillBuyItem = CreateQueryEvent(),
+  __doc_OnVendorWillBuyItem = "Query: return false to stop a vendor buying an item (removes it from the sell list). Args: item. Return nil or true to keep the default (default: vendor's own decision).",
 
   ---Query event fired from GetSpellListItems to collect custom scroll entries for the speedbook.
   ---Return a table of {name, seed, spell, count} entries to inject, or nil for none.
@@ -543,10 +557,10 @@ local events = {
   OnSavePlayerData = CreateEvent(),
   __doc_OnSavePlayerData = "Called on save. Return a sequence table of uint32 values to persist in a separate mod-data file. Use OnLoadPlayerData to restore on load.",
 
-  ---Called when the player's save file is loaded. Receives the flat uint32 sequence previously returned
-  ---by OnSavePlayerData. Not called for old saves that predate the mod-data file.
+  ---Called when the player's save file is loaded. Receives the flat uint32 sequence returned
+  ---by OnSavePlayerData on the last save. Not called for saves lacking the mod-data file.
   OnLoadPlayerData = CreateEvent(),
-  __doc_OnLoadPlayerData = "Called on load with the flat uint32 sequence from the previous OnSavePlayerData return. Not called for old saves lacking mod data.",
+  __doc_OnLoadPlayerData = "Called on load with the flat uint32 sequence from the last OnSavePlayerData return. Not called for saves lacking the mod-data file.",
 }
 
 ---Registers a custom event type with the given name.
