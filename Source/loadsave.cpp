@@ -2968,7 +2968,7 @@ void LoadPlayerModData() // Lua mod support
 {
 	LoadHelper file(OpenSaveArchive(gSaveNumber), "luamoddata");
 	if (!file.IsValid())
-		return; // old save or no mod data; _iLuaData defaults to 0
+		return; // no "luamoddata" entry (vanilla / non-mod save): nothing to load
 	const uint32_t count = file.NextLE<uint32_t>();
 	std::vector<uint32_t> data(count);
 	for (uint32_t &value : data)

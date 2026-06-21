@@ -37,8 +37,6 @@ struct Corpse {
 extern Corpse Corpses[MaxCorpses];
 extern int8_t stonendx;
 
-struct CMonster;
-
 void InitCorpses();
 void AddCorpse(Point tilePosition, int8_t dv, Direction ddir);
 void MoveLightsToCorpses();

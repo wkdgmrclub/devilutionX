@@ -4368,19 +4368,13 @@ void GolumAi(Monster &golem)
 		return;
 	}
 
-	// Lua mod support
+	// Lua mod support: forward the current enemy monster (or null when there is none) so a handler
+	// can derive distance / line of sight itself. Only values already in scope are passed — nothing
+	// is computed here purely to feed the hook. (golem.enemy indexes Monsters[] while NO_ENEMY is
+	// clear, matching the enemy read just below.)
 	{
-		const bool hasTarget = (golem.flags & MFLAG_NO_ENEMY) == 0;
-		int dist = -1;
-		bool hasLOS = false;
-		if (hasTarget) {
-			const Monster &enemy = Monsters[golem.enemy];
-			const int dx = std::abs(golem.position.tile.x - enemy.position.future.x);
-			const int dy = std::abs(golem.position.tile.y - enemy.position.future.y);
-			dist = std::max(dx, dy);
-			hasLOS = LineClearMovingMissile(golem.position.tile, enemy.position.tile);
-		}
-		if (lua::OnGolemChooseAction(&golem, hasTarget, dist, hasLOS))
+		Monster *enemy = ((golem.flags & MFLAG_NO_ENEMY) == 0) ? &Monsters[golem.enemy] : nullptr;
+		if (lua::OnGolemChooseAction(&golem, enemy))
 			return;
 	}
 
@@ -4436,7 +4430,7 @@ void GolumAi(Monster &golem)
 		}
 		return; // Lua took ownership: either walked or deliberately stood still
 	}
-	// No Lua handler answered: original _pdir wander (backward compat for non-modded golems)
+	// No Lua handler answered: the engine default _pdir wander (unchanged for non-modded golems)
 	if (RandomWalk(golem, Players[golem.goalVar3]._pdir))
 		return;
 

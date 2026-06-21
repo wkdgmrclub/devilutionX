@@ -626,15 +626,21 @@ int8_t DefaultDropAnimForItemType(ItemType type)
 	}
 }
 
-void LuaAddToHealerStock(int32_t mappingId, int ivalue)
+void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride)
 {
 	const auto it = ItemMappingIdsToIndices.find(mappingId);
 	if (it == ItemMappingIdsToIndices.end()) return;
 	const auto itemIndex = static_cast<_item_indexes>(it->second);
 
-	// Idempotent: skip if this item is already in the healer's stock.
+	const uint32_t seed = seedOpt.value_or(0);
+
+	// Idempotent: skip if this item is already in stock. Without a seed (a single static stock
+	// item) any same-mapping entry counts as already present; with a seed (per-instance custom
+	// items sharing one mapping, e.g. seeded scrolls) only a matching seed counts, so distinct
+	// seeds coexist.
 	for (const Item &existing : HealerItems) {
-		if (existing.IDidx == itemIndex) return;
+		if (existing.IDidx != itemIndex) continue;
+		if (!seedOpt.has_value() || existing._iSeed == seed) return;
 	}
 
 	// If at capacity, replace the last (lowest-priority) random item.
@@ -644,10 +650,23 @@ void LuaAddToHealerStock(int32_t mappingId, int ivalue)
 
 	Item item = {};
 	GetItemAttrs(item, itemIndex, 1);
+	if (seedOpt.has_value()) {
+		// Seeded custom item: set it up like a normal dropped/inventory item so its seed, name and
+		// dwBuff roundtrip intact when bought (createInfo 0 keeps RecreateItem from touching dwBuff).
+		SetupItem(item);
+		item._iSeed = seed;
+		item._iCreateInfo = 0;
+	}
 	item._iIdentified = true;
 	item._iIvalue = ivalue;
 	item._ivalue = ivalue;
 	item._iStatFlag = true;
+	if (buffOverride.has_value()) item.dwBuff = *buffOverride;
+	if (modDataOverride.has_value()) item._iLuaData = *modDataOverride; // Lua mod support
+	if (nameOverride.has_value()) {
+		CopyUtf8(item._iName, *nameOverride, sizeof(item._iName));
+		CopyUtf8(item._iIName, *nameOverride, sizeof(item._iIName));
+	}
 	HealerItems.push_back(std::move(item));
 }
 
@@ -676,8 +695,8 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: integer)",
 	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (uint32; persisted through save/load; base game ignores this field).",
 	    LuaSpawnItemAt);
-	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer)",
-	    "Add a custom item to the healer's buy list at the given identified value (shop price). Idempotent — calling again while the item is already in stock is a no-op. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so the item reappears after purchase.",
+	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, modData?: integer)",
+	    "Add a custom item to the healer's buy list at the given identified value (shop price). Optional seed/name/dwBuff/modData stock a per-instance seeded item (e.g. a custom scroll) that roundtrips when bought; omitting them stocks a single static item. Idempotent — without a seed any same-mapping entry is a no-op, with a seed only a matching seed is a no-op, so distinct seeds coexist. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so items reappear after purchase.",
 	    LuaAddToHealerStock);
 	// Lua mod support: populate the custom unique info box slot.
 	// Call inside OnPrepareUniqueInfoBox then return true to redirect DrawUniqueInfo to this content.

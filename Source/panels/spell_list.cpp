@@ -284,7 +284,7 @@ std::vector<SpellListItem> GetSpellListItems()
 		}
 	}
 
-	// Lua mod support: append custom scroll entries (e.g. named Tame Scrolls per monster).
+	// Lua mod support: append custom scroll entries (e.g. mod-defined named scrolls).
 	for (const lua::CustomSpeedbookEntry &entry : lua::OnGetCustomSpeedbookScrollEntries(MyPlayer)) {
 		const int lx = x;
 		const int ly = y - SPLICONLENGTH;

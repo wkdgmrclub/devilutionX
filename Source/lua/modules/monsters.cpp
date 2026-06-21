@@ -418,6 +418,15 @@ void InitMonsterUserType(sol::state_view &lua)
 		    AddMissile(monster.position.tile, monster.position.tile, monster.direction, MissileID::FlashBottom, TARGET_PLAYERS, monster, dam, 0);
 		    AddMissile(monster.position.tile, monster.position.tile, monster.direction, MissileID::FlashTop, TARGET_PLAYERS, monster, dam, 0);
 	    });
+	LuaSetDocFn(monsterType, "castResurrectBeamSelf", "()",
+	    "Spawn the Resurrect beam visual (MissileID::ResurrectBeam) centred on this monster's own tile. "
+	    "Purely cosmetic — the beam deals no damage and targets nothing; it plays the Resurrect sprite "
+	    "animation once at the monster's location (intended to mark a spot on a monster's final death "
+	    "frame). Fires immediately, no cast animation. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    AddMissile(monster.position.tile, monster.position.tile, monster.direction, MissileID::ResurrectBeam, TARGET_PLAYERS, monster, 0, 0);
+	    });
 	LuaSetDocFn(monsterType, "setLightRadius", "(radius: integer)",
 	    "Give this monster a light source of the given radius (the same mechanic 'lighted' unique monsters "
 	    "use), or change its radius if it already has one; radius <= 0 removes the light. The engine moves "
@@ -697,6 +706,16 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	    []() -> Monster * {
 		    if (pcursmonst < 0 || pcursmonst >= static_cast<int>(GetMaxMonsters())) return nullptr; // Lua mod support
 		    return &Monsters[pcursmonst];
+	    });
+	LuaSetDocFn(table, "fromId", "(id: integer) -> Monster|nil",
+	    "Returns the active Monster occupying the given slot id (Monster.id), or nil if no active monster holds that slot. // Lua mod support",
+	    [](int id) -> Monster * {
+		    if (id < 0 || id >= static_cast<int>(GetMaxMonsters())) return nullptr;
+		    for (size_t i = 0; i < ActiveMonsterCount; i++) {
+			    if (ActiveMonsters[i] == static_cast<size_t>(id))
+				    return &Monsters[id];
+		    }
+		    return nullptr;
 	    });
 	// Lua mod support: missile ID constants for use with monster:startRangedAttack()
 	{

@@ -416,6 +416,11 @@ enum _cmd_id : uint8_t {
 	//
 	// body (TCmdSpawnMonster)
 	CMD_SPAWNMONSTER,
+	// Generic variable-length message carrying an opaque payload. The engine does not interpret
+	// the body; on receipt it is forwarded to a Lua dispatch hook. // Lua mod support
+	//
+	// body (TCmdLuaMsg)
+	CMD_LUAMSG,
 	// Fake command; set current player for succeeding mega pkt buffer messages.
 	//
 	// body (TFakeCmdPlr)
@@ -544,6 +549,7 @@ struct TItem {
 	uint32_t dwBuff;
 	uint16_t wToHit;
 	uint16_t wMaxDam;
+	uint32_t dwLuaData; // Lua mod support: generic 32-bit mod-data slot carried over the wire; 0 for vanilla items
 };
 
 struct TEar {
@@ -644,6 +650,14 @@ struct TCmdPlrInfoHdr {
 struct TCmdString {
 	_cmd_id bCmd;
 	char str[MAX_SEND_STR_LEN];
+};
+
+// Generic variable-length opaque payload for Lua mod net messages. `len` is the number of valid
+// bytes in `data` (binary-safe, may contain embedded zeros). // Lua mod support
+struct TCmdLuaMsg {
+	_cmd_id bCmd;
+	uint8_t len;
+	char data[MAX_SEND_STR_LEN];
 };
 
 struct TFakeCmdPlr {
@@ -761,6 +775,7 @@ void NetSendCmdChBeltItem(bool bHiPri, int beltIndex);
 void NetSendCmdDamage(bool bHiPri, const Player &player, uint32_t dwDam, DamageType damageType);
 void NetSendCmdMonDmg(bool bHiPri, uint16_t wMon, uint32_t dwDam);
 void NetSendCmdString(uint32_t pmask, const char *pszStr);
+void NetSendCmdLuaMessage(uint32_t pmask, const char *data, size_t len); // Lua mod support
 void delta_close_portal(const Player &player);
 bool ValidateCmdSize(size_t requiredCmdSize, size_t maxCmdSize, size_t playerId);
 size_t ParseCmd(uint8_t pnum, const TCmd *pCmd, size_t maxCmdSize);

@@ -36,7 +36,9 @@ bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 // When a Point is returned, GolumAi sets enemyPosition to it and tries AiPlanPath first (wall routing),
 // then falls back to RandomWalk if AiPlanPath returns false (clear line).
 std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition);
-bool OnGolemChooseAction(const Monster *golem, bool hasTarget, int distanceToTarget, bool hasLOS);
+// `enemy` is the golem's current target monster, or null when it has none. A handler derives
+// distance / line of sight from it (e.g. monster:hasLineOfSightTo). Returns true to consume the tick.
+bool OnGolemChooseAction(const Monster *golem, const Monster *enemy);
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
 void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY);
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
@@ -70,6 +72,7 @@ std::pair<int, int> OnGetUnarmedDamageFloor(const Player *player, int minDamage,
 int OnGetBlockChanceBonus(const Player *player, int blockBonus);
 void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue);
+bool OnVendorWillBuyItem(const Item *item, bool defaultValue);  // query: false = vendor won't buy this item
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
 void OnItemUsed(const Player &player, int mid, int spellID);std::string OnGetMiscItemDescription(const Item *item);bool OnPrepareUniqueInfoBox(const Item &item);          // true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
 
@@ -79,6 +82,10 @@ void GameStart();
 void OnNewCharacter(const Player &player);
 void OnCreatePlrItems(Player &player);void OnLevelExit();
 void OnLevelEnter();
+
+// Generic mod net pipe: fired on receipt of a CMD_LUAMSG packet. `senderId` is the player id the
+// message came from; `payload` is the opaque bytes the sender passed to system.netSend (binary-safe).
+void OnNetMessage(int senderId, std::string_view payload);
 
 void OnGolemKilledMonster(const Monster *golem, const Monster *victim);
 void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster);

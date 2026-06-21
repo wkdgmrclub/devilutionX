@@ -2865,24 +2865,27 @@ bool PlayerCanAfford(int price)
 
 bool SmithWillBuy(const Item &item)
 {
+	// Same vanilla decision as before, expressed as a single result so it can route through the
+	// generic vendor call-out below (first-match precedence preserved via else-if). // Lua mod support
+	bool rv;
 	if (item.isEmpty())
-		return false;
+		rv = false;
+	else if (item._iMiscId > IMISC_OILFIRST && item._iMiscId < IMISC_OILLAST)
+		rv = true;
+	else if (item._itype == ItemType::Misc)
+		rv = false;
+	else if (item._itype == ItemType::Gold)
+		rv = false;
+	else if (item._itype == ItemType::Staff && (!gbIsHellfire || IsValidSpell(item._iSpell)))
+		rv = false;
+	else if (item._iClass == ICLASS_QUEST)
+		rv = false;
+	else if (item.IDidx == IDI_LAZSTAFF)
+		rv = false;
+	else
+		rv = true;
 
-	if (item._iMiscId > IMISC_OILFIRST && item._iMiscId < IMISC_OILLAST)
-		return true;
-
-	if (item._itype == ItemType::Misc)
-		return false;
-	if (item._itype == ItemType::Gold)
-		return false;
-	if (item._itype == ItemType::Staff && (!gbIsHellfire || IsValidSpell(item._iSpell)))
-		return false;
-	if (item._iClass == ICLASS_QUEST)
-		return false;
-	if (item.IDidx == IDI_LAZSTAFF)
-		return false;
-
-	return true;
+	return lua::OnVendorWillBuyItem(&item, rv); // Lua mod support
 }
 
 bool WitchWillBuy(const Item &item)
@@ -2905,7 +2908,7 @@ bool WitchWillBuy(const Item &item)
 	if (item.IDidx == IDI_LAZSTAFF)
 		rv = false;
 
-	return rv;
+	return lua::OnVendorWillBuyItem(&item, rv); // Lua mod support
 }
 
 } // namespace devilution

@@ -263,7 +263,7 @@ struct Item {
 	bool _iStatFlag = false;
 	ItemSpecialEffectHf _iDamAcFlags = ItemSpecialEffectHf::None;
 	uint32_t dwBuff = 0;
-	uint32_t _iLuaData = 0; // Lua mod support: generic mod-data slot; persisted in save files; base game never reads or writes this field
+	uint32_t _iLuaData = 0; // Lua mod support: generic mod-data slot; carried over the network (TItem) in full and in the hero save via the 16-bit wValue slot; base-game gameplay never reads or interprets it
 
 	/**
 	 * @brief Clears this item and returns the old value

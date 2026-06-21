@@ -132,9 +132,9 @@ std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTa
 	return std::nullopt;                                                                  // nil = engine default
 }
 
-bool OnGolemChooseAction(const Monster *golem, bool hasTarget, int distanceToTarget, bool hasLOS)
+bool OnGolemChooseAction(const Monster *golem, const Monster *enemy)
 {
-	return CallLuaEventReturn<bool>(false, "OnGolemChooseAction", golem, hasTarget, distanceToTarget, hasLOS);
+	return CallLuaEventReturn<bool>(false, "OnGolemChooseAction", golem, enemy);
 }
 
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY)
@@ -269,6 +269,12 @@ void OnLevelExit()
 void OnLevelEnter()
 {
 	CallLuaEvent("OnLevelEnter");
+}
+
+void OnNetMessage(int senderId, std::string_view payload)
+{
+	// Pass the payload as a length-counted std::string so embedded zeros survive into Lua.
+	CallLuaEvent("NetMessage", senderId, std::string(payload));
 }
 
 bool OnCanPlayerUseItem(const Player *player, const Item *item, bool defaultValue)
@@ -408,6 +414,11 @@ bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool default
 	default:                    return defaultValue;
 	}
 	return CallLuaEventReturn<bool>(defaultValue, "OnShouldExcludeWirtItem", player, std::string(typeName));
+}
+
+bool OnVendorWillBuyItem(const Item *item, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnVendorWillBuyItem", item);
 }
 
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic)

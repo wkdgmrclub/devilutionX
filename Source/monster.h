@@ -252,7 +252,7 @@ size_t GetMaxLvlMTypes();
  * @brief Reserve additional level monster-type slots for the current binary session.
  *
  * Must be called at mod-load time, before any level is generated. Cumulative across mods.
- * Generic, modder-facing: nothing here is Hunter-specific. // Lua mod support
+ * Generic, modder-facing: nothing here is mod-specific. // Lua mod support
  */
 void RequestExtraLevelMonsterTypes(size_t count);
 
