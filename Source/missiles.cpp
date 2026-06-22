@@ -5,8 +5,6 @@
  */
 #include "missiles.h"
 
-#include "lua/lua_event.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -42,6 +40,7 @@
 #include "items.h"
 #include "levels/gendung.h"
 #include "levels/gendung_defs.hpp"
+#include "lua/lua_event.hpp"
 #include "msg.h"
 #include "multi.h"
 #include "objects.h"
@@ -3202,14 +3201,15 @@ void ProcessHorkSpawn(Missile &missile)
 
 		if (spawnPosition) {
 			auto facing = static_cast<Direction>(missile.var1);
-			const size_t activeCountBefore = ActiveMonsterCount;
-			SpawnMonster(*spawnPosition, facing, 1);
-			// Lua mod support: if a golem fired this Hork Spawn, notify Lua of the freshly
-			// spawned monster. SpawnMonster bumps ActiveMonsterCount only on success; the new
-			// monster is Monsters[ActiveMonsters[activeCountBefore]].
 			Monster *parent = missile.sourceMonster();
-			if (parent != nullptr && (parent->flags & MFLAG_GOLEM) != 0 && ActiveMonsterCount > activeCountBefore)
-				lua::OnGolemSpawnedMinion(parent, &Monsters[ActiveMonsters[activeCountBefore]]);
+			// Lua mod support: for a golem-sourced spawn missile, let a handler veto the default
+			// spawn (the SpawnMonster below uses the level-local type index 1). Default true = vanilla.
+			bool doDefaultSpawn = true;
+			if (parent != nullptr && (parent->flags & MFLAG_GOLEM) != 0)
+				doDefaultSpawn = lua::OnGolemMinionMissileSpawn(parent, static_cast<int>(MT_HORKSPWN), spawnPosition->x, spawnPosition->y, true);
+			if (doDefaultSpawn) {
+				SpawnMonster(*spawnPosition, facing, 1);
+			}
 		}
 	} else {
 		missile._midist++;

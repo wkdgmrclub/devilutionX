@@ -1843,11 +1843,13 @@ void PrintItemMisc(const Item &item)
 	const bool gamepadRequiresTarget = item.isScroll() && TargetsMonster(item._iSpell);
 
 	// Lua mod support: allow mods to add or override the description for any misc item.
-	// For oil/potion items, falls back to PrintItemOil when Lua returns nothing.
+	// For oil/potion items, falls back to PrintItemOil when Lua returns nothing — but only in the
+	// control modes that print oil text below, so the no-mod path stays identical to vanilla (which
+	// printed oil inside the per-control-mode helpers, never for ControlTypes::None).
 	const std::string customDesc = lua::OnGetMiscItemDescription(&item);
 	if (!customDesc.empty()) {
 		AddItemInfoBoxString(customDesc);
-	} else if (isOil) {
+	} else if (isOil && ControlMode != ControlTypes::None) {
 		PrintItemOil(item._iMiscId);
 	}
 
@@ -2230,8 +2232,11 @@ StringOrView GetTranslatedItemName(const Item &item)
 {
 	const auto &baseItemData = AllItemsList[static_cast<size_t>(item.IDidx)];
 
-	// Lua mod support: if _iName has been overridden by a mod (differs from the base item definition), use it directly.
-	if (std::string_view(item._iName) != std::string_view(baseItemData.iName)) {
+	// Lua mod support: a mod-registered item (index past the base range) whose _iName was overridden
+	// from its definition uses that name directly. Gated to custom items so base items keep vanilla's
+	// translated/composed names (e.g. staves, which compose _iName with the spell at creation).
+	if (item.IDidx >= IDI_NUM_DEFAULT_ITEMS
+	    && std::string_view(item._iName) != std::string_view(baseItemData.iName)) {
 		return std::string(item._iName);
 	}
 
@@ -3810,9 +3815,36 @@ void SpawnTheodore(Point position, bool sendmsg)
 	SpawnRewardItem(IDI_THEODORE, position, sendmsg);
 }
 
+int8_t DefaultDropAnimForItemType(ItemType type)
+{
+	switch (type) {
+	case ItemType::Axe: return 1;
+	case ItemType::Bow: return 3;
+	case ItemType::Mace: return 6;
+	case ItemType::Sword: return 8;
+	case ItemType::Shield: return 7;
+	case ItemType::LightArmor: return 14;
+	case ItemType::Helm: return 5;
+	case ItemType::MediumArmor: return 0;
+	case ItemType::HeavyArmor: return 17;
+	case ItemType::Staff: return 11;
+	case ItemType::Gold: return 4;
+	case ItemType::Ring: return 12;
+	case ItemType::Amulet: return 12;
+	default: return 2;
+	}
+}
+
+int8_t GetItemAnimType(const Item &item)
+{
+	if (item._iCurs >= ItemCAnimTblSize)
+		return DefaultDropAnimForItemType(item._itype);
+	return ItemCAnimTbl[item._iCurs];
+}
+
 void RespawnItem(Item &item, bool flipFlag)
 {
-	const int it = GetItemAnimIndex(item._iCurs);
+	const int it = GetItemAnimType(item);
 	item.setNewAnimation(flipFlag);
 	item._iRequest = false; // Item isn't being picked up by a player
 
@@ -3872,7 +3904,7 @@ void ProcessItems()
 				item.AnimInfo.currentFrame = 10;                                                     // Beginning of elevated frames
 		} else {
 			if (item.AnimInfo.currentFrame == (item.AnimInfo.numberOfFrames - 1) / 2)
-				PlaySfxLoc(ItemDropSnds[GetItemAnimIndex(item._iCurs)], item.position);
+				PlaySfxLoc(ItemDropSnds[GetItemAnimType(item)], item.position);
 
 			if (item.AnimInfo.isLastFrame()) {
 				item.AnimInfo.currentFrame = item.AnimInfo.numberOfFrames - 1;
@@ -3893,7 +3925,7 @@ void FreeItemGFX()
 
 void GetItemFrm(Item &item)
 {
-	const int it = GetItemAnimIndex(item._iCurs);
+	const int it = GetItemAnimType(item);
 	if (itemanims[it])
 		item.AnimInfo.sprites.emplace(*itemanims[it]);
 }
@@ -4910,7 +4942,7 @@ bool Item::isUsable() const
 
 void Item::setNewAnimation(bool showAnimation)
 {
-	const int8_t it = static_cast<int8_t>(GetItemAnimIndex(_iCurs));
+	const int8_t it = static_cast<int8_t>(GetItemAnimType(*this));
 	const int8_t numberOfFrames = ItemAnimLs[it];
 	const OptionalClxSpriteList sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
 	if (_iCurs != ICURS_MAGIC_ROCK)

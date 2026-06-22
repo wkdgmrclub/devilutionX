@@ -167,7 +167,7 @@ void InitMonsterUserType(sol::state_view &lua)
 		    // Drop any multiplayer delta record of this monster so it is not re-created on level
 		    // reload. No-op in singleplayer. (Singleplayer persistence is handled by removing the
 		    // monster from ActiveMonsters before SaveLevel, below.)
-		    DeltaRemoveSpawnedMonster(monster);
+		    LuaDeltaRemoveSpawnedMonster(monster);
 		    // DeleteMonsterList() compacts ActiveMonsters and decrements ActiveMonsterCount. Doing
 		    // that here while a game-logic step is in flight — e.g. this remove() runs from an
 		    // OnMonsterDeath handler despawning a dead ally's minions while ProcessMonsters /
@@ -256,10 +256,10 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.resistance = static_cast<uint16_t>(flags);
 	    });
-	LuaSetDocFn(monsterType, "makeGolem", "()",
-	    "Convert this monster to a golem (switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour)",
-	    [](Monster &monster) {
-		    ChangeMonsterToGolem(monster);
+	LuaSetDocFn(monsterType, "makeGolem", "(ownerId?: integer)",
+	    "Convert this monster to a golem owned by player ownerId (defaults to the local player). Switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour. // Lua mod support",
+	    [](Monster &monster, sol::optional<int> ownerId) {
+		    LuaChangeMonsterToGolem(monster, ownerId.has_value() ? static_cast<uint8_t>(*ownerId) : MyPlayerId);
 	    });
 	LuaSetDocFn(monsterType, "checkQuestKill", "()",
 	    "Run this monster's quest-completion side effects as if it had been killed (quest state + death speech, e.g. Skeleton King -> Q_SKELKING done + 'Rest well, Leoric'; Lazarus -> opens the path to Diablo). No-op for non-quest monsters. Wraps the engine's CheckQuestKill. // Lua mod support",
@@ -376,36 +376,30 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Fire a ranged attack at the monster's current target using the given MissileID integer. Damage is drawn from the monster's natural min/max damage range. Use monsters.MissileID for missile ID constants.",
 	    [](const Monster &constMonster, int missileIdInt) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartGolemRangedAttack(monster, static_cast<MissileID>(missileIdInt));
+		    LuaStartMonsterRangedAttack(monster, static_cast<MissileID>(missileIdInt));
 	    });
 	LuaSetDocFn(monsterType, "startCharge", "() -> boolean",
 	    "Fire a Rhino-missile charge at the current enemy target. Ally-safe via the monster's MFLAG_TARGETS_MONSTER flag (not the missile caster). Returns true if the charge started. // Lua mod support",
 	    [](const Monster &constMonster) -> bool {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    return StartGolemCharge(monster);
+		    return LuaStartMonsterCharge(monster);
 	    });
-	LuaSetDocFn(monsterType, "spawnSkeletonMinion", "() -> boolean",
-	    "Spawn a skeleton next to this monster toward its current enemy, the way Skeleton King's LeoricAi does. Fires OnGolemSpawnedMinion with (this monster, spawned skeleton). Returns true if a skeleton spawned. // Lua mod support",
-	    [](const Monster &constMonster) -> bool {
+	LuaSetDocFn(monsterType, "startSpecialStand", "()",
+	    "Play this monster's special-stand animation facing its current enemy (the brief cast/special pose). Does not fire a missile, deal damage, or spawn anything — purely the animation. // Lua mod support",
+	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    return StartGolemSpawnSkeleton(monster);
+		    LuaStartMonsterSpecialStand(monster);
 	    });
 	LuaSetDocFn(monsterType, "startSpecialRangedAttack", "(missileId: integer)",
 	    "Fire a special ranged attack (Special animation + SpecialRangedAttack mode) at the current target, e.g. the Hork Demon's HorkSpawn. The missile uses TARGET_PLAYERS with this monster as source. Use monsters.MissileID.* for missile IDs. // Lua mod support",
 	    [](const Monster &constMonster, int missileIdInt) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartGolemSpecialRangedAttack(monster, static_cast<MissileID>(missileIdInt));
-	    });
-	LuaSetDocFn(monsterType, "startNaturalRangedAttack", "()",
-	    "Fire this monster's authentic ranged/special attack — the same missile and animation its native AI uses (based on originalAiId): Succubus->BloodStar, Storm->lightning, Magma->MagmaBall, Lich->flare, Counselor/Advocate->cast by intelligence, Mega->Inferno, etc. Use instead of startRangedAttack to avoid the generic arrow. // Lua mod support",
-	    [](const Monster &constMonster) {
-		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartGolemNaturalRangedAttack(monster);
+		    LuaStartMonsterSpecialRangedAttack(monster, static_cast<MissileID>(missileIdInt));
 	    });
 	LuaSetDocFn(monsterType, "naturalRangedMissileId", "() -> integer",
-	    "Returns the MissileID integer this monster's authentic ranged/special attack would fire (the same missile startNaturalRangedAttack uses), without firing it. Combine with monsters.getMissileDamageType to derive the attack's element. // Lua mod support",
+	    "Returns the MissileID integer this monster's authentic ranged/special attack would fire, derived from its original AI (Counselor/Advocate by intelligence, Mega->Inferno, others by type), without firing it. Combine with monsters.getMissileDamageType to derive the attack's element. // Lua mod support",
 	    [](const Monster &monster) -> int {
-		    return static_cast<int>(GetGolemNaturalMissile(monster));
+		    return static_cast<int>(LuaGetMonsterNaturalRangedMissile(monster));
 	    });
 	LuaSetDocFn(monsterType, "castFlashSelf", "()",
 	    "Cast a Flash burst (the FlashBottom+FlashTop missile pair of the Flash spell) centered on this "
@@ -451,36 +445,36 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Trigger this monster's special melee attack (Special animation + SpecialMeleeAttack mode), e.g. the Goat Melee low-HP special. // Lua mod support",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartGolemSpecialAttack(monster);
+		    LuaStartMonsterSpecialAttack(monster);
 	    });
 	LuaSetDocFn(monsterType, "startHeal", "()",
 	    "Trigger the Gargoyle self-heal animation (reverses Special animation, enters Heal mode). // Lua mod support",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartHeal(monster);
+		    LuaStartMonsterHeal(monster);
 	    });
 	LuaSetDocFn(monsterType, "startEating", "()",
 	    "Trigger the Scavenger corpse-eating animation (enters SpecialMeleeAttack mode). GolumAi will not interrupt until the animation finishes. // Lua mod support",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartEating(monster);
+		    LuaStartMonsterEat(monster);
 	    });
 	LuaSetDocFn(monsterType, "startFadeout", "()",
 	    "Trigger the Sneak fade-out animation (enters FadeOut mode; sets MFLAG_HIDDEN when the animation completes). Used to cloak a monster.",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartFadeout(monster, monster.direction, true);
+		    LuaStartMonsterFadeout(monster);
 	    });
 	LuaSetDocFn(monsterType, "startFadein", "()",
 	    "Trigger the Sneak fade-in animation (enters FadeIn mode; clears MFLAG_HIDDEN immediately). Used to materialise a monster.",
 	    [](const Monster &constMonster) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    StartFadein(monster, monster.direction, false);
+		    LuaStartMonsterFadein(monster);
 	    });
 	LuaSetDocFn(monsterType, "findNearbyCorpse", "() -> Point|nil",
 	    "Search within 4 tiles for a corpse tile with line-of-sight. Returns the tile position or nil. // Lua mod support",
 	    [](const Monster &monster) -> sol::optional<Point> {
-		    const auto result = ScavengerFindCorpse(monster);
+		    const auto result = LuaMonsterFindCorpse(monster);
 		    if (!result) return sol::nullopt;
 		    return *result;
 	    });
@@ -489,7 +483,7 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &constMonster, int x, int y) -> bool {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.enemyPosition = { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
-		    if (AiPlanPath(monster)) return true;
+		    if (LuaMonsterPlanPath(monster)) return true;
 		    const WorldTilePosition dest { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
 		    return Walk(monster, GetDirection(monster.position.tile, dest));
 	    });
@@ -638,8 +632,9 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    ActiveMonsterCount++;
 		    const uint32_t seed = GetLCGEngineState();
 		    InitializeSpawnedMonster(spawnPos, Direction::South, typeIndex, monsterIndex, seed, 0, 0);
-		    NetSendCmdSpawnMonster(spawnPos, Direction::South, static_cast<uint16_t>(typeIndex),
-		        static_cast<uint16_t>(monsterIndex), seed, 0, 0);
+		    // Local-only spawn — the level-local typeIndex is meaningless on a peer whose level lacks
+		    // this species, so it is NOT broadcast. Cross-client spawn rides the mod net pipe keyed by
+		    // the (globally stable) species id; see monsters.netSpawnAt. // Lua mod support
 
 		    return &Monsters[monsterIndex];
 	    });
@@ -667,8 +662,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
 		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
 		    sgGameInitInfo.nDifficulty = savedDiff;
-		    NetSendCmdSpawnMonster(placement->spawnPos, Direction::South, static_cast<uint16_t>(placement->typeIndex),
-		        static_cast<uint16_t>(placement->monsterIndex), placement->seed, 0, 0);
+		    // Local-only spawn; cross-client spawn rides the mod net pipe by species id (see netSpawnAt). // Lua mod support
 		    return &Monsters[placement->monsterIndex];
 	    });
 	LuaSetDocFn(table, "spawnUniqueAt", "(uniqueTypeIdx: integer, capturedDifficulty: integer, x: integer, y: integer) -> Monster|nil",
@@ -697,9 +691,27 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 			    return nullptr;
 		    }
 		    sgGameInitInfo.nDifficulty = savedDiff;
-		    NetSendCmdSpawnMonster(placement->spawnPos, Direction::South, static_cast<uint16_t>(placement->typeIndex),
-		        static_cast<uint16_t>(placement->monsterIndex), placement->seed, 0, 0);
+		    // Local-only spawn; cross-client spawn rides the mod net pipe by species id (see netSpawnAt). // Lua mod support
 		    return &Monsters[placement->monsterIndex];
+	    });
+	LuaSetDocFn(table, "netSpawnAt", "(monsterId: integer, typeId: integer, uniqueTypeIdx: integer, capturedDifficulty: integer, x: integer, y: integer, seed: integer) -> Monster|nil",
+	    "Recreate a networked mod-spawned monster at a SPECIFIC slot id on this client, resolving the species to THIS client's own LevelMonsterTypes index (registering the type + loading its GFX as needed). For replaying a peer's mod spawn: each client builds its own natural monster set, then the owner's extra monsters are recreated on top via this. uniqueTypeIdx < 0 = a normal (non-unique) monster. Unlike spawnWithDifficulty/spawnUniqueAt this does NOT gate on level ownership (the receiver is not the level owner) and uses the caller-supplied slot id instead of allocating one. // Lua mod support",
+	    [](int monsterId, int typeIdInt, int uniqueTypeIdx, int capturedDifficulty, int x, int y, uint32_t seed) -> Monster * {
+		    if (monsterId < 0 || monsterId >= static_cast<int>(GetMaxMonsters())) return nullptr;
+		    const auto type = static_cast<_monster_id>(typeIdInt);
+		    const auto typeIndex = EnsureMonsterType(type, uniqueTypeIdx >= 0 ? PLACE_UNIQUE : PLACE_SCATTER);
+		    if (!typeIndex) return nullptr;
+		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
+		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
+		    InitializeSpawnedMonster({ x, y }, Direction::South, *typeIndex, static_cast<size_t>(monsterId), seed, 0, 0);
+		    Monster &monster = Monsters[static_cast<size_t>(monsterId)];
+		    if (uniqueTypeIdx >= 0 && uniqueTypeIdx < static_cast<int>(UniqueMonstersData.size())) {
+			    const UniqueMonsterType uniqueType = static_cast<UniqueMonsterType>(uniqueTypeIdx);
+			    if (const auto result = PrepareUniqueMonst(monster, uniqueType, 0, 0, UniqueMonstersData[static_cast<size_t>(uniqueTypeIdx)]); !result)
+				    LogError("netSpawnAt: PrepareUniqueMonst failed for unique type {}: {}", uniqueTypeIdx, result.error());
+		    }
+		    sgGameInitInfo.nDifficulty = savedDiff;
+		    return &monster;
 	    });
 	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
 	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",
@@ -716,6 +728,12 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 				    return &Monsters[id];
 		    }
 		    return nullptr;
+	    });
+	LuaSetDocFn(table, "aiRandom", "(n: integer) -> integer",
+	    "Returns a value in [0, n) from the engine's global RNG (GenerateRnd). During monster AI processing the global RNG is reseeded to each monster's per-monster seed (synced across clients in multiplayer), so a draw made from inside a monster-AI hook is identical on every client; outside AI processing it is just the running global RNG. // Lua mod support",
+	    [](int n) -> int {
+		    if (n <= 0) return 0;
+		    return GenerateRnd(n);
 	    });
 	// Lua mod support: missile ID constants for use with monster:startRangedAttack()
 	{

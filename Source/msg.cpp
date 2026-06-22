@@ -2859,11 +2859,11 @@ void delta_monster_hp(const Monster &monster, const Player &player)
 // Lua mod support: erase a dynamically spawned monster (golem / raised / mod-spawned) from the
 // level delta so it is not re-created when the level is reloaded. Spawned monsters are otherwise
 // persisted in `spawnedMonsters` for the life of the level's delta — even a monster removed from
-// the live array (e.g. via the Lua monster:remove() binding) would replay on re-entry, both
-// re-creating the monster and bumping ActiveMonsterCount. Resolve the level from currlevel/setlevel
-// (the level being left), matching DeltaSaveLevel — at level exit the player's plrlevel is already
-// the destination, so the player overload would target the wrong level.
-void DeltaRemoveSpawnedMonster(const Monster &monster)
+// the live array at runtime would replay on re-entry, both re-creating the monster and bumping
+// ActiveMonsterCount. Resolve the level from currlevel/setlevel (the level being left), matching
+// DeltaSaveLevel — at level exit the player's plrlevel is already the destination, so the player
+// overload would target the wrong level.
+void LuaDeltaRemoveSpawnedMonster(const Monster &monster)
 {
 	if (!gbIsMultiplayer)
 		return;
@@ -2960,7 +2960,7 @@ void DeltaAddItem(int ii)
 // Register an item that was dynamically dropped (not pre-generated) in the delta so
 // DeltaLoadItems re-spawns it when the player returns to this level.
 // Lua mod support
-void DeltaRegisterDroppedItem(int ii)
+void LuaDeltaRegisterDroppedItem(int ii)
 {
 	if (!gbIsMultiplayer)
 		return;

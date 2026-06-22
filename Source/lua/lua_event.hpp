@@ -88,7 +88,12 @@ void OnLevelEnter();
 void OnNetMessage(int senderId, std::string_view payload);
 
 void OnGolemKilledMonster(const Monster *golem, const Monster *victim);
-void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster);
+// Fired only for a golem-sourced spawn missile (the source monster has MFLAG_GOLEM) when it lands,
+// BEFORE the engine's default SpawnMonster. Returning false suppresses that vanilla spawn at the
+// landing tile so a handler can create the monster itself (the engine spawn uses a level-local type
+// index, wrong if the source has been relocated). speciesTypeId is the canonical monster type the
+// engine would spawn; spawnX/spawnY the landing tile. Default true = unchanged vanilla behaviour.
+bool OnGolemMinionMissileSpawn(const Monster *golem, int speciesTypeId, int spawnX, int spawnY, bool defaultValue);
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster);
 std::string OnGetMonsterDisplayName(const Monster *monster); // default = monster.name()
 int OnGetMonsterOutlineColor(const Monster *monster); // -1 = no outline
@@ -100,6 +105,7 @@ uint8_t *OnGetMonsterTRN(const Monster *monster);
 int RegisterMonsterTRN(const uint8_t *data256);
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
 bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue);
+bool OnGolemCanRunAI(const Monster *monster, bool defaultValue);
 bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue);
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
 int OnGolemMissileDamage(const Monster *golem, int missileId, int dam);

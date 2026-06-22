@@ -586,26 +586,27 @@ void M_StartHit(Monster &monster, const Player &player, int dam);
 void StartMonsterDeath(Monster &monster, const Player &player, bool sendmsg);
 void MonsterDeath(Monster &monster, Direction md, bool sendmsg);
 void KillGolem(Monster &golem);
-void ChangeMonsterToGolem(Monster &monster); // Lua mod support
+void LuaChangeMonsterToGolem(Monster &monster, uint8_t ownerPlayerId); // Lua mod support
 void M_StartKill(Monster &monster, const Player &player);
 void M_SyncStartKill(Monster &monster, Point position, const Player &player);
 void M_UpdateRelations(const Monster &monster);
 void DoEnding();
 void PrepDoEnding();
 bool Walk(Monster &monster, Direction md);
-bool AiPlanPath(Monster &monster);                                    // Lua mod support
-void StartGolemRangedAttack(Monster &monster, MissileID missileType); // Lua mod support
-bool StartGolemCharge(Monster &monster);                              // Lua mod support
-bool StartGolemSpawnSkeleton(Monster &monster);                       // Lua mod support
-void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType); // Lua mod support
-void StartGolemNaturalRangedAttack(Monster &monster);                 // Lua mod support
-MissileID GetGolemNaturalMissile(const Monster &monster);             // Lua mod support
-void StartGolemSpecialAttack(Monster &monster);                       // Lua mod support
-void StartHeal(Monster &monster);                                     // Lua mod support
-void StartEating(Monster &monster);                                   // Lua mod support
-void StartFadeout(Monster &monster, Direction md, bool backwards);    // Lua mod support
-void StartFadein(Monster &monster, Direction md, bool backwards);     // Lua mod support
-std::optional<Point> ScavengerFindCorpse(const Monster &monster);    // Lua mod support
+// Lua mod support: helpers added only for Lua bindings (Lua-prefixed). The wrappers forward to engine
+// action helpers that have internal linkage (anonymous namespace), so the binding TU calls these.
+bool LuaStartMonsterCharge(Monster &monster);
+void LuaStartMonsterSpecialStand(Monster &monster);
+void LuaStartMonsterRangedAttack(Monster &monster, MissileID missileType);
+void LuaStartMonsterSpecialRangedAttack(Monster &monster, MissileID missileType);
+void LuaStartMonsterSpecialAttack(Monster &monster);
+void LuaStartMonsterHeal(Monster &monster);
+void LuaStartMonsterEat(Monster &monster);
+void LuaStartMonsterFadein(Monster &monster);
+void LuaStartMonsterFadeout(Monster &monster);
+MissileID LuaGetMonsterNaturalRangedMissile(const Monster &monster);
+bool LuaMonsterPlanPath(Monster &monster);
+std::optional<Point> LuaMonsterFindCorpse(const Monster &monster);
 void GolumAi(Monster &golem);
 void DeleteMonsterList();
 void RemoveEnemyReferences(const Player &player);

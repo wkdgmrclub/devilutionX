@@ -40,6 +40,12 @@ void InitPlayerUserType(sol::state_view &lua)
 	    [](const Player &player) -> Point {
 		    return Point { player.position.tile };
 	    });
+	LuaSetDocFn(playerType, "isOnActiveLevel", "() -> boolean",
+	    "Returns true if this player is on the client's currently-active (rendered) level. Useful for scoping net-message handling to same-level players, since monster slot ids are per-level. // Lua mod support",
+	    [](const Player &player) { return player.isOnActiveLevel(); });
+	LuaSetDocFn(playerType, "isLevelOwnedByLocalClient", "() -> boolean",
+	    "Returns true if the local client is the authority (owner) for this player's current level. Monster spawning is level-owner-authoritative in multiplayer (the engine gates SpawnMonster on this, 'to prevent desyncs in multiplayer'); a non-owner must ask the owner to spawn on its behalf, mirroring the Golem spell's CMD_REQUESTSPAWNGOLEM. // Lua mod support",
+	    [](const Player &player) { return player.isLevelOwnedByLocalClient(); });
 	LuaSetDocFn(playerType, "addExperience", "(experience: integer, monsterLevel: integer = nil)",
 	    "Adds experience to this player based on the current game mode",
 	    [](Player &player, uint32_t experience, std::optional<int> monsterLevel) {

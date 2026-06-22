@@ -291,7 +291,7 @@ bool AutoEquip(Player &player, const Item &item, inv_body_loc bodyLocation, bool
 		ChangeEquipment(player, bodyLocation, item, sendNetworkMessage);
 
 		if (sendNetworkMessage && *GetOptions().Audio.autoEquipSound) {
-			PlaySFX(ItemInvSnds[GetItemAnimIndex(item._iCurs)]);
+			PlaySFX(ItemInvSnds[GetItemAnimType(item)]);
 		}
 
 		CalcPlrInv(player, true);
@@ -587,7 +587,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 	}
 
 	if (&player == MyPlayer) {
-		PlaySFX(ItemInvSnds[GetItemAnimIndex(player.HoldItem._iCurs)]);
+		PlaySFX(ItemInvSnds[GetItemAnimType(player.HoldItem)]);
 	}
 
 	// Select the parameters that go into
@@ -780,7 +780,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 				attemptedMove = true;
 				automaticallyMoved = AutoPlaceItemInInventory(player, player.InvBody[invloc]);
 				if (automaticallyMoved) {
-					successSound = ItemInvSnds[GetItemAnimIndex(player.InvBody[invloc]._iCurs)];
+					successSound = ItemInvSnds[GetItemAnimType(player.InvBody[invloc])];
 					RemoveEquipment(player, invloc, false);
 				} else {
 					failedSpeech = HeroSpeech::IHaveNoRoom;
@@ -890,7 +890,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 					}
 					automaticallyMoved = AutoEquip(player, player.InvList[iv], true, &player == MyPlayer);
 					if (automaticallyMoved) {
-						successSound = ItemInvSnds[GetItemAnimIndex(player.InvList[iv]._iCurs)];
+						successSound = ItemInvSnds[GetItemAnimType(player.InvList[iv])];
 						player.RemoveInvItem(iv, false);
 
 						// If we're holding an item at this point we just lifted it from a body slot to make room for the original item, so we need to put it into the inv
@@ -1634,7 +1634,7 @@ void TransferItemToStash(Player &player, int location)
 		return;
 	}
 
-	PlaySFX(ItemInvSnds[GetItemAnimIndex(item._iCurs)]);
+	PlaySFX(ItemInvSnds[GetItemAnimType(item)]);
 
 	if (location < INVITEM_INV_FIRST) {
 		RemoveEquipment(player, static_cast<inv_body_loc>(location), false);
@@ -2211,7 +2211,7 @@ bool UseInvItem(int cii)
 	if (item->isScroll() && !lua::OnCanCastScroll(&player, static_cast<int>(item->_iSpell), item->_iSeed, -1))
 		return true;
 
-	const int idata = GetItemAnimIndex(item->_iCurs);
+	const int idata = GetItemAnimType(*item);
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
 	else if (&player == MyPlayer)
@@ -2268,7 +2268,7 @@ void CloseStash()
 				// to not have room for the item all 3 cases are extremely unlikely
 				app_fatal(_("No room for item"));
 			}
-			PlaySFX(ItemInvSnds[GetItemAnimIndex(myPlayer.HoldItem._iCurs)]);
+			PlaySFX(ItemInvSnds[GetItemAnimType(myPlayer.HoldItem)]);
 		}
 		myPlayer.HoldItem.clear();
 		NewCursor(CURSOR_HAND);

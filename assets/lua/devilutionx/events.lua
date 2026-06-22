@@ -452,12 +452,13 @@ local events = {
   OnGolemKilledMonster = CreateEvent(),
   __doc_OnGolemKilledMonster = "Fired when a golem/ally kills a monster in melee. Args: ally, victim.",
 
-  ---Event fired when a MFLAG_GOLEM monster spawns another monster via a special ability
-  ---(e.g. a tamed Skeleton King spawning skeletons, a tamed Hork Demon's Hork Spawn).
-  ---Args: ally (Monster — the spawner), newMonster (Monster — the freshly spawned monster).
-  ---Use to adopt the spawn as an owned minion (`newMonster:makeGolem()` + track it).
-  OnGolemSpawnedMinion = CreateEvent(),
-  __doc_OnGolemSpawnedMinion = "Fired when a golem/ally spawns a new monster via a special ability. Args: ally (spawner), newMonster. Adopt as a minion if desired.",
+  ---Query event fired only for a golem-sourced spawn missile (source has MFLAG_GOLEM) when it lands,
+  ---BEFORE the engine's default SpawnMonster. Return false to suppress the vanilla spawn at the landing
+  ---tile (the default spawn uses a level-local type index); a handler may create the monster itself.
+  ---Args: golem (spawner), speciesTypeId (the canonical type the engine would spawn), x, y (landing
+  ---tile). Return nil or true for the default spawn (default: true).
+  OnGolemMinionMissileSpawn = CreateQueryEvent(),
+  __doc_OnGolemMinionMissileSpawn = "Query (golem-sourced spawn missiles only): return false to suppress the engine's default spawn at the landing tile so a handler can spawn its own monster. Args: golem, speciesTypeId, x, y. Default: true.",
 
   ---Query event fired from the monster info box in place of PrintMonstHistory.
   ---Args: monster. Return a table of strings to fully replace the info block; return nil for default (PrintMonstHistory).
@@ -494,6 +495,8 @@ local events = {
   ---death (the monster still vanishes and is reaped); return nil or true to place the corpse (default: true).
   OnMonsterCanPlaceCorpse = CreateQueryEvent(),
   __doc_OnMonsterCanPlaceCorpse = "Query: return false to suppress a dying monster's corpse placement. Args: monster. Return nil or true to place the corpse (default: true).",
+  OnGolemCanRunAI = CreateQueryEvent(),
+  __doc_OnGolemCanRunAI = "Query (fires only for MFLAG_GOLEM monsters): return false to suppress this golem's local AI simulation this tick (e.g. one whose authority lives on another client and is kept in sync externally) — its mode/animation still advance so it renders normally. Args: monster. Return nil or true to run the AI (default: true, vanilla).",
 
   ---Query event fired when the monster healthbar decides whether to draw the resistance/immunity
   ---icon row. Vanilla shows it only for uniques or monster types killed 15+ times; return true to

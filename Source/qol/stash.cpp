@@ -156,7 +156,7 @@ void CheckStashPaste(Point cursorPosition)
 		return; // Found a second item
 	}
 
-	PlaySFX(ItemInvSnds[GetItemAnimIndex(player.HoldItem._iCurs)]);
+	PlaySFX(ItemInvSnds[GetItemAnimType(player.HoldItem)]);
 
 	// Need to set the item anchor position to the bottom left so drawing code functions correctly.
 	player.HoldItem.position = firstSlot + Displacement { 0, itemSize.height - 1 };
@@ -236,7 +236,7 @@ void CheckStashCut(Point cursorPosition, bool automaticMove)
 		CalcPlrInv(player, true);
 		holdItem._iStatFlag = player.CanUseItem(holdItem);
 		if (automaticallyEquipped) {
-			PlaySFX(ItemInvSnds[GetItemAnimIndex(holdItem._iCurs)]);
+			PlaySFX(ItemInvSnds[GetItemAnimType(holdItem)]);
 		} else if (!automaticMove || automaticallyMoved) {
 			PlaySFX(SfxID::GrabItem);
 		}
@@ -303,7 +303,7 @@ void TransferItemToInventory(Player &player, uint16_t itemId)
 		return;
 	}
 
-	PlaySFX(ItemInvSnds[GetItemAnimIndex(item._iCurs)]);
+	PlaySFX(ItemInvSnds[GetItemAnimType(item)]);
 
 	Stash.RemoveStashItem(itemId);
 }
@@ -506,7 +506,7 @@ bool UseStashItem(uint16_t c)
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
 	else
-		PlaySFX(ItemInvSnds[GetItemAnimIndex(item->_iCurs)]);
+		PlaySFX(ItemInvSnds[GetItemAnimType(*item)]);
 
 	UseItem(*MyPlayer, item->_iMiscId, item->_iSpell, -1);
 

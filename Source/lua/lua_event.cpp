@@ -444,9 +444,9 @@ void OnGolemKilledMonster(const Monster *golem, const Monster *victim)
 	CallLuaEvent("OnGolemKilledMonster", golem, victim);
 }
 
-void OnGolemSpawnedMinion(const Monster *golem, const Monster *newMonster)
+bool OnGolemMinionMissileSpawn(const Monster *golem, int speciesTypeId, int spawnX, int spawnY, bool defaultValue)
 {
-	CallLuaEvent("OnGolemSpawnedMinion", golem, newMonster);
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemMinionMissileSpawn", golem, speciesTypeId, spawnX, spawnY);
 }
 
 std::vector<std::string> OnGetMonsterInfo(const Monster *monster){
@@ -506,6 +506,11 @@ bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)
 bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanPlaceCorpse", monster);
+}
+
+bool OnGolemCanRunAI(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanRunAI", monster);
 }
 
 bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue)

@@ -603,27 +603,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	const uint8_t ii = PlaceItemInWorld(std::move(item), dropPos);
 	// In multiplayer mode, PlaceItemInWorld alone doesn't persist items across level transitions.
 	// Register as DroppedItem in the delta so DeltaLoadItems re-spawns it on return.
-	DeltaRegisterDroppedItem(ii);
-}
-
-int8_t DefaultDropAnimForItemType(ItemType type)
-{
-	switch (type) {
-	case ItemType::Axe: return 1;
-	case ItemType::Bow: return 3;
-	case ItemType::Mace: return 6;
-	case ItemType::Sword: return 8;
-	case ItemType::Shield: return 7;
-	case ItemType::LightArmor: return 14;
-	case ItemType::Helm: return 5;
-	case ItemType::MediumArmor: return 0;
-	case ItemType::HeavyArmor: return 17;
-	case ItemType::Staff: return 11;
-	case ItemType::Gold: return 4;
-	case ItemType::Ring: return 12;
-	case ItemType::Amulet: return 12;
-	default: return 2;
-	}
+	LuaDeltaRegisterDroppedItem(ii);
 }
 
 void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride)

@@ -881,6 +881,14 @@ void StartSpecialAttack(Monster &monster)
 	monster.position.old = monster.position.tile;
 }
 
+void StartEating(Monster &monster)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, monster.direction);
+	monster.mode = MonsterMode::SpecialMeleeAttack;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+}
+
 void DiabloDeath(Monster &diablo, bool sendmsg)
 {
 	PlaySFX(SfxID::DiabloDeath);
@@ -1024,6 +1032,31 @@ void StartDeathFromMonster(Monster &attacker, Monster &target)
 		M_StartStand(attacker, attacker.direction);
 }
 
+void StartFadein(Monster &monster, Direction md, bool backwards)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, md);
+	monster.mode = MonsterMode::FadeIn;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+	monster.flags &= ~MFLAG_HIDDEN;
+	if (backwards) {
+		monster.flags |= MFLAG_LOCK_ANIMATION;
+		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
+	}
+}
+
+void StartFadeout(Monster &monster, Direction md, bool backwards)
+{
+	NewMonsterAnim(monster, MonsterGraphic::Special, md);
+	monster.mode = MonsterMode::FadeOut;
+	monster.position.future = monster.position.tile;
+	monster.position.old = monster.position.tile;
+	if (backwards) {
+		monster.flags |= MFLAG_LOCK_ANIMATION;
+		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
+	}
+}
+
 /**
  * @brief Starts the monster healing procedure.
  *
@@ -1033,6 +1066,15 @@ void StartDeathFromMonster(Monster &attacker, Monster &target)
  *
  * @param monster The monster that will be healed.
  */
+void StartHeal(Monster &monster)
+{
+	monster.changeAnimationData(MonsterGraphic::Special);
+	monster.animInfo.currentFrame = monster.type().getAnimData(MonsterGraphic::Special).frames - 1;
+	monster.flags |= MFLAG_LOCK_ANIMATION;
+	monster.mode = MonsterMode::Heal;
+	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
+}
+
 void SyncLightPosition(Monster &monster)
 {
 	if (monster.lightId == NO_LIGHT)
@@ -2124,6 +2166,9 @@ void SkeletonBowAi(Monster &monster)
 	monster.checkStandAnimationIsLoaded(md);
 }
 
+// Lua mod support: forward declaration (defined below in this TU, internal linkage).
+std::optional<Point> ScavengerFindCorpse(const Monster &scavenger);
+
 void ScavengerAi(Monster &monster)
 {
 	if (monster.mode != MonsterMode::Stand)
@@ -3209,51 +3254,6 @@ bool PosOkMovingMissile(Point position)
 	return !IsMissileBlockedByTile(position);
 }
 
-} // namespace
-
-// Lua mod support: exposed for Lua bindings; moved out of anonymous namespace to resolve ADL ambiguity.
-void StartEating(Monster &monster)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, monster.direction);
-	monster.mode = MonsterMode::SpecialMeleeAttack;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-}
-
-void StartHeal(Monster &monster)
-{
-	monster.changeAnimationData(MonsterGraphic::Special);
-	monster.animInfo.currentFrame = monster.type().getAnimData(MonsterGraphic::Special).frames - 1;
-	monster.flags |= MFLAG_LOCK_ANIMATION;
-	monster.mode = MonsterMode::Heal;
-	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
-}
-
-void StartFadein(Monster &monster, Direction md, bool backwards)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, md);
-	monster.mode = MonsterMode::FadeIn;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-	monster.flags &= ~MFLAG_HIDDEN;
-	if (backwards) {
-		monster.flags |= MFLAG_LOCK_ANIMATION;
-		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
-	}
-}
-
-void StartFadeout(Monster &monster, Direction md, bool backwards)
-{
-	NewMonsterAnim(monster, MonsterGraphic::Special, md);
-	monster.mode = MonsterMode::FadeOut;
-	monster.position.future = monster.position.tile;
-	monster.position.old = monster.position.tile;
-	if (backwards) {
-		monster.flags |= MFLAG_LOCK_ANIMATION;
-		monster.animInfo.currentFrame = monster.animInfo.numberOfFrames - 1;
-	}
-}
-
 bool AiPlanPath(Monster &monster)
 {
 	if (monster.type().type != MT_GOLEM) {
@@ -3309,8 +3309,24 @@ std::optional<Point> ScavengerFindCorpse(const Monster &scavenger)
 	return {};
 }
 
-// Lua mod support
-void ChangeMonsterToGolem(Monster &monster)
+} // namespace
+
+// Lua mod support: thin wrappers exposing the two vanilla helpers above (internal linkage) to the
+// binding layer; each forwards with no added behaviour.
+bool LuaMonsterPlanPath(Monster &monster)
+{
+	return AiPlanPath(monster);
+}
+
+std::optional<Point> LuaMonsterFindCorpse(const Monster &monster)
+{
+	return ScavengerFindCorpse(monster);
+}
+
+// Lua mod support: convert a monster to a golem owned by ownerPlayerId. The owner is parameterised
+// (not hardcoded to MyPlayerId) so a client can replay this conversion for a monster owned by another
+// player.
+void LuaChangeMonsterToGolem(Monster &monster, uint8_t ownerPlayerId)
 {
 	const auto naturalToHit = static_cast<uint16_t>(monster.toHit(sgGameInitInfo.nDifficulty));
 	monster.flags |= MFLAG_GOLEM;
@@ -3322,7 +3338,7 @@ void ChangeMonsterToGolem(Monster &monster)
 	monster.goal = MonsterGoal::Normal;
 	monster.activeForTicks = UINT8_MAX;
 	monster.ai = MonsterAIID::Golem;
-	monster.goalVar3 = static_cast<int>(MyPlayerId);
+	monster.goalVar3 = static_cast<int>(ownerPlayerId);
 	monster.pathCount = 0;
 	UpdateEnemy(monster);
 }
@@ -4231,16 +4247,9 @@ bool Walk(Monster &monster, Direction md)
 	return true;
 }
 
-// Lua mod support
-void StartGolemRangedAttack(Monster &monster, MissileID missileType)
-{
-	StartRangedAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
-}
-
-// Lua mod support: fire a Rhino charge missile, matching RhinoAi/BatAi/SnakeAi. Uses
-// TARGET_PLAYERS like the vanilla casts so Missile::sourceMonster() resolves. Returns true
-// if the charge started.
-bool StartGolemCharge(Monster &monster)
+// Lua mod support: start a charge attack toward the monster's current target (charge missile +
+// Charge mode). Returns true if the charge started, false if the path is blocked.
+bool LuaStartMonsterCharge(Monster &monster)
 {
 	if (!LineClear([&monster](Point position) { return IsTileAvailable(monster, position); }, monster.position.tile, monster.enemyPosition))
 		return false;
@@ -4254,45 +4263,16 @@ bool StartGolemCharge(Monster &monster)
 	return true;
 }
 
-// Lua mod support: spawn a skeleton the way LeoricAi does, but invokable on a golem (which runs
-// GolumAi, not LeoricAi). Mirrors the LeoricAi spawn block: pick the tile toward the current
-// enemy, spawn a random skeleton, and play the special-stand. Fires OnGolemSpawnedMinion so a
-// mod can react to the spawn. Returns true if a skeleton was actually spawned (false if blocked,
-// no skeleton type, or the spawn cap is hit).
-bool StartGolemSpawnSkeleton(Monster &monster)
+// Lua mod support: play the monster's special-stand animation facing its current target.
+void LuaStartMonsterSpecialStand(Monster &monster)
 {
 	const Direction md = GetDirection(monster.position.tile, monster.enemyPosition);
-	const Point newPosition = monster.position.tile + md;
-	if (!IsTileAvailable(monster, newPosition))
-		return false;
-	std::optional<size_t> typeIndex = GetRandomSkeletonTypeIndex();
-	if (!typeIndex)
-		return false;
-	const size_t activeCountBefore = ActiveMonsterCount;
-	SpawnMonster(newPosition, md, *typeIndex);
-	if (ActiveMonsterCount == activeCountBefore) // SpawnMonster bailed (cap reached / not level owner)
-		return false;
 	StartSpecialStand(monster, md);
-	Monster &spawned = Monsters[ActiveMonsters[activeCountBefore]];
-	lua::OnGolemSpawnedMinion(&monster, &spawned);
-	return true;
 }
 
-// Lua mod support: fire a special ranged attack (Special animation + SpecialRangedAttack mode),
-// matching monsters like the Hork Demon's Hork Spawn. The engine's MonsterRangedSpecialAttack
-// mode handler creates the missile with TARGET_PLAYERS + this monster as source, so a spawn
-// missile (HorkSpawn) resolves its parent via Missile::sourceMonster() when it lands.
-void StartGolemSpecialRangedAttack(Monster &monster, MissileID missileType)
-{
-	StartRangedSpecialAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
-}
-
-// Lua mod support: resolve the missile a golem's *authentic* ranged/special attack would fire,
-// mirroring StartGolemNaturalRangedAttack's selection (Counselor/Advocate by intelligence,
-// Mega->Inferno, everyone else via GetMissileType). Single source of truth so a mod can read the
-// missile (and thus its element) without firing it. Uses monster.data().ai (the original AI),
-// since a golem's live ai is Golem.
-MissileID GetGolemNaturalMissile(const Monster &monster)
+// Lua mod support: return the MissileID this monster's type fires as its ranged/special attack,
+// derived from its data AI (without firing). Lets a caller read the attack's missile/element.
+MissileID LuaGetMonsterNaturalRangedMissile(const Monster &monster)
 {
 	const MonsterAIID ai = monster.data().ai;
 	switch (ai) {
@@ -4310,39 +4290,42 @@ MissileID GetGolemNaturalMissile(const Monster &monster)
 	}
 }
 
-// Lua mod support: fire this golem's *authentic* ranged/special attack — the same missile and
-// animation its original AI would use — instead of the generic golem arrow. Mirrors AiRanged /
-// AiRangedAvoidance / CounselorAi / MegaAi:
-//   - Counselor/Advocate: cast Firebolt/ChargedBolt/LightningControl/Fireball by intelligence
-//   - Mega: InfernoControl (special-ranged)
-//   - Magma/Storm/Acid/AcidUnique/Diablo/BoneDemon: GetMissileType, special-ranged animation
-//   - everyone else (Succubus, Lich, FireBat, archers, ...): GetMissileType, normal ranged anim
-// The missile choice is delegated to GetGolemNaturalMissile (shared with the Lua binding).
-void StartGolemNaturalRangedAttack(Monster &monster)
+// Lua mod support: thin wrappers letting the Lua binding layer invoke a monster's native action. Each
+// forwards to the matching engine helper (which has internal linkage, so it cannot be called from the
+// binding TU directly). No behaviour beyond the forward.
+void LuaStartMonsterRangedAttack(Monster &monster, MissileID missileType)
 {
-	const MonsterAIID ai = monster.data().ai;
-	const int dam = RandomIntBetween(monster.minDamage, monster.maxDamage);
-	const MissileID missile = GetGolemNaturalMissile(monster);
-	switch (ai) {
-	case MonsterAIID::Mega:
-	case MonsterAIID::Magma:
-	case MonsterAIID::Storm:
-	case MonsterAIID::Acid:
-	case MonsterAIID::AcidUnique:
-	case MonsterAIID::Diablo:
-	case MonsterAIID::BoneDemon:
-		StartRangedSpecialAttack(monster, missile, dam);
-		break;
-	default:
-		StartRangedAttack(monster, missile, dam);
-		break;
-	}
+	StartRangedAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
 }
 
-// Lua mod support: trigger the monster's special melee attack (e.g. GoatMelee's low-HP special).
-void StartGolemSpecialAttack(Monster &monster)
+void LuaStartMonsterSpecialRangedAttack(Monster &monster, MissileID missileType)
+{
+	StartRangedSpecialAttack(monster, missileType, RandomIntBetween(monster.minDamage, monster.maxDamage));
+}
+
+void LuaStartMonsterSpecialAttack(Monster &monster)
 {
 	StartSpecialAttack(monster);
+}
+
+void LuaStartMonsterHeal(Monster &monster)
+{
+	StartHeal(monster);
+}
+
+void LuaStartMonsterEat(Monster &monster)
+{
+	StartEating(monster);
+}
+
+void LuaStartMonsterFadein(Monster &monster)
+{
+	StartFadein(monster, monster.direction, false);
+}
+
+void LuaStartMonsterFadeout(Monster &monster)
+{
+	StartFadeout(monster, monster.direction, true);
 }
 
 void GolumAi(Monster &golem)
@@ -4545,8 +4528,15 @@ void ProcessMonsters()
 			}
 		}
 
+		// Lua mod support: a mod may suppress a golem's local AI simulation (e.g. one whose authority
+		// lives on another client and is kept in sync externally). Gated on MFLAG_GOLEM, mirroring the
+		// other OnGolemCanXxx call-outs; default true = vanilla (run the AI). Mode/animation advance
+		// (UpdateModeStance / processAnimation below) still run so a suppressed golem renders normally.
+		bool runAI = true;
+		if ((monster.flags & MFLAG_GOLEM) != 0)
+			runAI = lua::OnGolemCanRunAI(&monster, true);
 		while (true) {
-			if ((monster.flags & MFLAG_SEARCH) == 0 || !AiPlanPath(monster)) {
+			if (runAI && ((monster.flags & MFLAG_SEARCH) == 0 || !AiPlanPath(monster))) {
 				AiProc[static_cast<int8_t>(monster.ai)](monster);
 			}
 
