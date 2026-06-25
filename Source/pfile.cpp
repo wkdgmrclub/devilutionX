@@ -512,6 +512,7 @@ HeroCompareResult CompareSaves(const std::string &actualSavePath, const std::str
 
 void pfile_write_hero(SaveWriter &saveWriter, bool writeGameData)
 {
+	lua::OnBeforeSaveHero(); // Lua mod support: meticulously manage save data at the mod level in lua
 	if (writeGameData) {
 		SaveGameData(saveWriter);
 		RenameTempToPerm(saveWriter);
@@ -524,8 +525,9 @@ void pfile_write_hero(SaveWriter &saveWriter, bool writeGameData)
 	if (!gbVanilla) {
 		SaveHotkeys(saveWriter, myPlayer);
 		SaveHeroItems(saveWriter, myPlayer);
-		SavePlayerModData(saveWriter); // Lua mod support
+		LuaSavePlayerModData(saveWriter); // Lua mod support
 	}
+	lua::OnAfterSaveHero(); // Lua mod support
 }
 
 void RemoveAllInvalidItems(Player &player)
@@ -786,7 +788,7 @@ void pfile_read_player_from_save(uint32_t saveNum, Player &player)
 
 	UnPackPlayer(pkplr, player);
 	LoadHeroItems(player);
-	LoadPlayerModData(); // Lua mod support
+	LuaLoadPlayerModData(); // Lua mod support
 	RemoveAllInvalidItems(player);
 	CalcPlrInv(player, false);
 }

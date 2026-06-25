@@ -264,6 +264,7 @@ struct Item {
 	ItemSpecialEffectHf _iDamAcFlags = ItemSpecialEffectHf::None;
 	uint32_t dwBuff = 0;
 	uint32_t _iLuaData = 0; // Lua mod support: generic mod-data slot; carried over the network (TItem) in full and in the hero save via the 16-bit wValue slot; base-game gameplay never reads or interprets it
+	std::string _iModData; // Lua mod support: generic OPTIONAL variable-length mod-data blob; empty (and zero-cost on the wire/delta) unless a mod sets it; exposed to Lua as item.modBytes. Base-game gameplay never reads or interprets it. NOT in the hero save (ItemPack frozen) — a mod persists it out-of-band. (Phase 1: in-memory + Lua only; network/delta transport lands in later phases.)
 
 	/**
 	 * @brief Clears this item and returns the old value

@@ -174,12 +174,12 @@ tl::expected<MissileID, std::string> ParseMissileId(std::string_view value)
 /** Data related to each spell ID. */
 std::vector<SpellData> SpellsData;
 
-std::unordered_map<std::string, SpellID> DynamicSpellIds; // Lua mod support
+std::unordered_map<std::string, SpellID> LuaDynamicSpellIds; // Lua mod support
 
 // Lua mod support
-void RegisterDynamicSpellId(std::string_view name, SpellID id)
+void LuaRegisterDynamicSpellId(std::string_view name, SpellID id)
 {
-	DynamicSpellIds.emplace(std::string(name), id);
+	LuaDynamicSpellIds.emplace(std::string(name), id);
 }
 
 tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
@@ -236,8 +236,8 @@ tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
 	if (value == "RuneOfNova") return SpellID::RuneOfNova;
 	if (value == "RuneOfImmolation") return SpellID::RuneOfImmolation;
 	if (value == "RuneOfStone") return SpellID::RuneOfStone;
-	const auto it = DynamicSpellIds.find(std::string(value)); // Lua mod support: dynamic spell names registered by mods
-	if (it != DynamicSpellIds.end()) return it->second;
+	const auto it = LuaDynamicSpellIds.find(std::string(value)); // Lua mod support: dynamic spell names registered by mods
+	if (it != LuaDynamicSpellIds.end()) return it->second;
 	return tl::make_unexpected("Unknown enum value");
 }
 
@@ -268,8 +268,8 @@ void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename)
 
 void LoadSpellData()
 {
-	DynamicSpellIds.clear(); // Lua mod support
-	ClearDynamicSpellIcons(); // Lua mod support
+	LuaDynamicSpellIds.clear(); // Lua mod support
+	LuaClearDynamicSpellIcons(); // Lua mod support
 	SpellsData.clear();
 	const std::string_view filename = "txtdata\\spells\\spelldat.tsv";
 	DataFile dataFile = DataFile::loadOrDie(filename);

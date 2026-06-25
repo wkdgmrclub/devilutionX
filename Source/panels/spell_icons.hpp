@@ -117,12 +117,12 @@ tl::expected<void, std::string> LoadSmallSpellIcons();
 void FreeSmallSpellIcons();
 
 /** Lua mod support: parse a SpellIcon name string to its frame index. Returns Empty on unknown names. */
-uint8_t ParseSpellIconName(std::string_view name);
+uint8_t LuaParseSpellIconName(std::string_view name);
 
 /** Lua mod support: register a custom icon frame for a dynamic spell ID. */
-void RegisterDynamicSpellIcon(int spellId, uint8_t iconFrame);
+void LuaRegisterDynamicSpellIcon(int spellId, uint8_t iconFrame);
 
 /** Lua mod support: clear all dynamic spell icon registrations. Call at the start of each data reload. */
-void ClearDynamicSpellIcons();
+void LuaClearDynamicSpellIcons();
 
 } // namespace devilution

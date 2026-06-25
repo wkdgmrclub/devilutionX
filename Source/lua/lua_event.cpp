@@ -271,7 +271,7 @@ void OnLevelEnter()
 	CallLuaEvent("OnLevelEnter");
 }
 
-void OnNetMessage(int senderId, std::string_view payload)
+void NetMessage(int senderId, std::string_view payload)
 {
 	// Pass the payload as a length-counted std::string so embedded zeros survive into Lua.
 	CallLuaEvent("NetMessage", senderId, std::string(payload));
@@ -302,14 +302,9 @@ int OnGolemMissileDamage(const Monster *golem, int missileId, int dam)
 	return CallLuaEventReturn<int>(dam, "OnGolemMissileDamage", golem, missileId, dam);
 }
 
-int OnGolemMissilePreResolve(const Monster *source, const Monster *target, int missileId, int damageType)
+int OnMonsterMissileHit(const Monster *source, const Monster *target, int missileId, int damageType, int minDamage, int maxDamage, int dist, bool isDamageShifted)
 {
-	return CallLuaEventReturn<int>(damageType, "OnGolemMissilePreResolve", source, target, missileId, damageType);
-}
-
-void OnGolemMissilePostResolve(const Monster *target)
-{
-	CallLuaEvent("OnGolemMissilePostResolve", target);
+	return CallLuaEventReturn<int>(-1, "OnMonsterMissileHit", source, target, missileId, damageType, minDamage, maxDamage, dist, isDamageShifted);
 }
 
 bool OnPlayerHasCriticalStrike(const Player *player, bool defaultValue)
@@ -658,6 +653,21 @@ void OnLoadPlayerData(const std::vector<uint32_t> &data){
 		luaData[static_cast<int>(i + 1)] = data[i];
 	const sol::protected_function fn = trigger->as<sol::protected_function>();
 	SafeCallResult(fn(luaData), /*optional=*/true);
+}
+
+bool OnItemAllowedInStash(const Item *item, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnItemAllowedInStash", item);
+}
+
+void OnBeforeSaveHero()
+{
+	CallLuaEvent("OnBeforeSaveHero");
+}
+
+void OnAfterSaveHero()
+{
+	CallLuaEvent("OnAfterSaveHero");
 }
 
 } // namespace lua

@@ -2298,7 +2298,7 @@ void StartStore(TalkID s)
 	ClearSText(0, NumStoreLines);
 	ReleaseStoreBtn();
 
-	// Fire StoreOpened Lua event for main store entries
+	// Lua mod support: fire StoreOpened event for main store entries
 	if (const char *name = TownerNameForTalkID(s); name != nullptr)
 		lua::StoreOpened(name);
 

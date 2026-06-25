@@ -19,9 +19,9 @@ int AddSpellDataFromTsv(std::string_view name, std::string_view path, sol::optio
 	const auto newId = static_cast<std::underlying_type_t<SpellID>>(SpellsData.size());
 	DataFile dataFile = DataFile::loadOrDie(path);
 	LoadSpellDatFromFile(dataFile, path);
-	RegisterDynamicSpellId(name, static_cast<SpellID>(newId));
+	LuaRegisterDynamicSpellId(name, static_cast<SpellID>(newId));
 	if (iconName.has_value() && !iconName->empty()) {
-		RegisterDynamicSpellIcon(static_cast<int>(newId), ParseSpellIconName(*iconName));
+		LuaRegisterDynamicSpellIcon(static_cast<int>(newId), LuaParseSpellIconName(*iconName));
 	}
 	return static_cast<int>(newId);
 }
@@ -37,7 +37,7 @@ sol::table LuaSpellsModule(sol::state_view &lua)
 	LuaSetDocFn(table, "setSpellIcon", "(spellId: integer, iconName: string)",
 	    "Set the speedbook icon for a dynamic spell by name (e.g. \"Golem\"). Call after addSpellDataFromTsv.",
 	    [](int spellId, std::string_view iconName) {
-		    RegisterDynamicSpellIcon(spellId, ParseSpellIconName(iconName));
+		    LuaRegisterDynamicSpellIcon(spellId, LuaParseSpellIconName(iconName));
 	    });
 	return table;
 }

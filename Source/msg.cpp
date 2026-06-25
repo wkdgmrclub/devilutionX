@@ -2499,7 +2499,7 @@ size_t OnLuaMessage(const TCmd &cmd, size_t maxCmdSize, const Player &player)
 		return maxCmdSize;
 	const size_t available = std::min<size_t>(MAX_SEND_STR_LEN, maxCmdSize - headerSize);
 	const size_t len = std::min<size_t>(message.len, available);
-	lua::OnNetMessage(static_cast<int>(player.getId()), std::string_view(message.data, len));
+	lua::NetMessage(static_cast<int>(player.getId()), std::string_view(message.data, len));
 	return headerSize + len;
 }
 

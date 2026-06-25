@@ -256,6 +256,26 @@ void InitMonsterUserType(sol::state_view &lua)
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    monster.resistance = static_cast<uint16_t>(flags);
 	    });
+	LuaSetDocFn(monsterType, "resolveMissileHit", "(missileId: integer, damageType: integer, minDam: integer, maxDam: integer, dist: integer, shifted: boolean) -> boolean",
+	    "Resolve a missile hit against this monster through the engine's monster-vs-monster damage path "
+	    "(MonsterTrapHit): rolls to-hit, applies the given DamageType's resistance/immunity, deals the rolled "
+	    "damage, and runs the inline death/hit reactions. Returns true if the monster was hit. Lets a mod own a "
+	    "player-minion's missile resolution from Lua (e.g. reclassify the element or adjust resistance around the "
+	    "call) while the engine still performs the actual damage step. Use monsters.MissileID / monsters.DamageType "
+	    "constants. // Lua mod support",
+	    [](const Monster &constMonster, int missileId, int damageType, int minDam, int maxDam, int dist, bool shifted) -> bool {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    return MonsterTrapHit(monster, minDam, maxDam, dist, static_cast<MissileID>(missileId), static_cast<DamageType>(damageType), shifted);
+	    });
+	LuaSetDocFn(monsterType, "tagForPlayer", "(playerId: integer)",
+	    "Record that the given player has damaged this monster (sets the player's bit in the monster's whoHit "
+	    "mask), so the player shares in the kill XP when it dies — the same credit a player's own attack records. "
+	    "Use to attribute a player-minion's kills to its owner. No-op for an out-of-range playerId. // Lua mod support",
+	    [](const Monster &constMonster, int playerId) {
+		    if (playerId < 0 || playerId >= static_cast<int>(Players.size())) return;
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    monster.tag(Players[static_cast<size_t>(playerId)]);
+	    });
 	LuaSetDocFn(monsterType, "makeGolem", "(ownerId?: integer)",
 	    "Convert this monster to a golem owned by player ownerId (defaults to the local player). Switches AI to GolumAi; use OnGolemCanTargetMonster and OnGolemCanSelect to customise behaviour. // Lua mod support",
 	    [](Monster &monster, sol::optional<int> ownerId) {
@@ -290,6 +310,16 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "The id of the player that owns this monster, stored in goalVar3 (set when it becomes a golem/player-controlled ally; the caster becomes owner). Only meaningful when isGolem is true. Use to filter golem hooks by ownership. readonly",
 	    [](const Monster &monster) -> int {
 		    return static_cast<int>(monster.goalVar3);
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "monsterClass", "string",
+	    "The monster's creature class from monstdat: \"Animal\", \"Demon\", or \"Undead\". readonly",
+	    [](const Monster &monster) -> std::string {
+		    switch (monster.data().monsterClass) {
+		    case MonsterClass::Animal: return "Animal";
+		    case MonsterClass::Demon: return "Demon";
+		    case MonsterClass::Undead: return "Undead";
+		    }
+		    return "Animal";
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isHidden", "boolean",
 	    "Whether this monster has the MFLAG_HIDDEN flag set (faded out / invisible, e.g. a cloaked Sneak monster). readonly",

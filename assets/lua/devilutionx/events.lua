@@ -519,25 +519,17 @@ local events = {
   OnGolemMissileDamage = CreateQueryEvent(),
   __doc_OnGolemMissileDamage = "Query: return integer to override a golem/player-minion missile's damage. Args: golem, missileId (int), dam (int). MFLAG_GOLEM sources only; fires per missile incl. each spell segment. Return nil to keep dam.",
 
-  ---Query event fired just BEFORE a golem/player-minion (MFLAG_GOLEM) missile's damage is resolved
-  ---against another monster (the MonsterTrapHit path, e.g. a player-minion's cast hitting an enemy
-  ---monster), before the engine reads the target's resistance/immunity. Fired when either the source OR
-  ---the target is a player-minion (MFLAG_GOLEM); wild-vs-wild missiles never fire it.
-  ---Args: source (Monster — the source monster, may be nil for a trap), target (Monster — the monster
-  ---being hit), missileId (int), damageType (int — monsters.DamageType.*). A handler may transiently
-  ---mutate the target's resistance bitfield (restore it in the paired OnGolemMissilePostResolve so it
-  ---only spans this one synchronous resolution) AND/OR return a DamageType int to reclassify the element
-  ---the engine resolves this hit as (the engine's own immune/resist math then runs against that element).
-  ---Return nil to keep the original damageType. Use to express resistance an element lacks (e.g. resolve
-  ---acid as Magic so a monster's magic resistance applies — monster-side acid has no resist tier).
-  OnGolemMissilePreResolve = CreateQueryEvent(),
-  __doc_OnGolemMissilePreResolve = "Query (MFLAG_GOLEM on either end — source or target): fired before that missile resolves against the target monster. Args: source (may be nil), target, missileId (int), damageType (int). Transiently mutate target resistance (restore in OnGolemMissilePostResolve) and/or return a DamageType int to reclassify the resolved element (nil = keep damageType).",
-
-  ---Event fired immediately AFTER the golem-missile-vs-monster resolution that OnGolemMissilePreResolve
-  ---bracketed (same gate). Args: target (Monster). Use to restore any transient resistance change made
-  ---in the pre hook.
-  OnGolemMissilePostResolve = CreateEvent(),
-  __doc_OnGolemMissilePostResolve = "Fired right after a golem-missile-vs-monster resolution (pairs with OnGolemMissilePreResolve). Args: target. Restore any transient resistance change here.",
+  ---Query event fired for a missile's resolution against a monster (the MonsterTrapHit path, e.g. a
+  ---player-minion's cast hitting an enemy monster) when either the source OR the target is a player-minion
+  ---(MFLAG_GOLEM); wild-vs-wild missiles never fire it. A handler may fully own the resolution.
+  ---Args: source (Monster — may be nil for a trap), target (Monster — the monster being hit), missileId
+  ---(int), damageType (int — monsters.DamageType.*), minDam, maxDam, dist, shifted (the engine's own
+  ---resolution inputs). Return < 0 to decline — the engine resolves the hit normally against damageType.
+  ---Otherwise resolve the hit yourself (e.g. reclassify the element / transiently adjust the target's
+  ---resistance, then call target:resolveMissileHit) and return 1 for a hit or 0 for a miss. Because the
+  ---whole resolution is one synchronous call, any transient resistance change is set and restored inline.
+  OnMonsterMissileHit = CreateQueryEvent(),
+  __doc_OnMonsterMissileHit = "Query (MFLAG_GOLEM on either end — source or target): a missile is resolving against a monster. Args: source (may be nil), target, missileId (int), damageType (int), minDam, maxDam, dist, shifted. Return <0 to let the engine resolve it normally (default), or resolve it yourself (e.g. via target:resolveMissileHit) and return 1 (hit) / 0 (miss).",
 
   ---Query event fired before a player's left-click attack or offensive spell cast is queued on a monster.
   ---Args: player, monster. Return false to cancel (silently no-op); return nil or true to allow (default: true).
@@ -564,6 +556,22 @@ local events = {
   ---by OnSavePlayerData on the last save. Not called for saves lacking the mod-data file.
   OnLoadPlayerData = CreateEvent(),
   __doc_OnLoadPlayerData = "Called on load with the flat uint32 sequence from the last OnSavePlayerData return. Not called for saves lacking the mod-data file.",
+
+  ---Query event fired when deciding whether an item may be placed in the stash (manual drop and auto-place).
+  ---Args: item. Return false to forbid the item from the stash; return nil or true to allow (default: engine value).
+  OnItemAllowedInStash = CreateQueryEvent(),
+  __doc_OnItemAllowedInStash = "Query: return false to stop an item being placed in the stash (manual and auto-place). Args: item. Return nil or true to allow (default: engine value).",
+
+  ---Called at the start of a hero-file write, before the player is serialized. Pairs with OnAfterSaveHero.
+  ---A handler may transiently mutate the local player (e.g. remove a session-only item so it is never
+  ---written to disk) and MUST undo the change in OnAfterSaveHero so it spans only this one write.
+  OnBeforeSaveHero = CreateEvent(),
+  __doc_OnBeforeSaveHero = "Called before the player is serialized to the hero file. Pairs with OnAfterSaveHero; transiently mutate the player here and restore it in OnAfterSaveHero.",
+
+  ---Called at the end of a hero-file write, after the player is serialized. Restore any transient
+  ---change made in OnBeforeSaveHero here.
+  OnAfterSaveHero = CreateEvent(),
+  __doc_OnAfterSaveHero = "Called after the player is serialized to the hero file. Restore any transient change made in OnBeforeSaveHero here.",
 }
 
 ---Registers a custom event type with the given name.

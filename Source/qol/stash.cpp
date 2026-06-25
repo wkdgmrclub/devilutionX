@@ -25,6 +25,7 @@
 #include "headless_mode.hpp"
 #include "hwcursor.hpp"
 #include "inv.h"
+#include "lua/lua_event.hpp"
 #include "minitext.h"
 #include "stores.h"
 #include "utils/display.h"
@@ -114,7 +115,7 @@ std::optional<Point> FindTargetSlotUnderItemCursor(Point cursorPosition, Size it
 
 bool IsItemAllowedInStash(const Item &item)
 {
-	return item._iMiscId != IMISC_ARENAPOT;
+	return lua::OnItemAllowedInStash(&item, item._iMiscId != IMISC_ARENAPOT); // Lua mod support
 }
 
 void CheckStashPaste(Point cursorPosition)

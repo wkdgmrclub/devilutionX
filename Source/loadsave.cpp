@@ -2952,7 +2952,7 @@ tl::expected<void, std::string> LoadLevel()
 	return LoadLevel(nullptr);
 }
 
-void SavePlayerModData(SaveWriter &saveWriter) // Lua mod support
+void LuaSavePlayerModData(SaveWriter &saveWriter) // Lua mod support
 {
 	const std::vector<uint32_t> data = lua::OnSavePlayerData();
 	if (data.empty())
@@ -2964,7 +2964,7 @@ void SavePlayerModData(SaveWriter &saveWriter) // Lua mod support
 		file.WriteLE<uint32_t>(value);
 }
 
-void LoadPlayerModData() // Lua mod support
+void LuaLoadPlayerModData() // Lua mod support
 {
 	LoadHelper file(OpenSaveArchive(gSaveNumber), "luamoddata");
 	if (!file.IsValid())

@@ -74,18 +74,21 @@ void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue);
 bool OnVendorWillBuyItem(const Item *item, bool defaultValue);  // query: false = vendor won't buy this item
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
-void OnItemUsed(const Player &player, int mid, int spellID);std::string OnGetMiscItemDescription(const Item *item);bool OnPrepareUniqueInfoBox(const Item &item);          // true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
+void OnItemUsed(const Player &player, int mid, int spellID);
+std::string OnGetMiscItemDescription(const Item *item);
+bool OnPrepareUniqueInfoBox(const Item &item); // true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
 
 void LoadModsComplete();
 void GameDrawComplete();
 void GameStart();
 void OnNewCharacter(const Player &player);
-void OnCreatePlrItems(Player &player);void OnLevelExit();
+void OnCreatePlrItems(Player &player);
+void OnLevelExit();
 void OnLevelEnter();
 
 // Generic mod net pipe: fired on receipt of a CMD_LUAMSG packet. `senderId` is the player id the
 // message came from; `payload` is the opaque bytes the sender passed to system.netSend (binary-safe).
-void OnNetMessage(int senderId, std::string_view payload);
+void NetMessage(int senderId, std::string_view payload);
 
 void OnGolemKilledMonster(const Monster *golem, const Monster *victim);
 // Fired only for a golem-sourced spawn missile (the source monster has MFLAG_GOLEM) when it lands,
@@ -109,15 +112,12 @@ bool OnGolemCanRunAI(const Monster *monster, bool defaultValue);
 bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue);
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
 int OnGolemMissileDamage(const Monster *golem, int missileId, int dam);
-// Bracket a missile's target-side damage resolution against another monster, fired when either the
-// source or the target is a player-minion (MFLAG_GOLEM); source may be null (e.g. a trap). PreResolve
-// fires before the engine reads the target's resistance/immunity: a mod may transiently adjust the
-// target's resistance bitfield (restored in PostResolve) and returns the DamageType the engine should
-// resolve this hit as (default = the passed-in damageType). The engine's own immune/resist math is
-// unchanged — it runs against the returned element. PostResolve fires right after so the mod can restore
-// the bitfield (changes must only span this one synchronous resolution).
-int OnGolemMissilePreResolve(const Monster *source, const Monster *target, int missileId, int damageType);
-void OnGolemMissilePostResolve(const Monster *target);
+// Fired for a missile's resolution against a monster when either the source or the target is a
+// player-minion (MFLAG_GOLEM); source may be null (e.g. a trap). Lets a mod fully own the hit
+// resolution: return <0 to decline (the engine runs its default trap-hit resolution against the passed
+// damageType), or return 1/0 (hit/no-hit) after resolving the hit itself. Passes the resolution inputs
+// the engine would otherwise feed the default path.
+int OnMonsterMissileHit(const Monster *source, const Monster *target, int missileId, int damageType, int minDamage, int maxDamage, int dist, bool isDamageShifted);
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
 bool OnPlayerAttackMonster(const Player *player, int monsterId, bool defaultValue);
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);
@@ -139,12 +139,18 @@ int OnResolveCustomScrollSlot(const Player *player, int spellId, uint32_t select
 bool OnCanCastScroll(const Player *player, int spellId, uint32_t selectedSeed, int monsterId);
 bool OnCanCastSkill(const Player *player, int spellId, int monsterId);
 bool OnCanAutoRefillBeltItem(const Player *player, const Item *item, bool defaultValue);
+bool OnItemAllowedInStash(const Item *item, bool defaultValue); // query: false = item may not be placed in the stash
 
 // Mod data persistence hooks
 // OnSavePlayerData: all handlers run; return values (tables of uint32) are concatenated into a flat vector.
 // OnLoadPlayerData: the same flat vector is passed back to all handlers on load.
 std::vector<uint32_t> OnSavePlayerData();
 void OnLoadPlayerData(const std::vector<uint32_t> &data);
+
+// Bracket the hero-file write. A handler may transiently mutate the saved player (e.g. remove an item)
+// in OnBeforeSaveHero and must restore it in OnAfterSaveHero so the change spans only this one write.
+void OnBeforeSaveHero();
+void OnAfterSaveHero();
 
 } // namespace lua
 
