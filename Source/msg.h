@@ -6,6 +6,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <string_view>
 
 #include "dvlnet/leaveinfo.hpp"
 #include "engine/point.hpp"
@@ -20,6 +22,11 @@ namespace devilution {
 using net::leaveinfo_t;
 
 #define MAX_SEND_STR_LEN 80
+
+// Buffer size for the generic Lua mod net payload. Decoupled from the chat-message size above:
+// the length field is a uint8_t, so 255 is the largest a single payload can describe, and it fits
+// comfortably inside a packet body. // Lua mod support
+#define LUA_MSG_MAX_LEN 255
 
 enum _cmd_id : uint8_t {
 	// Player mode standing.
@@ -549,7 +556,6 @@ struct TItem {
 	uint32_t dwBuff;
 	uint16_t wToHit;
 	uint16_t wMaxDam;
-	uint32_t dwLuaData; // Lua mod support: generic 32-bit mod-data slot carried over the wire; 0 for vanilla items
 };
 
 struct TEar {
@@ -657,7 +663,7 @@ struct TCmdString {
 struct TCmdLuaMsg {
 	_cmd_id bCmd;
 	uint8_t len;
-	char data[MAX_SEND_STR_LEN];
+	char data[LUA_MSG_MAX_LEN];
 };
 
 struct TFakeCmdPlr {
@@ -750,6 +756,9 @@ bool IsValidLevelForMultiplayer(uint8_t level);
 bool IsValidLevel(uint8_t level, bool isSetLevel);
 void DeltaAddItem(int ii);
 void LuaDeltaRegisterDroppedItem(int ii); // Lua mod support
+void LuaSetItemDeltaModData(uint8_t level, uint32_t seed, std::string_view blob); // Lua mod support
+std::string LuaGetItemDeltaModData(uint8_t level, uint32_t seed);                 // Lua mod support
+uint8_t LuaCurrentDeltaLevel();                                                   // Lua mod support
 void DeltaSaveLevel();
 void DeltaLoadLevel();
 /** @brief Clears last sent player command for the local player. This is used when a game tick changes. */

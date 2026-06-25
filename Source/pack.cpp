@@ -143,8 +143,6 @@ void PackItem(ItemPack &packedItem, const Item &item, bool isHellfire)
 			packedItem.bMCh = item._iMaxCharges;
 			if (item.IDidx == IDI_GOLD)
 				packedItem.wValue = Swap16LE(item._ivalue);
-			else if (item._iCreateInfo == 0) // Lua mod support: store modData in unused wValue slot for custom items (capped at 16 bits by pack format)
-				packedItem.wValue = Swap16LE(static_cast<uint16_t>(std::min(item._iLuaData, static_cast<uint32_t>(0xFFFF))));
 			packedItem.dwBuff = item.dwBuff;
 		}
 	}
@@ -345,8 +343,6 @@ void UnPackItem(const ItemPack &packedItem, const Player &player, Item &item, bo
 		item._iDurability = ClampDurability(item, packedItem.bDur);
 		item._iMaxCharges = std::clamp<int>(packedItem.bMCh, 0, item._iMaxCharges);
 		item._iCharges = std::clamp<int>(packedItem.bCh, 0, item._iMaxCharges);
-		if (Swap16LE(packedItem.iCreateInfo) == 0) // Lua mod support: restore modData from wValue for custom items
-			item._iLuaData = static_cast<uint32_t>(Swap16LE(packedItem.wValue));
 	}
 }
 

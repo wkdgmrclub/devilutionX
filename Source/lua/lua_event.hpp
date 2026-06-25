@@ -47,6 +47,7 @@ void OnCalcPlayerResistances(const Player *player, int fire, int lightning, int 
 
 void OnCustomItemRecreated(Item &item);
 void OnItemPickedUp(const Player &player, const Item &item);
+void OnItemDropped(const Player &player, const Item &item);
 int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip);
 int8_t OnGetPlayerIdleFrames(const Player *player, int weaponGraphic, bool isInTown);
 

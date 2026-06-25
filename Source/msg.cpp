@@ -236,11 +236,18 @@ struct DSpawnedMonster {
 	int16_t golemSpellLevel;
 };
 
+// Lua mod support: upper bound on the optional per-item mod-data blob carried in the level delta.
+// Bounds the worst-case delta receive buffer; the blob is opaque to the engine.
+constexpr size_t MaxItemModDataBytes = 255;
+
 struct DLevel {
 	TCmdPItem item[MAXITEMS];
 	ankerl::unordered_dense::map<WorldTilePosition, DObjectStr> object;
 	ankerl::unordered_dense::map<size_t, DSpawnedMonster> spawnedMonsters;
 	DMonsterStr monster[AbsoluteMaxMonsters]; // Lua mod support: ceiling-sized; serialized count is GetMaxMonsters()
+	// Lua mod support: optional per-item mod-data blobs keyed by item seed, persisted with the level
+	// delta so a dropped floor item keeps its blob persisted. Empty unless a mod populates it.
+	ankerl::unordered_dense::map<uint32_t, std::string> modData;
 };
 
 #pragma pack(push, 1)
@@ -286,14 +293,16 @@ uint8_t sbLastCmd;
 /**
  * @brief buffer used to receive level deltas, size is the worst expected case assuming every object on a level was touched
  */
-std::byte sgRecvBuf[1U                                               /* marker byte, always 0 */
-    + sizeof(uint8_t)                                                /* level id */
-    + sizeof(DLevel::item)                                           /* items spawned during dungeon generation which have been picked up, and items dropped by a player during a game */
-    + sizeof(uint8_t)                                                /* count of object interactions which caused a state change since dungeon generation */
-    + ((sizeof(WorldTilePosition) + sizeof(_cmd_id)) * MAXOBJECTS)   /* location/action pairs for the object interactions */
-    + sizeof(DLevel::monster)                                        /* latest monster state */
-    + sizeof(uint16_t)                                               /* spawned monster count */
-    + ((sizeof(uint16_t) + sizeof(DSpawnedMonster)) * AbsoluteMaxMonsters)]; /* spawned monsters // Lua mod support */
+std::byte sgRecvBuf[1U                                                           /* marker byte, always 0 */
+    + sizeof(uint8_t)                                                            /* level id */
+    + sizeof(DLevel::item)                                                       /* items spawned during dungeon generation which have been picked up, and items dropped by a player during a game */
+    + sizeof(uint8_t)                                                            /* count of object interactions which caused a state change since dungeon generation */
+    + ((sizeof(WorldTilePosition) + sizeof(_cmd_id)) * MAXOBJECTS)               /* location/action pairs for the object interactions */
+    + sizeof(DLevel::monster)                                                    /* latest monster state */
+    + sizeof(uint16_t)                                                           /* spawned monster count */
+    + ((sizeof(uint16_t) + sizeof(DSpawnedMonster)) * AbsoluteMaxMonsters)       /* spawned monsters // Lua mod support */
+    + sizeof(uint16_t)                                                           /* mod-data blob count // Lua mod support */
+    + ((sizeof(uint32_t) + sizeof(uint16_t) + MaxItemModDataBytes) * MAXITEMS)]; /* per-item mod-data blobs // Lua mod support */
 
 _cmd_id sgbRecvCmd;
 ankerl::unordered_dense::map<uint8_t, LocalLevel> LocalLevels;
@@ -699,6 +708,67 @@ const std::byte *DeltaImportSpawnedMonsters(const std::byte *src, const std::byt
 	return src;
 }
 
+// Lua mod support: serialize the optional per-item mod-data blobs (seed -> bytes) into the level delta.
+// Layout: uint16 count, then per entry uint32 seed, uint16 length, <length> raw bytes.
+std::byte *DeltaExportModData(std::byte *dst, const ankerl::unordered_dense::map<uint32_t, std::string> &modData)
+{
+	uint16_t size = Swap16LE(static_cast<uint16_t>(modData.size()));
+	memcpy(dst, &size, sizeof(uint16_t));
+	dst += sizeof(uint16_t);
+
+	for (const auto &[seed, blob] : modData) {
+		uint32_t seedLE = Swap32LE(seed);
+		memcpy(dst, &seedLE, sizeof(uint32_t));
+		dst += sizeof(uint32_t);
+
+		uint16_t len = Swap16LE(static_cast<uint16_t>(blob.size()));
+		memcpy(dst, &len, sizeof(uint16_t));
+		dst += sizeof(uint16_t);
+
+		memcpy(dst, blob.data(), blob.size());
+		dst += blob.size();
+	}
+
+	return dst;
+}
+
+// Lua mod support: counterpart of DeltaExportModData; rejects an over-long blob or oversized count.
+const std::byte *DeltaImportModData(const std::byte *src, const std::byte *end, ankerl::unordered_dense::map<uint32_t, std::string> &modData)
+{
+	modData.clear();
+	if (src == nullptr || src + sizeof(uint16_t) > end)
+		return nullptr;
+
+	uint16_t size;
+	memcpy(&size, src, sizeof(uint16_t));
+	size = Swap16LE(size);
+	src += sizeof(uint16_t);
+	if (size > MAXITEMS)
+		return nullptr;
+
+	for (size_t i = 0; i < size; i++) {
+		if (src + sizeof(uint32_t) + sizeof(uint16_t) > end)
+			return nullptr;
+
+		uint32_t seed;
+		memcpy(&seed, src, sizeof(uint32_t));
+		seed = Swap32LE(seed);
+		src += sizeof(uint32_t);
+
+		uint16_t len;
+		memcpy(&len, src, sizeof(uint16_t));
+		len = Swap16LE(len);
+		src += sizeof(uint16_t);
+		if (len > MaxItemModDataBytes || src + len > end)
+			return nullptr;
+
+		modData.emplace(seed, std::string(reinterpret_cast<const char *>(src), len));
+		src += len;
+	}
+
+	return src;
+}
+
 std::byte *DeltaExportJunk(std::byte *dst)
 {
 	for (auto &portal : sgJunk.portal) {
@@ -807,6 +877,8 @@ void DeltaImportData(_cmd_id cmd, uint32_t recvOffset, int pnum)
 		src = DeltaImportObjects(src, end, deltaLevel.object);
 		src = DeltaImportMonster(src, end, deltaLevel.monster);
 		src = DeltaImportSpawnedMonsters(src, end, deltaLevel.spawnedMonsters);
+		if (src != nullptr) // Lua mod support
+			src = DeltaImportModData(src, end, deltaLevel.modData);
 	} else {
 		Log("Received invalid deltas, dropping player {}", pnum);
 		SNetDropPlayer(pnum, leaveinfo_t::LEAVE_DROP);
@@ -953,6 +1025,9 @@ void DeltaLoadItems(const DLevel &deltaLevel)
 			const int ii = AllocateItem();
 			auto &item = Items[ii];
 			RecreateItem(*MyPlayer, deltaItem, item);
+			// Lua mod support: restore the optional per-item mod-data blob persisted with this floor item.
+			if (auto modIt = deltaLevel.modData.find(Swap32LE(deltaItem.def.dwSeed)); modIt != deltaLevel.modData.end())
+				item._iModData = modIt->second;
 
 			const int x = deltaItem.x;
 			const int y = deltaItem.y;
@@ -2497,7 +2572,7 @@ size_t OnLuaMessage(const TCmd &cmd, size_t maxCmdSize, const Player &player)
 	const size_t headerSize = sizeof(message) - sizeof(message.data);
 	if (maxCmdSize < headerSize)
 		return maxCmdSize;
-	const size_t available = std::min<size_t>(MAX_SEND_STR_LEN, maxCmdSize - headerSize);
+	const size_t available = std::min<size_t>(LUA_MSG_MAX_LEN, maxCmdSize - headerSize);
 	const size_t len = std::min<size_t>(message.len, available);
 	lua::NetMessage(static_cast<int>(player.getId()), std::string_view(message.data, len));
 	return headerSize + len;
@@ -2703,7 +2778,6 @@ void PrepareItemForNetwork(const Item &item, TItem &messageItem)
 	messageItem.wToHit = Swap16LE(item._iPLToHit);
 	messageItem.wMaxDam = Swap16LE(item._iMaxDam);
 	messageItem.dwBuff = Swap32LE(item.dwBuff);
-	messageItem.dwLuaData = Swap32LE(item._iLuaData); // Lua mod support
 }
 
 void PrepareEarForNetwork(const Item &item, TEar &ear)
@@ -2718,7 +2792,6 @@ void RecreateItem(const Player &player, const TItem &messageItem, Item &item)
 	RecreateItem(player, item,
 	    static_cast<_item_indexes>(Swap16LE(messageItem.wIndx)), Swap16LE(messageItem.wCI),
 	    Swap32LE(messageItem.dwSeed), Swap16LE(messageItem.wValue), dwBuff);
-	item._iLuaData = Swap32LE(messageItem.dwLuaData); // Lua mod support: restore mod-data slot (zeroed by item recreation above)
 	if (messageItem.bId != 0)
 		item._iIdentified = true;
 	item._iMaxDur = messageItem.bMDur;
@@ -2729,6 +2802,42 @@ void RecreateItem(const Player &player, const TItem &messageItem, Item &item)
 		item._iPLToHit = ClampToHit(item, static_cast<uint8_t>(Swap16LE(messageItem.wToHit)));
 		item._iMaxDam = ClampMaxDam(item, static_cast<uint8_t>(Swap16LE(messageItem.wMaxDam)));
 	}
+}
+
+// Lua mod support: attach an optional mod-data blob to an item seed in a level's delta, so a floor
+// item dropped on that level keeps the blob across a rejoin (it ships in the level delta and is
+// restored onto the item by DeltaLoadItems). An empty blob clears the entry. The blob is opaque to
+// the engine; a mod packs its own layout. Clamped to MaxItemModDataBytes; the per-level entry count
+// is capped at the floor-item ceiling so the delta receive buffer can never overflow.
+void LuaSetItemDeltaModData(uint8_t level, uint32_t seed, std::string_view blob)
+{
+	DLevel &deltaLevel = GetDeltaLevel(level);
+	if (blob.empty()) {
+		deltaLevel.modData.erase(seed);
+		return;
+	}
+	auto it = deltaLevel.modData.find(seed);
+	if (it == deltaLevel.modData.end() && deltaLevel.modData.size() >= MAXITEMS)
+		return;
+	deltaLevel.modData[seed] = std::string(blob.substr(0, MaxItemModDataBytes));
+}
+
+// Lua mod support: read back a blob set by LuaSetItemDeltaModData (empty string if none). Does not
+// create a delta level entry for an unseen level.
+std::string LuaGetItemDeltaModData(uint8_t level, uint32_t seed)
+{
+	auto levelIt = DeltaLevels.find(level);
+	if (levelIt == DeltaLevels.end())
+		return {};
+	auto it = levelIt->second.modData.find(seed);
+	return it != levelIt->second.modData.end() ? it->second : std::string();
+}
+
+// Lua mod support: the local player's current delta level id (the key under which floor items on this
+// level live in the delta) — pass it to LuaSetItemDeltaModData so a blob lands on the right level.
+uint8_t LuaCurrentDeltaLevel()
+{
+	return GetLevelForMultiplayer(*MyPlayer);
 }
 
 void ClearLastSentPlayerCmd()
@@ -2792,14 +2901,18 @@ void run_delta_info()
 void DeltaExportData(uint8_t pnum)
 {
 	for (const auto &[levelNum, deltaLevel] : DeltaLevels) {
-		const size_t bufferSize = 1U                                                              /* marker byte, always 0 */
-		    + sizeof(uint8_t)                                                                     /* level id */
-		    + sizeof(deltaLevel.item)                                                             /* items spawned during dungeon generation which have been picked up, and items dropped by a player during a game */
-		    + sizeof(uint8_t)                                                                     /* count of object interactions which caused a state change since dungeon generation */
-		    + ((sizeof(WorldTilePosition) + sizeof(DObjectStr)) * deltaLevel.object.size())       /* location/action pairs for the object interactions */
-		    + sizeof(deltaLevel.monster)                                                          /* latest monster state */
-		    + sizeof(uint16_t)                                                                    /* spawned monster count */
-		    + ((sizeof(uint16_t) + sizeof(DSpawnedMonster)) * deltaLevel.spawnedMonsters.size()); /* spawned monsters */
+		size_t modDataBytes = sizeof(uint16_t); // Lua mod support: count header + variable blob bytes
+		for (const auto &[seed, blob] : deltaLevel.modData)
+			modDataBytes += sizeof(uint32_t) + sizeof(uint16_t) + blob.size();
+		const size_t bufferSize = 1U                                                             /* marker byte, always 0 */
+		    + sizeof(uint8_t)                                                                    /* level id */
+		    + sizeof(deltaLevel.item)                                                            /* items spawned during dungeon generation which have been picked up, and items dropped by a player during a game */
+		    + sizeof(uint8_t)                                                                    /* count of object interactions which caused a state change since dungeon generation */
+		    + ((sizeof(WorldTilePosition) + sizeof(DObjectStr)) * deltaLevel.object.size())      /* location/action pairs for the object interactions */
+		    + sizeof(deltaLevel.monster)                                                         /* latest monster state */
+		    + sizeof(uint16_t)                                                                   /* spawned monster count */
+		    + ((sizeof(uint16_t) + sizeof(DSpawnedMonster)) * deltaLevel.spawnedMonsters.size()) /* spawned monsters */
+		    + modDataBytes;                                                                      /* per-item mod-data blobs // Lua mod support */
 		const std::unique_ptr<std::byte[]> dst { new std::byte[bufferSize] };
 
 		std::byte *dstEnd = &dst.get()[1];
@@ -2809,6 +2922,7 @@ void DeltaExportData(uint8_t pnum)
 		dstEnd = DeltaExportObject(dstEnd, deltaLevel.object);
 		dstEnd = DeltaExportMonster(dstEnd, deltaLevel.monster);
 		dstEnd = DeltaExportSpawnedMonsters(dstEnd, deltaLevel.spawnedMonsters);
+		dstEnd = DeltaExportModData(dstEnd, deltaLevel.modData); // Lua mod support
 		const uint32_t size = CompressData(dst.get(), dstEnd);
 		multi_send_zero_packet(pnum, CMD_DLEVEL, dst.get(), size);
 	}
@@ -3394,7 +3508,7 @@ void NetSendCmdLuaMessage(uint32_t pmask, const char *data, size_t len) // Lua m
 {
 	TCmdLuaMsg cmd;
 	cmd.bCmd = CMD_LUAMSG;
-	const size_t clamped = std::min<size_t>(len, MAX_SEND_STR_LEN);
+	const size_t clamped = std::min<size_t>(len, LUA_MSG_MAX_LEN);
 	cmd.len = static_cast<uint8_t>(clamped);
 	memcpy(cmd.data, data, clamped);
 	const size_t headerSize = sizeof(cmd) - sizeof(cmd.data);

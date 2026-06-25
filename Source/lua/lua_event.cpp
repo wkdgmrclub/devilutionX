@@ -236,6 +236,11 @@ void OnItemPickedUp(const Player &player, const Item &item){
 	CallLuaEvent("OnItemPickedUp", &player, &item);
 }
 
+void OnItemDropped(const Player &player, const Item &item)
+{
+	CallLuaEvent("OnItemDropped", &player, &item);
+}
+
 int8_t OnGetAnimationSkipFrames(const Player *player, std::string_view animType, int8_t defaultSkip)
 {
 	return static_cast<int8_t>(CallLuaEventReturn<int>(static_cast<int>(defaultSkip), "OnGetAnimationSkipFrames", player, std::string(animType), static_cast<int>(defaultSkip)));

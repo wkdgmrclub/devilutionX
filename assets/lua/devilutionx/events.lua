@@ -380,6 +380,11 @@ local events = {
   OnItemPickedUp = CreateEvent(),
   __doc_OnItemPickedUp = "Called after a floor item is picked up. Args: player, item (floor item snapshot). Use player:findScrollBySeed(item.seed) to get the live inventory copy.",
 
+  ---Called when the local player manually drops a held item onto the floor, before the cursor item is cleared.
+  ---Args: player, item (the item being dropped — seed and all attributes, including item.modData, are still valid).
+  OnItemDropped = CreateEvent(),
+  __doc_OnItemDropped = "Called when the local player drops a held item onto the floor. Args: player, item (the dropped item; item.modData is still valid).",
+
   ---Query event fired when a player reaches a floor item to pick it up, before the network request is sent.
   ---Args: player, item (the floor item). Return false to forbid this player from picking it up (e.g. class-restricted items); the pickup silently cancels. Return nil or true to allow (default: true).
   OnPlayerCanPickUpItem = CreateQueryEvent(),

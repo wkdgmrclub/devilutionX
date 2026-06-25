@@ -184,9 +184,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "friendlyMode", "boolean",
 	    "Whether this player is in friendly (non-hostile) mode. False = hostile, i.e. PvP is enabled toward other players. readonly",
 	    [](const Player &player) -> bool { return player.friendlyMode; });
-	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer, modData?: integer, modBytes?: string) -> boolean",
-	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Optional modData sets item.modData (uint32; preserved through save/load). Optional modBytes sets item.modBytes (binary-safe blob; travels with the item, not saved to disk). base game ignores the mod-data fields. Returns true if placed successfully, false if inventory is full or item type not found.",
-	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride, sol::optional<std::string> modBytesOverride) -> bool {
+	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer, modData?: string) -> boolean",
+	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file). Returns true if placed successfully, false if inventory is full or item type not found.",
+	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) -> bool {
 		    const auto it = ItemMappingIdsToIndices.find(mappingId);
 		    if (it == ItemMappingIdsToIndices.end()) return false;
 		    const auto itemIndex = static_cast<_item_indexes>(it->second);
@@ -197,8 +197,7 @@ void InitPlayerUserType(sol::state_view &lua)
 		    item._iSeed = seed;
 		    item._iCreateInfo = 0;
 		    if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
-		    if (modDataOverride.has_value()) item._iLuaData = *modDataOverride; // Lua mod support
-		    if (modBytesOverride.has_value()) item._iModData = *modBytesOverride; // Lua mod support
+		    if (modDataOverride.has_value()) item._iModData = *modDataOverride; // Lua mod support
 		    CopyUtf8(item._iName, name, sizeof(item._iName));
 		    CopyUtf8(item._iIName, name, sizeof(item._iIName));
 		    if (!AutoPlaceItemInInventory(player, item, false)) return false;

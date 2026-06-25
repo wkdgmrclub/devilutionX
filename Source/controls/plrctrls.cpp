@@ -39,6 +39,7 @@
 #include "levels/tile_properties.hpp"
 #include "levels/town.h"
 #include "levels/trigs.h"
+#include "lua/lua_event.hpp" // Lua mod support
 #include "minitext.h"
 #include "missiles.h"
 #include "panels/spell_icons.hpp"
@@ -2417,6 +2418,7 @@ bool TryDropItem()
 	}
 
 	NetSendCmdPItem(true, CMD_PUTITEM, *itemTile, myPlayer.HoldItem);
+	lua::OnItemDropped(myPlayer, myPlayer.HoldItem); // Lua mod support
 	myPlayer.HoldItem.clear();
 	NewCursor(CURSOR_HAND);
 	return true;

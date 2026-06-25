@@ -8,6 +8,7 @@
 #include <SDL.h>
 #endif
 
+#include "game_mode.hpp"
 #include "lua/metadoc.hpp"
 #include "msg.h"
 #include "multi.h"
@@ -26,6 +27,10 @@ sol::table LuaSystemModule(sol::state_view &lua)
 	    "Returns true if the current game is multiplayer, false for single-player.",
 	    []() { return gbIsMultiplayer; });
 
+	LuaSetDocFn(table, "isHellfire", "() -> boolean",
+	    "Returns true if the current game is running in the Hellfire gamemode, false for Diablo.",
+	    []() { return gbIsHellfire; });
+
 	// Lua mod support: generic net pipe. Send an opaque payload to other clients; it arrives via the
 	// NetMessage event. The engine does not interpret the payload — encode/decode it in Lua. Default
 	// target is every other player (the local sender applies its own effects directly, mirroring the
@@ -33,7 +38,10 @@ sol::table LuaSystemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "netSend", "(payload: string, mask: integer|nil)",
 	    "Send an opaque payload to other clients over the generic Lua net pipe; received via the NetMessage event. Defaults to all other players. No-op in single-player. // Lua mod support",
 	    [](const std::string &payload, sol::optional<uint32_t> mask) {
-		    if (!gbIsMultiplayer) return;
+		    // The outgoing packet header is built from the local player, so a send is only valid once
+		    // it exists. A mod may reach this from a setup callback that runs before the local player
+		    // is established; drop the send rather than dereference a null MyPlayer.
+		    if (!gbIsMultiplayer || MyPlayer == nullptr) return;
 		    const uint32_t pmask = mask.value_or(0xFFFFFF & ~(1U << MyPlayerId));
 		    NetSendCmdLuaMessage(pmask, payload.data(), payload.size());
 	    });

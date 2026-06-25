@@ -92,13 +92,13 @@ void InitItemUserType(sol::state_view &lua)
 	LuaSetDocProperty(itemType, "statFlag", "boolean", "Equippable flag", &Item::_iStatFlag);
 	LuaSetDocProperty(itemType, "damAcFlags", "ItemSpecialEffectHf", "Secondary special effect flags", &Item::_iDamAcFlags);
 	LuaSetDocProperty(itemType, "buff", "number", "Secondary creation flags", &Item::dwBuff);
-	LuaSetDocProperty(itemType, "modData", "number", "Mod-data slot (uint32); persisted through save/load; base game never reads or writes this field", &Item::_iLuaData); // Lua mod support
 	// Lua mod support: generic OPTIONAL variable-length mod-data blob. A byte string (binary-safe — pack it
 	// with Lua's string.pack / read it with string.unpack). Empty unless a mod sets it, so base-game items
-	// pay nothing. Travels with the item over the network/delta (later phases) so it survives a trade; NOT
-	// written to the hero save (a mod persists it out-of-band, e.g. via OnSavePlayerData). Base game ignores it.
+	// pay nothing. Base game never reads or interprets it. NOT written to the hero save (a mod persists it
+	// out-of-band, e.g. via OnSavePlayerData); persists with a dropped floor item through the level delta
+	// (see items.setItemDeltaModData); a live trade is the mod's own responsibility (e.g. the Lua net pipe).
 	LuaSetDocProperty(
-	    itemType, "modBytes", "string", "Optional variable-length mod-data blob (binary-safe byte string; use string.pack/unpack). Empty for non-mod items. Carried with the item over the network so it survives a trade; not saved to disk. Base game ignores it.",
+	    itemType, "modData", "string", "Optional variable-length mod-data blob (binary-safe byte string; use string.pack/unpack). Empty for non-mod items. Base game ignores it; not saved to the hero file.",
 	    [](const Item &item) -> std::string { return item._iModData; },
 	    [](Item &item, const std::string &value) { item._iModData = value; });
 
@@ -577,7 +577,7 @@ int LuaRegisterCursorGraphic(const std::string &path, int width)
 	return RegisterCustomCursorGraphic(std::move(sprite));
 }
 
-void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride, sol::optional<std::string> modBytesOverride) // Lua mod support
+void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) // Lua mod support
 {
 	if (ActiveItemCount >= MAXITEMS)
 		return;
@@ -601,8 +601,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	item._iCreateInfo = 0;
 	item._iIdentified = true;
 	if (buffOverride.has_value()) item.dwBuff = *buffOverride; // Lua mod support
-	if (modDataOverride.has_value()) item._iLuaData = *modDataOverride; // Lua mod support
-	if (modBytesOverride.has_value()) item._iModData = *modBytesOverride; // Lua mod support
+	if (modDataOverride.has_value()) item._iModData = *modDataOverride; // Lua mod support
 
 	if (nameOverride.has_value()) {
 		CopyUtf8(item._iName, *nameOverride, sizeof(item._iName));
@@ -615,7 +614,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	LuaDeltaRegisterDroppedItem(ii);
 }
 
-void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<uint32_t> modDataOverride, sol::optional<int> magicalOverride, sol::optional<std::string> modBytesOverride)
+void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride, sol::optional<int> magicalOverride)
 {
 	const auto it = ItemMappingIdsToIndices.find(mappingId);
 	if (it == ItemMappingIdsToIndices.end()) return;
@@ -651,8 +650,7 @@ void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> 
 	item._ivalue = ivalue;
 	item._iStatFlag = true;
 	if (buffOverride.has_value()) item.dwBuff = *buffOverride;
-	if (modDataOverride.has_value()) item._iLuaData = *modDataOverride; // Lua mod support
-	if (modBytesOverride.has_value()) item._iModData = *modBytesOverride; // Lua mod support
+	if (modDataOverride.has_value()) item._iModData = *modDataOverride; // Lua mod support
 	// Optional quality override so a stocked custom item buys back at the intended quality (a vendor
 	// purchase preserves the stock item's fields verbatim and fires none of the pickup/recreate
 	// fixups, so quality must already be correct here). Default leaves the base-item quality unchanged.
@@ -686,12 +684,23 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addItemData", "(itemData: table[], baseMappingId: number)", "Add item definitions from a list of Lua tables. Required field: name. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, skipSpeedbook, value.", AddItemData);
 	LuaSetDocFn(table, "addUniqueItemData", "(itemData: table[], baseMappingId: number)", "Add unique item definitions from a list of Lua tables. Required field: name. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID (pass to item's cursorGraphic field).", LuaRegisterCursorGraphic);
-	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: integer, modBytes?: string)",
-	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (uint32). Optional modBytes sets item.modBytes (binary-safe blob; travels with the item, not saved to disk). base game ignores the mod-data fields.",
+	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: string)",
+	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file).",
 	    LuaSpawnItemAt);
-	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, modData?: integer, magical?: integer, modBytes?: string)",
-	    "Add a custom item to the healer's buy list at the given identified value (shop price). Optional seed/name/dwBuff/modData stock a per-instance seeded item (e.g. a custom scroll) that roundtrips when bought; omitting them stocks a single static item. Optional magical sets the item quality (item_quality: 0=normal, 2=unique) so the bought copy keeps gold/unique presentation — a vendor purchase preserves the stock item's fields and fires no pickup/recreate fixups, so quality must be set here. Idempotent — without a seed any same-mapping entry is a no-op, with a seed only a matching seed is a no-op, so distinct seeds coexist. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so items reappear after purchase.",
+	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, modData?: string, magical?: integer)",
+	    "Add a custom item to the healer's buy list at the given identified value (shop price). Optional seed/name/dwBuff/modData stock a per-instance seeded item (e.g. a custom scroll) that roundtrips when bought; omitting them stocks a single static item. modData is a binary-safe blob (base game ignores it). Optional magical sets the item quality (item_quality: 0=normal, 2=unique) so the bought copy keeps gold/unique presentation — a vendor purchase preserves the stock item's fields and fires no pickup/recreate fixups, so quality must be set here. Idempotent — without a seed any same-mapping entry is a no-op, with a seed only a matching seed is a no-op, so distinct seeds coexist. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so items reappear after purchase.",
 	    LuaAddToHealerStock);
+	// Lua mod support: persist an optional mod-data blob for an item seed in a level's delta, so a dropped
+	// floor item keeps it across a rejoin. Generic; the blob is opaque to the engine (pack it with string.pack).
+	LuaSetDocFn(table, "setItemDeltaModData", "(level: integer, seed: integer, blob: string) -> void",
+	    "Attach a mod-data blob to an item seed in the given level's delta (so a floor item dropped on that level keeps it across a rejoin). An empty blob clears the entry. Clamped to 255 bytes; the per-level entry count is capped at the floor-item ceiling. Base game ignores it.",
+	    LuaSetItemDeltaModData);
+	LuaSetDocFn(table, "getItemDeltaModData", "(level: integer, seed: integer) -> string",
+	    "Read back a blob set by setItemDeltaModData for the given level + item seed (empty string if none).",
+	    LuaGetItemDeltaModData);
+	LuaSetDocFn(table, "currentDeltaLevel", "() -> integer",
+	    "The local player's current delta level id (the key floor items on this level use). Pass it to setItemDeltaModData so a blob lands on the right level; broadcast it to peers so they mirror it under the same level.",
+	    LuaCurrentDeltaLevel);
 	// Lua mod support: populate the custom unique info box slot.
 	// Call inside OnPrepareUniqueInfoBox then return true to redirect DrawUniqueInfo to this content.
 	LuaSetDocFn(table, "setCustomUniqueBox",
