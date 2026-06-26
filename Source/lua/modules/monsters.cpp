@@ -44,6 +44,25 @@ struct MonsterPlacement {
 	uint32_t seed;
 };
 
+// Seed for InitializeSpawnedMonster, derived from the monster's (stable, cross-client) slot id.
+//
+// A networked mod spawn is recreated at the SAME slot id on every client (the owner spawns locally and
+// peers recreate it at that id via monsters.netSpawnAt). InitializeSpawnedMonster does SetRndSeed(seed)
+// and InitMonster then makes a few RNG draws (e.g. the starting animation frame). Seeding from the slot
+// id makes those draws identical on every client, so a recreated monster starts on the same frame
+// regardless of which client spawned it or when. Seeding from the local RNG state instead
+// (GetLCGEngineState) gives each client a different starting frame — purely cosmetic, but free to avoid.
+//
+// NOTE: this does NOT drive the per-monster AI sync. In multiplayer the engine re-bases every monster's
+// aiSeed each game tick from the synced lockstep tick counter + slot id (MonsterSeeds, multi.cpp), so
+// aiSeed is already identical across clients every tick and overwrites whatever was set here. AI
+// determinism therefore depends on the slot id matching (it does) and on the mod's own AI consuming RNG
+// / making cached decisions symmetrically across clients — not on this initial seed.
+uint32_t SyncSpawnSeed(size_t monsterId)
+{
+	return static_cast<uint32_t>(monsterId);
+}
+
 // Shared pre-spawn setup: crawl for a free tile, grab the next ActiveMonsters slot.
 // Does NOT call InitializeSpawnedMonster — callers do that after setting difficulty.
 std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
@@ -58,7 +77,8 @@ std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
 		return c;
 	});
 	if (!freePos) return std::nullopt;
-	return MonsterPlacement { typeIndex, ActiveMonsters[ActiveMonsterCount], *freePos, GetLCGEngineState() };
+	const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
+	return MonsterPlacement { typeIndex, monsterIndex, *freePos, SyncSpawnSeed(monsterIndex) };
 }
 
 // Shared type registration: find or register the monster type and load its GFX.
@@ -89,6 +109,65 @@ void AddUniqueMonsterDataFromTsv(const std::string_view path)
 {
 	DataFile dataFile = DataFile::loadOrDie(path);
 	LoadUniqueMonstDatFromFile(dataFile, path);
+}
+
+// Shared silent removal of a monster from the live level (no death effects, loot, or XP). The only
+// difference between callers is how the multiplayer delta records the removal, selected by markKilled:
+//   false — invalidate the delta slot (LuaDeltaRemoveSpawnedMonster). Correct for a monster that does
+//           NOT exist in the deterministic level generation (a dynamically spawned monster): a client
+//           loading the level later simply skips the slot, never recreating it.
+//   true  — record it as killed (delta_kill_monster: hit points 0 at a valid tile). Correct for a
+//           level-natural (generation-placed) monster: a client loading the level later regenerates the
+//           monster from the level seed, so the delta must reap that copy — otherwise it survives as a
+//           live ghost. It also frees the monster's slot id on that client so it can be reused.
+// Capture the tile before the cleanup zeroes the position fields, so the killed-delta record is valid.
+void RemoveMonsterFromLevel(Monster &monster, bool markKilled)
+{
+	const Point tile { monster.position.tile };
+	// Zero hit points so an in-flight position sync (SyncMonster, keyed by slot index) skips this slot
+	// instead of re-occupying it after removal. delta_kill_monster sets the delta's hit points to 0
+	// explicitly, so this does not change what is persisted.
+	monster.hitPoints = 0;
+	if (monster.lightId != NO_LIGHT) {
+		AddUnLight(monster.lightId);
+		monster.lightId = NO_LIGHT;
+	}
+	// Explicitly zero dMonster at all three position fields before M_ClearSquares.
+	// M_ClearSquares only covers a 3x3 around position.old; a monster removed mid-walk can
+	// have a dMonster reservation at position.future (or position.old) outside that radius,
+	// which would otherwise survive as a stale entry pointing at this now-invalid slot — a
+	// ghost (a clickable/killable copy, and a frozen rendered body) on the removing client.
+	dMonster[monster.position.old.x][monster.position.old.y] = 0;
+	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	dMonster[monster.position.future.x][monster.position.future.y] = 0;
+	M_ClearSquares(monster);
+	monster.isInvalid = true;
+	// Update the multiplayer delta so the removal survives a level reload / late join. No-op in
+	// singleplayer. (Singleplayer persistence is handled by the DeleteMonsterList compaction below,
+	// before SaveLevel.)
+	if (markKilled)
+		delta_kill_monster(monster, tile, *MyPlayer);
+	else
+		LuaDeltaRemoveSpawnedMonster(monster);
+	// DeleteMonsterList() compacts ActiveMonsters and decrements ActiveMonsterCount. Doing
+	// that here while a game-logic step is in flight — e.g. this runs from an OnMonsterDeath
+	// handler despawning a dead monster's minions while ProcessMonsters / ProcessMissiles is
+	// still iterating ActiveMonsters by index — mutates the array the engine is mid-iteration
+	// over, leaving a stale slot / out-of-range monster id that the renderer then dereferences
+	// (the DrawDungeon `mid < GetMaxMonsters()` and null-sprite asserts). Mirror the engine's own
+	// MonsterDeath: during a tick, only flag the monster invalid and park it in the golem holding
+	// cell so its AI cannot re-occupy a tile before it is reaped; the engine's DeleteMonsterList
+	// (top & bottom of ProcessMonsters) then compacts it safely next tick.
+	if (gGameLogicStep == GameLogicStep::None) {
+		// Outside the game-logic tick (level-exit recall, or any removal requested while no
+		// step is in flight): compact immediately so SaveLevel does not persist this monster
+		// (DeleteMonsterList would otherwise not run until next tick, after pfile_save_level).
+		DeleteMonsterList();
+	} else {
+		monster.position.tile = GolemHoldingCell;
+		monster.position.future = GolemHoldingCell;
+		monster.position.old = GolemHoldingCell;
+	}
 }
 
 void InitPointUserType(sol::state_view &lua)
@@ -154,40 +233,23 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return static_cast<int>(monster.level(static_cast<_difficulty>(sgGameInitInfo.nDifficulty)));
 	    });
 	LuaSetDocFn(monsterType, "remove", "()",
-	    "Silently remove this monster from the level without triggering death effects, loot, or XP.",
+	    "Silently remove this monster from the level without triggering death effects, loot, or XP. For a "
+	    "dynamically spawned monster (one not present in the deterministic level generation): the multiplayer "
+	    "delta slot is invalidated so a client loading the level later does not recreate it. To remove a "
+	    "level-natural monster, use removeAsKilled (see below) so a late-loading client reaps its regenerated "
+	    "copy instead of leaving a ghost. // Lua mod support",
 	    [](const Monster &constMonster) {
-		    Monster &monster = const_cast<Monster &>(constMonster);
-		    if (monster.lightId != NO_LIGHT) {
-			    AddUnLight(monster.lightId);
-			    monster.lightId = NO_LIGHT;
-		    }
-		    M_ClearSquares(monster);
-		    dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
-		    monster.isInvalid = true;
-		    // Drop any multiplayer delta record of this monster so it is not re-created on level
-		    // reload. No-op in singleplayer. (Singleplayer persistence is handled by removing the
-		    // monster from ActiveMonsters before SaveLevel, below.)
-		    LuaDeltaRemoveSpawnedMonster(monster);
-		    // DeleteMonsterList() compacts ActiveMonsters and decrements ActiveMonsterCount. Doing
-		    // that here while a game-logic step is in flight — e.g. this remove() runs from an
-		    // OnMonsterDeath handler despawning a dead ally's minions while ProcessMonsters /
-		    // ProcessMissiles is still iterating ActiveMonsters by index — mutates the array the
-		    // engine is mid-iteration over, leaving a stale slot / out-of-range monster id that the
-		    // renderer then dereferences (the DrawDungeon `mid < GetMaxMonsters()` and null-sprite
-		    // asserts). Mirror the engine's own MonsterDeath: during a tick, only flag the monster
-		    // invalid and park it in the golem holding cell so its AI cannot re-occupy a tile before
-		    // it is reaped; the engine's DeleteMonsterList (top & bottom of ProcessMonsters) then
-		    // compacts it safely next tick.
-		    if (gGameLogicStep == GameLogicStep::None) {
-			    // Outside the game-logic tick (level-exit recall, or any removal requested while no
-			    // step is in flight): compact immediately so SaveLevel does not persist this monster
-			    // (DeleteMonsterList would otherwise not run until next tick, after pfile_save_level).
-			    DeleteMonsterList();
-		    } else {
-			    monster.position.tile = GolemHoldingCell;
-			    monster.position.future = GolemHoldingCell;
-			    monster.position.old = GolemHoldingCell;
-		    }
+		    RemoveMonsterFromLevel(const_cast<Monster &>(constMonster), false);
+	    });
+	LuaSetDocFn(monsterType, "removeAsKilled", "()",
+	    "Silently remove this monster from the level (no death effects, loot, or XP) AND record it as killed "
+	    "in the multiplayer delta (hit points 0 at its tile). Use this — not remove — for a level-natural "
+	    "(generation-placed) monster: a client loading the level later regenerates it from the level seed, so "
+	    "the delta must reap that copy; otherwise the monster survives there as a live ghost (and its slot id "
+	    "stays occupied, which can collide with ids reused for dynamically spawned monsters). No-op delta in "
+	    "singleplayer. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    RemoveMonsterFromLevel(const_cast<Monster &>(constMonster), true);
 	    });
 	LuaSetDocFn(monsterType, "setHitPoints", "(hp: integer)",
 	    "Set this monster's current hit points (pass display value; stored as fixed-point internally).",
@@ -660,8 +722,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 
 		    const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
 		    ActiveMonsterCount++;
-		    const uint32_t seed = GetLCGEngineState();
-		    InitializeSpawnedMonster(spawnPos, Direction::South, typeIndex, monsterIndex, seed, 0, 0);
+		    InitializeSpawnedMonster(spawnPos, Direction::South, typeIndex, monsterIndex, SyncSpawnSeed(monsterIndex), 0, 0);
 		    // Local-only spawn — the level-local typeIndex is meaningless on a peer whose level lacks
 		    // this species, so it is NOT broadcast. Cross-client spawn rides the mod net pipe keyed by
 		    // the (globally stable) species id; see monsters.netSpawnAt. // Lua mod support
@@ -724,16 +785,16 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    // Local-only spawn; cross-client spawn rides the mod net pipe by species id (see netSpawnAt). // Lua mod support
 		    return &Monsters[placement->monsterIndex];
 	    });
-	LuaSetDocFn(table, "netSpawnAt", "(monsterId: integer, typeId: integer, uniqueTypeIdx: integer, capturedDifficulty: integer, x: integer, y: integer, seed: integer) -> Monster|nil",
-	    "Recreate a networked mod-spawned monster at a SPECIFIC slot id on this client, resolving the species to THIS client's own LevelMonsterTypes index (registering the type + loading its GFX as needed). For replaying a peer's mod spawn: each client builds its own natural monster set, then the owner's extra monsters are recreated on top via this. uniqueTypeIdx < 0 = a normal (non-unique) monster. Unlike spawnWithDifficulty/spawnUniqueAt this does NOT gate on level ownership (the receiver is not the level owner) and uses the caller-supplied slot id instead of allocating one. // Lua mod support",
-	    [](int monsterId, int typeIdInt, int uniqueTypeIdx, int capturedDifficulty, int x, int y, uint32_t seed) -> Monster * {
+	LuaSetDocFn(table, "netSpawnAt", "(monsterId: integer, typeId: integer, uniqueTypeIdx: integer, capturedDifficulty: integer, x: integer, y: integer) -> Monster|nil",
+	    "Recreate a networked mod-spawned monster at a SPECIFIC slot id on this client, resolving the species to THIS client's own LevelMonsterTypes index (registering the type + loading its GFX as needed). For replaying a peer's mod spawn: each client builds its own natural monster set, then the owner's extra monsters are recreated on top via this. uniqueTypeIdx < 0 = a normal (non-unique) monster. Unlike spawnWithDifficulty/spawnUniqueAt this does NOT gate on level ownership (the receiver is not the level owner) and uses the caller-supplied slot id instead of allocating one. The RNG seed is derived from that slot id (see SyncSpawnSeed) so every client starts the monster on the same initial state (e.g. animation frame); no seed is taken from the caller. (Per-monster AI RNG is synced separately by the engine each tick via MonsterSeeds, keyed on the same slot id.) // Lua mod support",
+	    [](int monsterId, int typeIdInt, int uniqueTypeIdx, int capturedDifficulty, int x, int y) -> Monster * {
 		    if (monsterId < 0 || monsterId >= static_cast<int>(GetMaxMonsters())) return nullptr;
 		    const auto type = static_cast<_monster_id>(typeIdInt);
 		    const auto typeIndex = EnsureMonsterType(type, uniqueTypeIdx >= 0 ? PLACE_UNIQUE : PLACE_SCATTER);
 		    if (!typeIndex) return nullptr;
 		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
 		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
-		    InitializeSpawnedMonster({ x, y }, Direction::South, *typeIndex, static_cast<size_t>(monsterId), seed, 0, 0);
+		    InitializeSpawnedMonster({ x, y }, Direction::South, *typeIndex, static_cast<size_t>(monsterId), SyncSpawnSeed(static_cast<size_t>(monsterId)), 0, 0);
 		    Monster &monster = Monsters[static_cast<size_t>(monsterId)];
 		    if (uniqueTypeIdx >= 0 && uniqueTypeIdx < static_cast<int>(UniqueMonstersData.size())) {
 			    const UniqueMonsterType uniqueType = static_cast<UniqueMonsterType>(uniqueTypeIdx);
@@ -742,6 +803,15 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    }
 		    sgGameInitInfo.nDifficulty = savedDiff;
 		    return &monster;
+	    });
+	LuaSetDocFn(table, "recordDeltaKill", "(level: integer, monsterId: integer, x: integer, y: integer)",
+	    "Record a monster as killed in the given level's multiplayer delta by slot id + position, without a live "
+	    "monster instance. For a client not on that level (so it has no live monster to remove): mirrors the delta "
+	    "record a networked monster death makes, so the slot is reaped instead of regenerated from the level seed "
+	    "when the client later loads the level. No-op in singleplayer. // Lua mod support",
+	    [](int level, int monsterId, int x, int y) {
+		    if (level < 0 || monsterId < 0) return;
+		    LuaDeltaKillMonster(static_cast<uint8_t>(level), static_cast<size_t>(monsterId), { x, y });
 	    });
 	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
 	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",

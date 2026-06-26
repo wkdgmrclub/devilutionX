@@ -22,6 +22,7 @@ void UniqueMonsterDataLoaded();
 void ItemDataLoaded();
 void UniqueItemDataLoaded();
 void SpellDataLoaded();
+void SpellsAssigned();
 void PlayerDataLoaded();
 
 void StoreOpened(std::string_view name);

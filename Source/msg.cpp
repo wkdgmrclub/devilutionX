@@ -1771,7 +1771,9 @@ bool InitNewSpell(Player &player, uint16_t wParamSpellID, uint16_t wParamSpellTy
 	wParamSpellType = Swap16LE(wParamSpellType);
 	wParamSpellFrom = Swap16LE(wParamSpellFrom);
 
-	if (wParamSpellID > static_cast<int8_t>(SpellID::LAST))
+	// Bound against the loaded spell table rather than the static SpellID::LAST, so
+	// spells registered at runtime (which extend past LAST) are accepted. // Lua mod support
+	if (wParamSpellID >= SpellsData.size())
 		return false;
 	auto spellID = static_cast<SpellID>(wParamSpellID);
 	if (!IsValidSpell(spellID)) {
@@ -2988,6 +2990,21 @@ void LuaDeltaRemoveSpawnedMonster(const Monster &monster)
 	// Invalidate the monster's delta slot (out-of-bounds tile => IsMonsterDeltaValid is false) so
 	// DeltaLoadMonsters does not re-apply stale state to the now-freed slot.
 	deltaLevel.monster[monsterId].position = { 0xFF, 0xFF };
+}
+
+// Lua mod support: record a monster as killed in a given level's delta by slot id + position, with no live
+// monster instance — for a client not currently on that level. Mirrors the delta record OnMonstDeath makes
+// for a networked death, so the monster is reaped instead of regenerated when the client later loads the
+// level. No-op in singleplayer.
+void LuaDeltaKillMonster(uint8_t level, size_t monsterId, Point position)
+{
+	if (!gbIsMultiplayer)
+		return;
+	if (monsterId >= GetMaxMonsters())
+		return;
+	DMonsterStr *pD = &GetDeltaLevel(level).monster[monsterId];
+	pD->position = position;
+	pD->hitPoints = 0;
 }
 
 void delta_sync_monster(const TSyncMonster &monsterSync, uint8_t level)

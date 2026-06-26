@@ -79,6 +79,10 @@ void SpellDataLoaded()
 {
 	CallLuaEvent("SpellDataLoaded");
 }
+void SpellsAssigned()
+{
+	CallLuaEvent("SpellsAssigned");
+}
 void PlayerDataLoaded()
 {
 	CallLuaEvent("PlayerDataLoaded");

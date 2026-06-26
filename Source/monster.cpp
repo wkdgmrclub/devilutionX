@@ -3256,7 +3256,9 @@ bool PosOkMovingMissile(Point position)
 
 bool AiPlanPath(Monster &monster)
 {
-	if (monster.type().type != MT_GOLEM) {
+	// Lua mod support: extend the MT_GOLEM path-gate exemption to any MFLAG_GOLEM monster (vanilla has
+	// none other than MT_GOLEM, so base behaviour is unchanged).
+	if (monster.type().type != MT_GOLEM && (monster.flags & MFLAG_GOLEM) == 0) {
 		if (monster.activeForTicks == 0)
 			return false;
 		if (monster.mode != MonsterMode::Stand)

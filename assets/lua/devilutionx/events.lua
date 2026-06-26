@@ -78,9 +78,15 @@ local events = {
   UniqueItemDataLoaded = CreateEvent(),
   __doc_UniqueItemDataLoaded = "Called after the unique item data TSV file has been loaded.",
 
-  ---Called after the spell data TSV file has been loaded. Use spells.addSpellDataFromTsv() in this handler to register additional spells.
+  ---Called after the spell data TSV file has been loaded. Use spells.registerSpell() in this handler to queue additional spells.
   SpellDataLoaded = CreateEvent(),
-  __doc_SpellDataLoaded = "Called after the spell data TSV file has been loaded. Use spells.addSpellDataFromTsv() in this handler to register additional spells.",
+  __doc_SpellDataLoaded = "Called after the spell data TSV file has been loaded. Use spells.registerSpell() in this handler to queue additional spells.",
+
+  ---Called after dynamic spells queued in SpellDataLoaded have been assigned their runtime IDs
+  ---(deterministically, sorted by name from a fixed base). Read an assigned ID with spells.getSpellId(name)
+  ---here. Fires before PlayerDataLoaded / ItemDataLoaded so the IDs are valid in those handlers.
+  SpellsAssigned = CreateEvent(),
+  __doc_SpellsAssigned = "Called after dynamic spells registered in SpellDataLoaded are assigned runtime IDs. Use spells.getSpellId(name) here. Fires before ItemDataLoaded/PlayerDataLoaded.",
 
   ---Called after base class data has been loaded but before class attributes are built. Use player.addClassDataFromTsv() in this handler to register additional classes.
   PlayerDataLoaded = CreateEvent(),

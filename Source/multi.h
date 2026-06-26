@@ -65,6 +65,7 @@ extern bool PublicGame;
 extern uint8_t gbDeltaSender;
 extern uint32_t player_state[MAX_PLRS];
 extern bool IsLoopback;
+extern uint32_t sgdwGameLoops; // Lua mod support: synced lockstep tick counter (see system.gameTick binding)
 
 DVL_API_FOR_TEST std::string DescribeLeaveReason(leaveinfo_t leaveReason);
 std::string FormatGameSeed(const uint32_t gameSeed[4]);
