@@ -63,8 +63,21 @@ uint32_t SyncSpawnSeed(size_t monsterId)
 	return static_cast<uint32_t>(monsterId);
 }
 
-// Shared pre-spawn setup: crawl for a free tile, grab the next ActiveMonsters slot.
-// Does NOT call InitializeSpawnedMonster — callers do that after setting difficulty.
+// Allocate a free slot at or above MaxMonsters. Natural placement is capped below MaxMonsters, so
+// slots here are never used by level generation and stay collision-free across clients. Needs
+// headroom from RequestExtraMonsters(); nullopt when exhausted. Free pool is ActiveMonsters at
+// index >= ActiveMonsterCount.
+std::optional<size_t> AllocateHighMonsterSlot()
+{
+	for (size_t i = ActiveMonsterCount; i < GetMaxMonsters(); i++) {
+		if (ActiveMonsters[i] >= MaxMonsters)
+			return ActiveMonsters[i];
+	}
+	return std::nullopt;
+}
+
+// Shared pre-spawn setup: crawl for a free tile, allocate a slot. Does NOT call
+// InitializeSpawnedMonster — callers do that (it activates the slot) after setting difficulty.
 std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
 {
 	if (ActiveMonsterCount >= GetMaxMonsters()) return std::nullopt; // Lua mod support
@@ -77,8 +90,9 @@ std::optional<MonsterPlacement> PrepareSpawnSlot(size_t typeIndex, int x, int y)
 		return c;
 	});
 	if (!freePos) return std::nullopt;
-	const size_t monsterIndex = ActiveMonsters[ActiveMonsterCount];
-	return MonsterPlacement { typeIndex, monsterIndex, *freePos, SyncSpawnSeed(monsterIndex) };
+	const auto monsterIndex = AllocateHighMonsterSlot();
+	if (!monsterIndex) return std::nullopt;
+	return MonsterPlacement { typeIndex, *monsterIndex, *freePos, SyncSpawnSeed(*monsterIndex) };
 }
 
 // Shared type registration: find or register the monster type and load its GFX.
@@ -748,7 +762,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    if (!typeIndex) return nullptr;
 		    const auto placement = PrepareSpawnSlot(*typeIndex, x, y);
 		    if (!placement) return nullptr;
-		    ActiveMonsterCount++;
+		    // InitializeSpawnedMonster activates the slot; no manual ActiveMonsterCount bump.
 		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
 		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
 		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
@@ -766,7 +780,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    if (!typeIndex) return nullptr;
 		    const auto placement = PrepareSpawnSlot(*typeIndex, x, y);
 		    if (!placement) return nullptr;
-		    ActiveMonsterCount++;
+		    // InitializeSpawnedMonster activates the slot; no manual ActiveMonsterCount bump.
 		    const _difficulty savedDiff = sgGameInitInfo.nDifficulty;
 		    sgGameInitInfo.nDifficulty = static_cast<_difficulty>(capturedDifficulty);
 		    InitializeSpawnedMonster(placement->spawnPos, Direction::South, placement->typeIndex, placement->monsterIndex, placement->seed, 0, 0);
