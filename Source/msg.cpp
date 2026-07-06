@@ -906,6 +906,8 @@ void DeltaLoadSpawnedMonsters(const DLevel &deltaLevel)
 void DeltaLoadEnemies(const DLevel &deltaLevel)
 {
 	for (size_t i = 0; i < GetMaxMonsters(); i++) { // Lua mod support
+		if (i >= MaxMonsters && !deltaLevel.spawnedMonsters.contains(i))
+			continue; // Lua mod support: extended-region slot with no spawn record — no monster exists here to apply it to
 		const DMonsterStr &deltaMonster = deltaLevel.monster[i];
 		if (!IsMonsterDeltaValid(deltaMonster))
 			continue;
@@ -929,6 +931,8 @@ void DeltaLoadEnemies(const DLevel &deltaLevel)
 void DeltaLoadMonsters(const DLevel &deltaLevel)
 {
 	for (size_t i = 0; i < GetMaxMonsters(); i++) { // Lua mod support
+		if (i >= MaxMonsters && !deltaLevel.spawnedMonsters.contains(i))
+			continue; // Lua mod support: extended-region slot with no spawn record — no monster exists here to apply it to
 		const DMonsterStr &deltaMonster = deltaLevel.monster[i];
 		if (!IsMonsterDeltaValid(deltaMonster))
 			continue;
@@ -2972,13 +2976,7 @@ void delta_monster_hp(const Monster &monster, const Player &player)
 		pD->hitPoints = SwapSigned32LE(monster.hitPoints);
 }
 
-// Lua mod support: erase a dynamically spawned monster (golem / raised / mod-spawned) from the
-// level delta so it is not re-created when the level is reloaded. Spawned monsters are otherwise
-// persisted in `spawnedMonsters` for the life of the level's delta — even a monster removed from
-// the live array at runtime would replay on re-entry, both re-creating the monster and bumping
-// ActiveMonsterCount. Resolve the level from currlevel/setlevel (the level being left), matching
-// DeltaSaveLevel — at level exit the player's plrlevel is already the destination, so the player
-// overload would target the wrong level.
+// Lua mod support: erase a dynamically spawned monster (golem / raised / mod-spawned) from the level delta
 void LuaDeltaRemoveSpawnedMonster(const Monster &monster)
 {
 	if (!gbIsMultiplayer)
@@ -2992,10 +2990,21 @@ void LuaDeltaRemoveSpawnedMonster(const Monster &monster)
 	deltaLevel.monster[monsterId].position = { 0xFF, 0xFF };
 }
 
+// Lua mod support: by-slot-id variant of the above for a client not currently on that level
+// (cross-level sync traffic can fill a record for the slot). Mirrors LuaDeltaKillMonster.
+void LuaDeltaRemoveSpawnedMonster(uint8_t level, size_t monsterId)
+{
+	if (!gbIsMultiplayer)
+		return;
+	if (monsterId >= GetMaxMonsters())
+		return;
+	DLevel &deltaLevel = GetDeltaLevel(level);
+	deltaLevel.spawnedMonsters.erase(monsterId);
+	deltaLevel.monster[monsterId].position = { 0xFF, 0xFF };
+}
+
 // Lua mod support: record a monster as killed in a given level's delta by slot id + position, with no live
-// monster instance — for a client not currently on that level. Mirrors the delta record OnMonstDeath makes
-// for a networked death, so the monster is reaped instead of regenerated when the client later loads the
-// level. No-op in singleplayer.
+// monster instance — for a client not currently on that level.
 void LuaDeltaKillMonster(uint8_t level, size_t monsterId, Point position)
 {
 	if (!gbIsMultiplayer)

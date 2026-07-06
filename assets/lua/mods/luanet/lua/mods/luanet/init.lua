@@ -1,0 +1,11 @@
+-- LuaNet mod entry point.
+--
+-- LuaNet is a LIBRARY mod distributed as a companion .mpq: a mod that wants custom Lua netcode
+-- enables the LuaNet mpq alongside it and pulls the API in with require("mods.luanet.api").
+-- LuaNet's mpq must be mounted (i.e. enabled in the active mod list) for its files to resolve --
+-- it is not assumed to be baked into the engine's asset tree.
+--
+-- This init just requires the api so the module is loaded even when LuaNet is the only LuaNet-aware
+-- mod enabled. The actual NetMessage subscription is attached lazily when a consumer first calls
+-- luanet.register (see api.lua), so it survives mod reloads. LuaNet adds no gameplay or rendering.
+require("mods.luanet.api")

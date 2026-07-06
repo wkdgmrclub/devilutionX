@@ -47,10 +47,12 @@ end
 
 -- Ally bookkeeping caps.
 MAX_HUNTERS              = 4
-MAX_DEPLOYED_PER_HUNTER  = 8
--- Reserve extra per-level monster-TYPE + live-monster slots for a full party's deployed allies.
-monsters.requestExtraTypes(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER)
-monsters.requestExtraMonsters(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER)
+MAX_DEPLOYED_PER_HUNTER  = 4
+SKELKING_MAX_MINIONS     = 3   -- cap of simultaneous skeleton minions per tamed Skeleton King
+HORK_MAX_MINIONS         = 3   -- cap of simultaneous Hork minions per tamed Hork Demon
+-- Reserve extra per-level monster-TYPE + live-monster slots for a full party's worst case: every hunter fields a full deploy including a Skeleton King AND a Hork Demon at full minions = 4 * (4+3+3) = 40 slots, inside the extended region (AbsoluteMaxMonsters 252 - natural 200 = 52).
+monsters.requestExtraTypes(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER + 2)  -- +2: skeleton + hork-spawn minion species, shared across hunters
+monsters.requestExtraMonsters(MAX_HUNTERS * (MAX_DEPLOYED_PER_HUNTER + SKELKING_MAX_MINIONS + HORK_MAX_MINIONS))
 
 -- Queued in SpellDataLoaded, resolved in SpellsAssigned (see spells.registerSpell below).
 TAME_ID              = nil
@@ -73,6 +75,9 @@ deployedAlliesById = {}
 
 -- Plane-1 runtime registry of allies owned by ANOTHER client, recreated from a net SP message.
 remoteAllies = {}
+
+-- Local delta level cached at level entry (OnLevelExit RM broadcasts need the departing level; plrlevel is already the destination by then).
+myDeltaLevel = 0
 
 -- Plane-2 runtime: seed -> ally `data` for a deploy we requested from the level owner.
 pendingDeploys = {}
@@ -292,13 +297,18 @@ STARTER_NAME     = "Scavenger"
 
 UNIQUE_SEED_FLAG = 0x800  -- bit 11 of the 12-bit type field marks a unique-monster scroll
 
+-- Seed layout (31 bits, signed-int32 safe): [7-bit charTag][12-bit counter][12-bit type field].
+-- charTag = OHID % 128 keeps seeds globally unique across characters in MP. Without it, two Hunters
+-- mint identical seeds (every starter scroll is counter 1 + MT_NSCAV) and one player's SD broadcast
+-- poisons the other's seed-keyed caches (scrollOrigin/receivedBlobs/item delta) — see bugs.md.
 function allocSeed(typeId, uniqueTypeIdx)
   local counter = scrollCounter   -- monotonic, never reused (see scrollCounter)
   scrollCounter = scrollCounter + 1
+  local upper = (getMyOhId() % 128) * 4096 + counter
   if uniqueTypeIdx ~= nil and uniqueTypeIdx >= 0 then
-    return counter * 4096 + UNIQUE_SEED_FLAG + uniqueTypeIdx
+    return upper * 4096 + UNIQUE_SEED_FLAG + uniqueTypeIdx
   end
-  return counter * 4096 + (typeId % 2048)
+  return upper * 4096 + (typeId % 2048)
 end
 
 -- Returns typeId for normal scrolls, or nil for unique scrolls.
@@ -1567,10 +1577,10 @@ local function broadcastSpawnAlly(monster, typeId, uniqueIdx, difficulty, owner,
   luanet.send("hunter", payload, mask)  -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
 
--- Tell same-level peers to despawn the monster at `monsterId` (an ally/minion we silently removed); keyed by the cross-client-identical monster id. No-op in SP. Assigns the forward-declared local.
+-- Tell peers to despawn the monster at `monsterId` (an ally/minion we silently removed); myDeltaLevel travels so an off-level peer can invalidate its stale delta record for the slot. No-op in SP.
 function broadcastRemove(monsterId)
   if not system.isMultiplayer() then return end
-  luanet.send("hunter", NET.REMOVE .. "|" .. monsterId)
+  luanet.send("hunter", table.concat({ NET.REMOVE, monsterId, myDeltaLevel }, "|"))
 end
 
 -- Tell same-level peers to remove a plain (non-golem) wild monster we removed locally as part of a tame conversion. level/x/y travel so an off-level peer can record the removal in that level's delta.
@@ -1816,11 +1826,18 @@ luanet.register("hunter", function(senderId, payload)
 
   elseif kind == NET.REMOVE then
     -- The sender removed one of its allies/minions; despawn our local copy. Self-validating: only acts on a monster golem-flagged to THIS sender (never our own ally or the vanilla Golem).
-    local id = tonumber(payload:match("^RM|(%-?%d+)$"))
-    if id == nil then return end
+    local idStr, lvlStr = payload:match("^RM|(%-?%d+)|(%-?%d+)$")
+    if idStr == nil then return end
+    local id = tonumber(idStr)
     local m = monsters.fromId(id)
-    if m == nil then remoteAllies[id] = nil; return end
+    if m == nil then
+      -- No live copy (off-level or already gone): invalidate our stale delta record for the sender's level, else DeltaLoadMonsters ghosts the uninitialised slot at our next load (see bugs.md; trust model = the CR receiver's recordDeltaKill).
+      monsters.removeDeltaSpawnedMonster(tonumber(lvlStr), id)
+      remoteAllies[id] = nil
+      return
+    end
     if not (m.isGolem and m.ownerPlayerId == senderId) then return end
+    if m.hitPoints <= 0 then return end  -- death-RM about a copy our own sim already killed: our OnMonsterDeath invalidated the delta; leave the dying monster alone
     m:remove()
     remoteAllies[id] = nil
 
@@ -1898,6 +1915,7 @@ end)
 
 -- On entering a level, ask same-level ally owners to (re)send their deployed allies (so a late joiner materialises them). Clears stale per-level remote-ally tracking first. Fires for everyone in MP; no-op in SP.
 events.OnLevelEnter.add(function()
+  myDeltaLevel = items.currentDeltaLevel()  -- valid here (plrlevel = this level); consumed by broadcastRemove
   remoteAllies = {}
   pendingDeploys = {}  -- keyed by seed; a deploy request in flight across a level change is stale
   if not system.isMultiplayer() then return end
@@ -2497,6 +2515,11 @@ events.OnMonsterDeath.add(function(monster)
   local entry = getDeployedAllyEntry(monster.id)
   local isTrackedAlly = entry ~= nil or remoteRec ~= nil
   local isMinion = (entry ~= nil and entry.isMinion) or (remoteRec ~= nil and remoteRec.parentId ~= nil)
+  -- A dead ally is forgotten by the delta everywhere (allies are corpseless; a stale record ghosts/crashes a later loader): every on-level witness invalidates locally, and the OWNER additionally RM-broadcasts so OFF-level clients invalidate too (see bugs.md).
+  if isTrackedAlly then
+    monsters.removeDeltaSpawnedMonster(myDeltaLevel, monster.id)
+    if entry ~= nil then broadcastRemove(monster.id) end
+  end
   if isTrackedAlly then corpselessDeaths[monster.id] = true end
   -- A NON-minion ally death gets the resurrect-beam FX on its final death frame (own or remote-observed).
   if isTrackedAlly and not isMinion then pendingResurrectBeam[monster.id] = true end
@@ -2961,12 +2984,10 @@ AIID = monsters.AIID
 CHARGE_MIN_DIST = { [monsters.AIID.Rhino] = 5, [monsters.AIID.Bat] = 5, [monsters.AIID.Snake] = 2 }
 
 SKELKING_SPAWN_MIN_DIST = 3   -- only spawn when the enemy is at least this far (matches LeoricAi)
-SKELKING_MAX_MINIONS    = 3   -- cap of simultaneous skeleton minions per tamed Skeleton King
 SKELKING_SPAWN_CHANCE   = 8   -- percent chance per eligible tick to spawn a minion
 SKELETON_TYPE_ID        = 8   -- MT_WSKELAX (basic skeleton) — the species a tamed king raises
 
 HORK_SPAWN_MIN_DIST = 3   -- Hork Demon fires Hork Spawn at range (matches HorkDemonAi)
-HORK_MAX_MINIONS    = 3   -- cap of simultaneous Hork minions per tamed Hork Demon
 HORK_SPAWN_CHANCE   = 8   -- percent chance per eligible tick to fire Hork Spawn
 
 events.OnGolemChooseAction.add(function(ally, enemy)
@@ -3158,7 +3179,7 @@ function reapOrphanedRemoteAllies()
 end
 
 events.GameDrawComplete.add(function()
-  local owner = player.self()  -- owns the allies leashed below (remote allies are owner-positioned, not leashed here)
+  local owner = player.self()  -- owns the allies leashed below
 
   -- Advance the pre-Bonded flash cadence (flashOn is read by OnGetMonsterTRN to blink a near-Bonded ally).
   flashFrameCounter = flashFrameCounter + 1
@@ -3166,6 +3187,20 @@ events.GameDrawComplete.add(function()
 
   -- Periodically clear remote allies whose owner has left (before the own-ally early-return; a peer can observe without owning). No-op in SP.
   if system.isMultiplayer() and flashFrameCounter % 30 == 0 then reapOrphanedRemoteAllies() end
+
+  -- Leash remote-owned allies to THEIR owner locally: snapToPlayer is client-local, so every client runs the same leash rule against the synced owner position (isOnActiveLevel skips mid-transition owners; guards mirror reapOrphanedRemoteAllies).
+  if system.isMultiplayer() then
+    for id, rec in pairs(remoteAllies) do
+      local m = monsters.fromId(id)
+      if m ~= nil and m.isGolem and m.ownerPlayerId == rec.ownerId then
+        local remoteOwner = player.get(rec.ownerId)
+        if remoteOwner ~= nil and remoteOwner:isOnActiveLevel()
+           and m:distanceTo(remoteOwner) > LEASH_DISTANCE then
+          m:snapToPlayer(remoteOwner)
+        end
+      end
+    end
+  end
 
   if #deployedAllies == 0 then return end
 
@@ -3466,9 +3501,14 @@ events.OnLevelEnter.add(function()
   if p.className ~= HUNTER_CLASS then return end
   p:iterateInventory(function(item)
     if not item:isScrollOf(TAME_ID) then return end
-    -- Defensive: keep scrollCounter ahead of every held scroll's counter so a fresh seed can't collide with one in inventory (no-op for our own scrolls).
-    local c = math.floor(item.seed / 4096)
-    if c >= scrollCounter then scrollCounter = c + 1 end
+    -- Defensive: keep scrollCounter ahead of every held scroll WE minted (matching charTag) so a
+    -- fresh seed can't collide with one in inventory. Foreign-tag scrolls can't collide (different
+    -- upper field) and are skipped, so they no longer inflate our counter.
+    local upper = math.floor(item.seed / 4096)
+    if math.floor(upper / 4096) == getMyOhId() % 128 then
+      local c = upper % 4096
+      if c >= scrollCounter then scrollCounter = c + 1 end
+    end
     if scrollIsGoldTier(item) then
       item.magical = 2  -- ITEM_QUALITY_UNIQUE → gold text + outline (unique champions/bosses + Bonded scrolls)
     end

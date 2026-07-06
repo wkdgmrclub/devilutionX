@@ -866,3 +866,35 @@ ally or a peaceful player's pet); a hostile observer gets vanilla behaviour. Bui
   the OT `{name,id}` is folded into the seed-keyed `item.modData` blob (the old `OO`/`NET_ORIGIN` pipe was
   retired), re-keyed on pickup, and also carried on the `CO` message so a remote observer's box shows the TRUE
   original tamer.
+
+---
+
+## Phase 10 — MP ally slot model: bring-up, leash sync + delta hygiene (C++ + Lua, VERIFIED 2026-07-05)
+
+The final MP bring-up wave: the high-slot model compiled and proven in two-client testing, plus the bug
+sweep it surfaced — all found, fixed, and re-verified 2026-07-05 (full forensics per bug in `bugs.md`;
+the distilled model now lives in `net_sync.md` §3).
+
+- **Slot model green:** `AllocateHighMonsterSlot` + `requestExtraMonsters` reservation verified live —
+  allies materialise on peers at slots above the natural region via `RQ`→`SP`→`netSpawnAt` clobber, with
+  the starter-scroll charTag seed hardening (DM3) landed during bring-up.
+- **Leash sync (`snapToPlayer`):** the binding is client-local by design, and the old owner-only leash
+  assumed snaps would propagate — they never did. Fixed pure-Lua: the leash runs **symmetrically on every
+  client**, remote allies leashing to *their* engine-synced owner (the MP monster model: simulate
+  everywhere, let proximity sync converge the residual).
+- **Delta hygiene (three bugs, one invariant):** routine cross-level `CMD_SYNCDATA` fills delta records
+  for ally slots on clients that never materialised them; applied at level load to uninitialized slots
+  they rendered frozen "golem ghosts" (recall + owner-quit repros) and fed a debug-assert hard crash
+  (ally-death repro — the visible `PlayerState[255]` net-thread crash was the `FreeDlg` shutdown race
+  masking the real assert). Fixes: *an ally that stops existing is forgotten by every client's delta* —
+  `RM|id|level` + `monsters.removeDeltaSpawnedMonster(level, id)` (the level-keyed
+  `LuaDeltaRemoveSpawnedMonster` overload, sibling of `LuaDeltaKillMonster`) on recall AND death; plus the
+  hard guarantee, the `DeltaLoadMonsters`/`DeltaLoadEnemies` **extended-region gate** (skip slots
+  `≥ MaxMonsters` with no `spawnedMonsters` entry — vanilla-dead 2-liner) covering the no-message paths
+  (owner quit, client crash). All three repros re-verified clean.
+- **Cap right-sizing:** `MAX_DEPLOYED_PER_HUNTER` 8 → 4 with minions now counted in the reservation:
+  worst case 4 Hunters × (4 allies + SK 3 + Hork 3 minions) = 40 slots ≤ the 52-slot extended region
+  (8/hunter could exceed it). Types reservation 18 (16 ally species + 2 shared minion species).
+- **Files:** `Source/msg.cpp/.h` (overload + gate), `Source/lua/modules/monsters.cpp`
+  (`removeDeltaSpawnedMonster` binding), `init.lua` (symmetric leash, `myDeltaLevel`, RM protocol +
+  dead-guard, death forget, caps); PR docs in `cpp_changes/monsters.md` + `net.md`.

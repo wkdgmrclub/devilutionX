@@ -45,6 +45,24 @@ Both generic; no vanilla behaviour change (full diagnosis in `../bugs.md`).
   `monster:remove()` binding; the delta erase runs immediately, while the `ActiveMonsters` compaction
   (`DeleteMonsterList()`) is deferred when a game-logic step is in flight to avoid re-entrant array
   mutation (`../bugs.md` → "Ally/minion death crashed the renderer").
+- **`LuaDeltaRemoveSpawnedMonster(uint8_t level, size_t monsterId)` overload (`Source/msg.cpp`, decl
+  `Source/msg.h`) + `monsters.removeDeltaSpawnedMonster(level, monsterId)` binding
+  (`Source/lua/modules/monsters.cpp`).** The by-slot-id sibling of the above, for a client **not on that
+  level** — the level-keyed counterpart of `LuaDeltaKillMonster`/`recordDeltaKill`. Needed because
+  `delta_sync_monster` fills `deltaLevel.monster[slot]` position/hp records from routine cross-level
+  `CMD_SYNCDATA` traffic even on clients that never materialised the monster; after the owner removes it,
+  that stale record would be applied by `DeltaLoadMonsters` to the never-initialized slot on the client's
+  next load of the level (frozen ghost). Same shape as the live-instance overload: erase the
+  `spawnedMonsters` entry + invalidate `deltaLevel.monster[id]`; bounds-checked against `GetMaxMonsters()`;
+  no-op in SP. Vanilla-dead code with no mod loaded.
+- **`DeltaLoadMonsters` / `DeltaLoadEnemies` extended-region gate (`Source/msg.cpp`).** Both loops now
+  skip slots `i >= MaxMonsters` that have no `deltaLevel.spawnedMonsters` entry. A client can hold a
+  monster[] record for an extended-region slot it never created (`delta_sync_monster` fills records from
+  cross-level `CMD_SYNCDATA` traffic), and applying it to the never-initialized `Monsters[i]` manufactures
+  a frozen ghost (or feeds debug asserts). Extended-region slots only exist while explicitly spawned —
+  `spawnedMonsters` entries are only written by the `CMD_SPAWNMONSTER` receiver and the game-join delta
+  import, so "no entry" proves "no monster". **Vanilla-invariant:** unmodded, `GetMaxMonsters() ==
+  MaxMonsters`, the loop never reaches the gated region — dead code, byte-for-byte identical.
 
 ---
 

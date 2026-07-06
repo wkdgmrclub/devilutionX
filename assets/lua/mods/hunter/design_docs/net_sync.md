@@ -1,15 +1,14 @@
 # Net Sync — Ally Multiplayer Data Model
 
-> **Status: shipped + two-client playtested (2026-06-25).** The authoritative *mod-side* design
-> reference for how tamed allies stay consistent across clients.
+> **Status: shipped + two-client playtested (slot model, leash sync, and delta hygiene verified
+> 2026-07-05).** The authoritative *mod-side* design reference for how tamed allies stay consistent
+> across clients.
 >
 > **What lives elsewhere:**
 > - The **engine code** this rides (the `CMD_LUAMSG` pipe, `netSpawnAt`, high-slot allocation,
->   mod-extensible monster arrays, `makeGolem` owner param) → `cpp_changes/net.md` +
->   `cpp_changes/monsters.md`.
+>   mod-extensible monster arrays, the `DeltaLoad` extended-region gate, `makeGolem` owner param) →
+>   `cpp_changes/net.md` + `cpp_changes/monsters.md`.
 > - The **dated as-built log** → `HISTORY.md` → "Phase 10 — Net Sync".
-> - The **current in-flight bring-up** (high-slot compile, "Broken MP netcode") →
->   `development_notes.md`.
 > - Item-blob trade transport → `item_moddata.md`.
 >
 > This environment cannot build or run two clients (see `CLAUDE.md`); every "verify" item is for the
@@ -62,9 +61,9 @@ owner-local).
 
 | # | Datum | Lives in | In the item? | Notes |
 |---|---|---|---|---|
-| 1 | `typeId` | `seed` low 16 bits | ✅ seed | `seedToTypeId` |
-| 2 | `uniqueTypeIdx` | `seed` low 16 bits (`UNIQUE_SEED_FLAG 0x8000`) | ✅ seed | `seedGetUniqueType` |
-| 3 | scroll counter (uniqueness) | `seed` high 16 bits | ✅ seed | `scrollCounter` |
+| 1 | `typeId` | `seed` bits 0–11 | ✅ seed | `seedToTypeId` |
+| 2 | `uniqueTypeIdx` | `seed` bits 0–11 (`UNIQUE_SEED_FLAG 0x800`) | ✅ seed | `seedGetUniqueType` |
+| 3 | charTag + scroll counter (uniqueness) | `seed` bits 12–30 | ✅ seed | `OHID % 128` + `scrollCounter` |
 | 4 | `maxHp` | `dwBuff` bits 1–15 | ✅ dwBuff | |
 | 5 | current HP (as `pct`) | `dwBuff` bits 24–31 | ✅ dwBuff | |
 | 6 | `level` | `dwBuff` bits 16–21 | ✅ dwBuff | |
@@ -99,6 +98,42 @@ engine's deterministic level generation and our dynamic allies from contending f
 
 Engine support (`AllocateHighMonsterSlot`, the array-cap extension) → `cpp_changes/net.md`.
 
+**Sizing:** the extended region holds `AbsoluteMaxMonsters (252) − MaxMonsters (200) = 52` slots. The
+reservation covers the party worst case — every Hunter fielding a full deploy including a Skeleton
+King AND a Hork Demon at full minions: `MAX_HUNTERS × (MAX_DEPLOYED_PER_HUNTER + 3 + 3) = 4 × 10 = 40`.
+
+### Delta hygiene (the third rule)
+
+Allies **never legitimately persist in any level's delta**: owners auto-recall on level exit, and peer
+materialisation is always `RQ`→`SP`, never delta replay. But the engine's routine `CMD_SYNCDATA`
+handler records monster position/hp into the delta **even on clients not on that level**
+(`delta_sync_monster`), so every client passively accumulates records for ally slots it never
+initialised. Left stale, those records get applied to uninitialised slots at that client's next level
+load (`DeltaLoadMonsters`/`DeltaLoadEnemies`) → frozen ghosts, and in debug builds assert crashes.
+Two layers keep this impossible:
+
+1. **Active forget (delta cleanliness — records also export to joiners):** *an ally that stops
+   existing is forgotten by every client's delta.* Recall/despawn: `RM|id|level` → off-level receivers
+   invalidate via `monsters.removeDeltaSpawnedMonster(level, id)`. Death: every on-level witness
+   invalidates locally in `OnMonsterDeath`, and the owner additionally RM-broadcasts for off-level
+   clients (a monster-inflicted ally death broadcasts no `CMD_MONSTDEATH`, so nothing else reaches
+   them). The RM receiver dead-guards (`hitPoints <= 0` → no-op) so a death-RM never disturbs a copy
+   mid-death-animation.
+2. **Load-side gate (the hard guarantee):** `DeltaLoadMonsters`/`DeltaLoadEnemies` skip extended-region
+   slots with no `spawnedMonsters` entry (`cpp_changes/monsters.md`). Mod spawns never create such
+   entries (pipe, not `CMD_SPAWNMONSTER`), so no stale record can ever be applied — covering every
+   path where no message can be sent (owner quit-to-menu, client crash, lost RM).
+
+### Leash (snapToPlayer) in MP
+
+`snapToPlayer` is a **client-local** position write (no net command, no delta). The leash therefore
+runs **symmetrically on every client** (`GameDrawComplete`): own allies leash to `player.self()`;
+remote-owned allies (from `remoteAllies`) leash to *their* owner via `player.get(rec.ownerId)`, gated
+by `isOnActiveLevel()` (skips owner mid-transition) and the same slot-alias guards as the orphan reap.
+This is the engine's own MP monster model — each client simulates, `CMD_SYNCDATA` proximity sync
+converges the residual tile or two. Accepted residual: the copies' distances can straddle
+`LEASH_DISTANCE`, so one side may snap a beat before the other; divergence is bounded by the leash.
+
 ### Transport
 The pipe sends `PT_MESSAGE` over the reliable, in-order TCP stream every in-game packet uses on every
 backend (asio TCP; ZeroTier over lwIP via per-peer `SOCK_STREAM` + `frame_queue`;
@@ -122,7 +157,7 @@ ids are per-level. Spawn bindings are **local-only** (no `NetSendCmdSpawnMonster
 | `RQ` | joiner → all | on `OnLevelEnter`, same-level ally owners re-send their `deployedAllies` so a late joiner materialises them. |
 | `DR` / `DF` | non-owner → level owner / back | non-owner deploy **request** / failure. The level owner is the single spawn authority (only it can allocate a slot). |
 | `CO\|…` | owner → same-level | broadcasts an ally's final combat numbers + caster profile (28 fields) so every client computes damage / Bonded effects / infobox identically. **No client re-derives.** (DM1) |
-| `RM\|id` | owner → same-level | live-remove (recall / retame / level-exit / minion-cleanup) so the ally despawns on peers instead of ghosting. Receiver guard: `isGolem && ownerPlayerId == senderId`. (N3) |
+| `RM\|id\|level` | owner → all | remove (recall / retame / level-exit / minion-cleanup / **death**): same-level peers despawn their live copy (guards: `isGolem && ownerPlayerId == senderId`, plus `hitPoints <= 0` → no-op for a death-RM); off-level peers invalidate their delta record for `level` via `monsters.removeDeltaSpawnedMonster` (see "Delta hygiene"). (N3) |
 | `SD` | owner → present peers | item-blob (Plane-2 progression) keyed by seed, for a trade where the dropper is present. See `item_moddata.md`. |
 
 Receivers track remote allies in the **Plane-1 runtime `remoteAllies[monsterId]`** record (peer-side
@@ -151,12 +186,15 @@ Mechanism decisions were D1–D5 / work blocks N1–N6; data-model decisions wer
 - **DM2 — trade payload. ✅** Plane-2 (#9–#11, #15) rides the **item blob** (`item.modData`), which
   survives the trade hot path; owner persistence rides the seed-keyed `luamoddata` save. See
   `item_moddata.md`.
-- **DM3 / D3 — seed uniqueness → per-character monotonic counter + re-stamp on acquire. ✅** Each
-  character keeps a persistent monotonic `scrollCounter` (never resets). Every scroll a character
-  creates or picks up is stamped from *that character's* counter; `OnItemPickedUp` re-keys a
-  picked-up scroll into the new owner's seed space. A player never holds two scrolls with the same
-  seed, and two players' seed-spaces never overlap → **collisions impossible by construction.** (A
-  random 32-bit seed was rejected: birthday collision at ~65k scrolls across unlimited players.)
+- **DM3 / D3 — seed uniqueness → charTag + per-character monotonic counter + re-stamp on acquire. ✅**
+  A seed's upper field is `[charTag (OHID % 128)][counter]`: the 7-bit charTag separates different
+  characters' seed spaces (two fresh Hunters would otherwise both mint the identical counter-1
+  starter-scroll seed and poison each other's seed-keyed caches over `SD`), and each character's
+  persistent monotonic `scrollCounter` (never resets) separates their own scrolls. `OnItemPickedUp`
+  re-keys a picked-up scroll into the new owner's seed space. A player never holds two scrolls with
+  the same seed; cross-character collision requires a 1-in-128 tag match *and* an equal counter+type
+  (and the pickup re-key still untangles any traded scroll). (A random 32-bit seed was rejected:
+  birthday collision at ~65k scrolls across unlimited players.)
 - **DM4 / N1-late — other-Hunter live view + load-in sync. ✅** The owner re-broadcasts Plane-1b
   combat values (same-level clients) + Plane-2 display (same-level Hunters) on deploy / state change /
   `RQ`. The spawn covers static identity for load-in; the pipe re-broadcast covers overrides/progression.
@@ -166,15 +204,17 @@ Mechanism decisions were D1–D5 / work blocks N1–N6; data-model decisions wer
   vanilla. See `cpp_changes/items.md` for the save-slot mechanics.
 - **DM6 / D4 — recovery registry stays owner-local; live-remove via `RM`. ✅** A traded scroll's
   recovery becomes the new owner's concern from first deploy. `RM` despawns silently-removed allies on
-  peers (not sent for natural death — the engine reaps the body everywhere).
+  peers; since 2026-07-05 it is **also sent on ally death** — not to remove the live copy (every
+  on-level client sims the death; the receiver dead-guards) but so off-level clients invalidate their
+  delta record (see "Delta hygiene").
 - **N4 — MP re-link on rejoin. RETIRED 2026-06-23 (premise void).** No ownerless allies persist on a
   level (all recalled to scroll form on level exit) and mod allies don't ride the engine delta in MP
   (pipe-replicated). Every rejoin/reload case is already covered: observer late-join → `RQ`→`SP`+`CO`;
   owner re-entry → fresh deploy; clean exit → recall + `RM`; SP mid-dungeon load → `relinkSavedAllies`;
-  owner crash → Pepin "lost" recovery. *Caveat:* the engine's departed-player golem reaper is
-  `MT_GOLEM`-type-only, so an ungraceful disconnect can leave a rare cosmetic ghost on a peer until its
-  next level reload; clean fix if it ever shows = a pipe "player left → despawn that owner's allies"
-  cleanup (mod-side, no engine change).
+  owner crash → Pepin "lost" recovery. The former departed-owner ghost caveat is closed (2026-07-05):
+  `reapOrphanedRemoteAllies` removes live copies whose owner left, and the `DeltaLoad` extended-region
+  gate stops stale delta records from ever materialising on a later load (owner quit-to-menu / crash
+  included) — see "Delta hygiene".
 - **N5 — XP attribution. ✅** Ally kills credit `Players[owner]` via `monster:tagForPlayer`.
 - **N6 — recovery-scroll store-buy roundtrip. Verification-only** for a future MP playtest.
 - **D2 — hostility source of truth.** Read existing engine player-team/hostility state where possible
@@ -195,4 +235,3 @@ The core net-sync round-trip is verified. Re-confirm opportunistically:
   pets only.
 - **Hunter death drop** — verify which Ear type drops; confirm intended.
 - **Deployed-monster sync** — all players consistently synced on dungeon-deployed monsters.
-- **`snapToPlayer` MP behaviour** — un-vetted (see `development_notes.md`).

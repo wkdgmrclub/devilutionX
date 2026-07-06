@@ -827,6 +827,13 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    if (level < 0 || monsterId < 0) return;
 		    LuaDeltaKillMonster(static_cast<uint8_t>(level), static_cast<size_t>(monsterId), { x, y });
 	    });
+	LuaSetDocFn(table, "removeDeltaSpawnedMonster", "(level: integer, monsterId: integer)",
+	    "Erase a dynamically spawned monster from the given level's multiplayer delta by slot id, without a live "
+	    "monster instance — for a client not on that level. No-op in singleplayer. // Lua mod support",
+	    [](int level, int monsterId) {
+		    if (level < 0 || monsterId < 0) return;
+		    LuaDeltaRemoveSpawnedMonster(static_cast<uint8_t>(level), static_cast<size_t>(monsterId));
+	    });
 	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
 	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",
 	    []() -> Monster * {

@@ -298,7 +298,7 @@ Properties accessible on `Item` references (e.g. from `player:findScrollBySeed`,
 
 ### Capacity reservation (load-time)
 - `monsters.requestExtraTypes(count)` — reserve `count` extra per-level monster-TYPE slots (base cap `MaxLvlMTypes` = 24). Call at mod load, before any level. Cumulative across mods; unmodded play unchanged.
-- `monsters.requestExtraMonsters(count)` — reserve `count` extra live-monster slots (base cap 200). Effective cap clamped to the engine's hard ceiling **252** (the `uint8` enemy-encoding limit). Call at mod load, before any level. Cumulative; unmodded play unchanged. Hunter `init.lua` requests 32 of each (4 Hunters × 8 allies).
+- `monsters.requestExtraMonsters(count)` — reserve `count` extra live-monster slots (base cap 200). Effective cap clamped to the engine's hard ceiling **252** (the `uint8` enemy-encoding limit). Call at mod load, before any level. Cumulative; unmodded play unchanged. Hunter `init.lua` requests 40 monster slots (4 Hunters × (4 allies + 6 minions)) and 18 type slots (16 ally species + the 2 shared minion species).
 
 ### Spawning
 - `monsters.addMonsterDataFromTsv(path)`, `monsters.addUniqueMonsterDataFromTsv(path)`
@@ -324,6 +324,10 @@ Properties accessible on `Item` references (e.g. from `player:findScrollBySeed`,
 - `monsters.getMissileDamageType(missileId) -> integer` — the `DamageType` of a `MissileID` (e.g. to derive a cast's element). Pair with `monster:naturalRangedMissileId()`
 - `monsters.DamageType` — table of `DamageType` integer constants: `Physical` (0), `Fire` (1), `Lightning` (2), `Magic` (3), `Acid` (4)
 - `monsters.registerTrn(bytes) -> integer` — register a 256-byte TRN (palette-remap) and return a handle. `bytes` is a 1-based Lua array of 256 color indices (entry `i` is the color every pixel of index `i-1` is drawn as; missing entries default to identity). Call **once at mod load** and reuse the handle; the buffer is copied and kept for the session. Return the handle from an `OnGetMonsterTRN` handler to remap a monster's palette for the frame. **Cross-palette caveat:** indices **0–127 are level-specific** (a different color in each area's `.pal`, and the area color-cycling touches only 1–31) — never use them as TRN targets. Indices **128–255 are the global sprite range**: identical RGB in every area palette (per `palette.h`) and never runtime-cycled, so *any* 128–255 entry is a reliable target (see `trn_palette.md`). Grayscale crypt/cathedral palettes desaturate everything to gray (expected)
+
+### Delta bookkeeping (MP, by slot id — for a client NOT on the level)
+- `monsters.recordDeltaKill(level, monsterId, x, y)` — record a monster as **killed** in the given level's MP delta with no live instance (mirrors a networked death record), so the slot is reaped instead of regenerated when this client later loads the level. For **level-natural** monsters; the CR (capture) receiver's off-level branch uses it. SP no-op. Source: `Source/lua/modules/monsters.cpp`
+- `monsters.removeDeltaSpawnedMonster(level, monsterId)` — **erase** a dynamically spawned monster from the given level's MP delta (`spawnedMonsters` entry + monster record invalidated) with no live instance. Sibling of `recordDeltaKill` for **spawned** monsters (allies/minions): routine cross-level sync fills position/hp records even on clients that never materialised the slot, and a stale record ghosts (or crashes) their next load. The RM receiver's not-found branch and the ally-death forget use it. SP no-op. Source: `Source/lua/modules/monsters.cpp`
 
 ### Monster properties (readonly)
 - `id`, `position` (Point with .x/.y), `name`, `health`, `maxHealth`, `isUnique`, `isQuestMonster`, `typeId`, `level`, `isLit`, `hasRangedAttack`

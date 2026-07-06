@@ -56,7 +56,7 @@ client replay the golem conversion for a *remote* player's pet.
   for spawn authority: a non-owner deploy routes through the `DR` request; minion spawns are done by the
   level owner then replicated over the pipe.
 
-## High-slot allocation (the MP slot model — *bring-up in `../development_notes.md`*)
+## High-slot allocation (the MP slot model — shipped, two-client verified 2026-07-05)
 `AllocateHighMonsterSlot()` (`Source/lua/modules/monsters.cpp`) returns the first free-pool id
 `≥ MaxMonsters`; `PrepareSpawnSlot` uses it. Allies occupy slots above the natural-monster region (which
 level generation caps below `MaxMonsters`), so an ally never collides with another client's regenerated

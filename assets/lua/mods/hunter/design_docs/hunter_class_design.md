@@ -65,13 +65,13 @@ Monster categories as implemented in Lua (note: C++ binding sets `isQuestMonster
 
 Taming destroys the monster → drops a Tame Scroll on the floor. Casting the scroll deploys the monster at the cursor tile.
 
-- Up to 8 tamed monsters deployed simultaneously (Phase 10 cap enforcement); unlimited scrolls held
+- Up to 4 tamed monsters deployed simultaneously; unlimited scrolls held. Cap sized so a full 4-Hunter party's worst case — everyone fielding a Skeleton King AND a Hork Demon at full minions, 4 × (4+3+3) = 40 live slots — fits the extended monster region (52 slots above the natural cap)
 - Scrolls persist across levels and game restarts
 - **Difficulty is frozen at capture time** — deploying in a different difficulty uses the original captured stats
 
 ## Tame Scroll Encoding
 
-- `_iSeed` upper 16 bits = counter; lower 16 bits: normal monsters = `typeId` (always < `0x8000`), unique monsters = `0x8000 | uniqueTypeIdx`
+- `_iSeed` layout (31 bits, signed-int32 safe): bits 24–30 = **charTag** (`OHID % 128` — keeps seeds globally unique across characters in MP; without it every fresh Hunter mints the same starter-scroll seed), bits 12–23 = per-character monotonic counter, bits 0–11 = type field: normal monsters = `typeId` (always < `0x800`), unique monsters = `0x800 | uniqueTypeIdx`
 - `dwBuff` bits: `maxHp` (bits 1–15, full 0..32767 resolution) + `level` (bits 16–21, 6 bits) + `capturedDifficulty` (bits 22–23) + `savedHp` as a **percent of maxHp** (bits 24–31, 0..100; current HP = `round(maxHp * pct/100)`). `maxHp` is the **un-buffed base max** (the live HP buff lives in `maxHitPoints`, never persisted), and current HP is clamped to it on recall (`savedHp ≤ maxHp` always) — overheal is **not** persisted. The percent field stays 8 bits wide but only ever holds 0..100. Bit 0 stays 0 (CF_HELLFIRE).
 - Both fields survive pfile and delta round-trips
 - `TAME_SCROLL_MAP = 90001`
