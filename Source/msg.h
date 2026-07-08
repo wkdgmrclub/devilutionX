@@ -757,7 +757,6 @@ uint8_t GetLevelForMultiplayer(const Player &player);
 bool IsValidLevelForMultiplayer(uint8_t level);
 bool IsValidLevel(uint8_t level, bool isSetLevel);
 void DeltaAddItem(int ii);
-void LuaDeltaRegisterDroppedItem(int ii);
 void LuaSetItemDeltaModData(uint8_t level, uint32_t seed, std::string_view blob);
 std::string LuaGetItemDeltaModData(uint8_t level, uint32_t seed);
 uint8_t LuaCurrentDeltaLevel();

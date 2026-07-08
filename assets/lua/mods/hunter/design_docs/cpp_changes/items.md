@@ -24,6 +24,14 @@ no mod uses it**; the base game never reads or interprets it.
 | Live hop | the mod's own Lua net pipe keyed by item seed (Hunter `SD` msg) | a trade where the dropper is present |
 | At-rest | per-level `DLevel.modData` map (`seed->blob`) riding the existing delta export/import (mirrors `spawnedMonsters`); restored onto a floor item in `DeltaLoadItems` | a dropped floor item across a rejoin — **even after the dropper leaves** (delta handed to a joiner on connect) |
 
+**The ITEM itself needs no mod transport.** A custom floor item is a valid vanilla item (createInfo 0
+passes `IsPItemValid`; `RecreateItem`'s createInfo==0 branch rebuilds it and fires
+`OnCustomItemRecreated` for the name), so it rides the standard item commands: hand drops send
+`CMD_PUTITEM` as always, and `items.spawnAt` announces `CMD_SPAWNITEM` exactly like a vanilla
+quest/reward drop (`SpawnRewardItem` pattern) — same-level peers spawn a live copy, every client
+(sender included, via loopback `OnSpawnItem`) registers it in the level delta, with the engine's own
+dedup/anti-dupe. Only the blob is mod-carried, over the two paths above.
+
 **NOT in the hero save** (`ItemPack` frozen). A mod persists it out-of-band via the `luamoddata` slot
 (below) and rebuilds it onto held items at load.
 
@@ -43,14 +51,49 @@ no-mod items behave exactly as vanilla. Net win vs. the removed always-on `dwLua
 > extension — both grew the item wire/save format for **every** player unconditionally, breaking
 > "byte-for-byte vanilla without the mod." Reaffirmed: even a 4-byte always-on item-wire field is the
 > ceiling; arbitrary mod data rides the generic pipe keyed by seed, or the optional blob.
+>
+> **Also rejected (removed 2026-07-08, do not rebuild):** mod-side replication of the ITEM record —
+> `LuaDeltaRegisterDroppedItem`/`LuaDeltaRegisterDroppedItemAt` (`msg.cpp`) + the
+> `items.registerDeltaDroppedItem` binding + the Hunter `DI` pipe message. They hand-rolled what
+> `CMD_SPAWNITEM`'s `OnSpawnItem` receiver already does natively (same-level live spawn, all-client
+> delta registration, dedup), built on the mistaken belief that the vanilla receiver's
+> `IsPItemValid`/`RecreateItem` chokepoints would reject a custom item — they don't (createInfo 0
+> validates, and the recreate path is what rebuilds the custom name). `items.spawnAt` now just sends
+> `CMD_SPAWNITEM`; only the blob needs mod transport.
 
 ---
 
 ## `OnItemDropped(player, item)` hook — status: ready
-Fired in `TryDropItem` (`Source/controls/plrctrls.cpp`) when the **local** player manually drops a held
-item onto the floor, before the cursor item is cleared (`item.modData` still valid). Sibling of
-`OnItemPickedUp`; the trade mechanism (drop → another player picks up). Plumbing: `lua_event.hpp/cpp`,
-`events.lua`.
+Fired when the **local** player manually drops a held item onto the floor, immediately after the
+`NetSendCmdPItem` send and before the cursor item is cleared (`item.modData` still valid). Sibling of
+`OnItemPickedUp`; the trade mechanism (drop → another player picks up).
+**Four fire sites — one per engine drop path** (each is the identical one-line call-out after the same
+send; a drop path without the call-out silently breaks the mod's drop-time announce, which is exactly
+the class of bug the missing mouse site caused):
+- `TryDropItem` (`Source/controls/plrctrls.cpp`) — controller drops + the `NewCursor` forced drop +
+  the `inv.cpp` drop fallback (those route through it). After `CMD_PUTITEM`.
+- The mouse click-on-world drop (`Source/diablo.cpp`, `LeftMouseDown` held-item branch) — the
+  ordinary mouse trade drop; does NOT route through `TryDropItem`. After `CMD_PUTITEM`.
+- The close-stash-while-holding force-drop (`Source/inv.cpp` `CloseStash`). After `CMD_PUTITEM`.
+- The swap-drop inside `InvGetItem` (`Source/inv.cpp`) — clicking a floor item while already holding
+  an item drops the held item in place. After `CMD_SYNCPUTITEM`, before `player.HoldItem` is
+  overwritten by the picked-up item.
+Plumbing: `lua_event.hpp/cpp`, `events.lua`.
+
+---
+
+## `OnItemPickedUp(player, item)` hook — status: ready
+Fired when a player takes a floor item, before `CleanupItems` clears the floor slot (`item` is the
+floor copy, still valid). **Two fire sites — one per engine pickup path:**
+- `AutoGetItem` (`Source/inv.cpp`) — auto-pickup into inventory/belt/equipment (walk-over, or a
+  left-click with the inventory panel closed); fires only when placement succeeded.
+- `InvGetItem` (`Source/inv.cpp`) — click-pickup with the inventory panel open; one unconditional
+  call-out after the gold/hand branch, before `CleanupItems`, covering both the gold auto-place and
+  the to-hand branch and all three `msg.cpp` callers (incl. the off-level `OnGetItem` echo). On this
+  path the acquired copy is the player's `HoldItem` (cursor), not an inventory slot.
+Both sites are unconditional one-line event call-outs after the same floor-copy window the engine
+itself documents (`HoldItem` copy first so `CleanupItems` can run after); no mod loaded = no-op,
+vanilla behaviour byte-identical.
 
 ---
 

@@ -599,6 +599,7 @@ bool LuaStartMonsterCharge(Monster &monster);
 void LuaStartMonsterSpecialStand(Monster &monster);
 void LuaStartMonsterRangedAttack(Monster &monster, MissileID missileType);
 void LuaStartMonsterSpecialRangedAttack(Monster &monster, MissileID missileType);
+void LuaStartMonsterAttack(Monster &monster);
 void LuaStartMonsterSpecialAttack(Monster &monster);
 void LuaStartMonsterHeal(Monster &monster);
 void LuaStartMonsterEat(Monster &monster);

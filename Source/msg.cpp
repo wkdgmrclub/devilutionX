@@ -3097,33 +3097,6 @@ void DeltaAddItem(int ii)
 	}
 }
 
-// Register an item that was dynamically dropped (not pre-generated) in the delta so
-// DeltaLoadItems re-spawns it when the player returns to this level.
-// Lua mod support
-void LuaDeltaRegisterDroppedItem(int ii)
-{
-	if (!gbIsMultiplayer)
-		return;
-
-	// Use currlevel/setlevel globals, not MyPlayer->plrlevel.
-	// During OnLevelExit (called from DeltaSaveLevel), plrlevel is already the destination level,
-	// so using it here would register the item in the wrong delta.
-	const uint8_t localLevel = GetLevelForMultiplayer(
-	    setlevel ? static_cast<uint8_t>(setlvlnum) : currlevel, setlevel);
-	DLevel &deltaLevel = GetDeltaLevel(localLevel);
-
-	for (TCmdPItem &delta : deltaLevel.item) {
-		if (delta.bCmd != CMD_INVALID)
-			continue;
-
-		delta.bCmd = TCmdPItem::DroppedItem;
-		delta.x = static_cast<uint8_t>(Items[ii].position.x);
-		delta.y = static_cast<uint8_t>(Items[ii].position.y);
-		PrepareItemForNetwork(Items[ii], delta);
-		return;
-	}
-}
-
 void DeltaSaveLevel()
 {
 	if (!gbIsMultiplayer)

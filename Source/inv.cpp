@@ -1690,12 +1690,15 @@ void InvGetItem(Player &player, int ii)
 		if (MyPlayer == &player && !player.HoldItem.isEmpty()) {
 			// drop whatever the player is currently holding
 			NetSendCmdPItem(true, CMD_SYNCPUTITEM, player.position.tile, player.HoldItem);
+			lua::OnItemDropped(player, player.HoldItem); // Lua mod support
 		}
 
 		// need to copy here instead of move so CleanupItems still has access to the position
 		player.HoldItem = item;
 		NewCursor(player.HoldItem);
 	}
+
+	lua::OnItemPickedUp(player, item); // Lua mod support
 
 	// This potentially moves items in memory so must be done after we've made a copy
 	CleanupItems(ii);
@@ -2260,6 +2263,7 @@ void CloseStash()
 		std::optional<Point> itemTile = FindAdjacentPositionForItem(myPlayer.position.future, myPlayer._pdir);
 		if (itemTile) {
 			NetSendCmdPItem(true, CMD_PUTITEM, *itemTile, myPlayer.HoldItem);
+			lua::OnItemDropped(myPlayer, myPlayer.HoldItem); // Lua mod support
 		} else {
 			if (!AutoPlaceItemInBelt(myPlayer, myPlayer.HoldItem, true, true)
 			    && !AutoPlaceItemInInventory(myPlayer, myPlayer.HoldItem, true)

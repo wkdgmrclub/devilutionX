@@ -609,9 +609,10 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	}
 
 	const uint8_t ii = PlaceItemInWorld(std::move(item), dropPos);
-	// In multiplayer mode, PlaceItemInWorld alone doesn't persist items across level transitions.
-	// Register as DroppedItem in the delta so DeltaLoadItems re-spawns it on return.
-	LuaDeltaRegisterDroppedItem(ii);
+	// Announce like any dynamically spawned item (cf. SpawnRewardItem): same-level peers spawn a live
+	// copy and every client — the sender included, via loopback — registers it in the level delta
+	// through the standard OnSpawnItem handling.
+	NetSendCmdPItem(true, CMD_SPAWNITEM, Items[ii].position, Items[ii]);
 }
 
 void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride, sol::optional<int> magicalOverride)
@@ -685,7 +686,7 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "addUniqueItemData", "(itemData: table[], baseMappingId: number)", "Add unique item definitions from a list of Lua tables. Required field: name. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
 	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID (pass to item's cursorGraphic field).", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: string)",
-	    "Drop a custom item at the nearest free tile to (x, y) with the given seed. Optional name overrides the display name. Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file).",
+	    "Drop a custom item at the nearest free tile to (x, y) with the given seed, announced like any dynamically spawned item (CMD_SPAWNITEM): in multiplayer, same-level peers spawn a live copy and every client registers it in the level delta, so it persists and replicates with no further calls. Optional name overrides the display name (local only; a peer's copy is recreated from the wire and renamed via OnCustomItemRecreated). Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file, and not carried on the item wire — persist it via setItemDeltaModData and/or a mod net message).",
 	    LuaSpawnItemAt);
 	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, modData?: string, magical?: integer)",
 	    "Add a custom item to the healer's buy list at the given identified value (shop price). Optional seed/name/dwBuff/modData stock a per-instance seeded item (e.g. a custom scroll) that roundtrips when bought; omitting them stocks a single static item. modData is a binary-safe blob (base game ignores it). Optional magical sets the item quality (item_quality: 0=normal, 2=unique) so the bought copy keeps gold/unique presentation — a vendor purchase preserves the stock item's fields and fires no pickup/recreate fixups, so quality must be set here. Idempotent — without a seed any same-mapping entry is a no-op, with a seed only a matching seed is a no-op, so distinct seeds coexist. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so items reappear after purchase.",

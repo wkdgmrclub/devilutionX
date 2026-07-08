@@ -1881,7 +1881,7 @@ player_graphic Player::getGraphic() const
 	case PM_RATTACK:
 		return player_graphic::Attack;
 	case PM_BLOCK:
-		return player_graphic::Block;
+		return lua::OnGetPlayerBlockGraphic(this, player_graphic::Block); // Lua mod support
 	case PM_SPELL:
 		return GetPlayerGraphicForSpell(executedSpell.spellId);
 	case PM_GOTHIT:
@@ -2242,6 +2242,8 @@ void LoadPlrGFX(Player &player, player_graphic graphic)
 		if (leveltype == DTYPE_TOWN)
 			return;
 		if (!player._pBlockFlag)
+			return;
+		if (lua::OnGetPlayerBlockGraphic(&player, player_graphic::Block) != player_graphic::Block) // Lua mod support: a redirected block graphic loads under its own case
 			return;
 		szCel = "bl";
 		break;
@@ -2709,7 +2711,7 @@ void StartPlrBlock(Player &player, Direction dir)
 	}
 	skippedAnimationFrames = lua::OnGetAnimationSkipFrames(&player, "Block", skippedAnimationFrames); // Lua mod support
 
-	NewPlrAnim(player, player_graphic::Block, dir, AnimationDistributionFlags::SkipsDelayOfLastFrame, skippedAnimationFrames);
+	NewPlrAnim(player, lua::OnGetPlayerBlockGraphic(&player, player_graphic::Block), dir, AnimationDistributionFlags::SkipsDelayOfLastFrame, skippedAnimationFrames); // Lua mod support
 
 	player._pmode = PM_BLOCK;
 	FixPlayerLocation(player, dir);

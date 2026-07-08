@@ -898,3 +898,79 @@ the distilled model now lives in `net_sync.md` §3).
 - **Files:** `Source/msg.cpp/.h` (overload + gate), `Source/lua/modules/monsters.cpp`
   (`removeDeltaSpawnedMonster` binding), `init.lua` (symmetric leash, `myDeltaLevel`, RM protocol +
   dead-guard, death forget, caps); PR docs in `cpp_changes/monsters.md` + `net.md`.
+
+---
+
+## Phase 10 — PvP: allies target hostile players + Friendly Fire extended to pets (C++ + Lua, VERIFIED 2026-07-06)
+
+Pre-Diablo-taming prerequisite: tamed allies fight hostile PLAYERS, and the engine's Friendly Fire toggle
+governs every pet↔player missile interaction in both directions. Hook catalog + engine proofs in
+`lua_api_reference.md` + `cpp_changes/monsters.md`; policy summary in `roadmap.md` ("Minion friendly-fire —
+resolved").
+
+- **Player targeting:** new `OnGolemCanTargetPlayer` in `UpdateEnemy` (default false = vanilla; the vanilla
+  Golem never targets players — barometer). Policy: never the owner, `arePeaceful` → no; adjacent hostile
+  always (self-defence); else owner-anchored `ENGAGE_RADIUS` + LOS. `GolumAi`'s monster reads gated on
+  `MFLAG_TARGETS_MONSTER`; `OnGolemChooseAction` forwards `enemyPlayer`; new bindings `monster:startAttack()`
+  + `monster:hasLineOfSightToPlayer(player)`. Ranged/hybrid/sneak handlers act on `enemy or enemyPlayer`
+  (`golemHasLosToTarget` dispatch); a last-in-chain melee handler swings when adjacent to a player target
+  (`OnGolemIdle`'s pursue branch closes distance). Everything else rides the existing shared player-target
+  machinery (enemyPosition refresh, `MonsterAttackPlayer`, `encode_enemy` player offset).
+- **FF, pet missiles vs players:** `PlayerMHit` has no faction/toggle check — new `OnGolemMissileCanHitPlayer`
+  at the `CheckMissileCol` dispatch (MFLAG_GOLEM-source gate; veto = missile passes through). Policy: never
+  the owner (self-hit analogue, unconditional); other players get `Plr2PlrMHit`'s exact gate (FF off +
+  friendly owner → no hit). New getter `system.isFriendlyFireEnabled()` (`sgGameInitInfo.bFriendlyFire`).
+- **FF, player missiles vs pets (mirror):** new `OnPlayerMissileCanHitGolem` at the `MonsterMHit` dispatch
+  (MFLAG_GOLEM-target gate). Policy: FF off + caster is owner/peaceful-with-owner → pass through; FF on or
+  hostility → vanilla (pets fair PvP game; vanilla Golems always hittable).
+- **Apocalypse vs pets:** vanilla `ProcessApocalypse` skips ALL player-minions; new
+  `OnApocalypseCanTargetGolem` ANDed after the vanilla skip (default false — can only widen). Policy: hostile
+  caster may boom another Hunter's pets; own/peaceful pets protected unconditionally (FF-independent, since
+  Apoc can't hit players); vanilla Golems keep the vanilla exclusion.
+- **Targeting-layer veto rebalance:** the auto-aim direct-target vetoes (own pet / peaceful Hunter's pet)
+  stay unconditional; the collateral-path veto — now `friendlyAllyNearPath`, sweeping own pets AND a
+  peaceful Hunter's pets (own ∪ peaceful-remote = same protected set on every mutually-peaceful client) —
+  applies only while FF is ON (with FF off the damage layer makes the line safe, restoring full auto-aim
+  reach/bounces).
+- **Files:** `Source/monster.cpp/.h`, `Source/missiles.cpp`, `Source/lua/lua_event.hpp/.cpp`,
+  `Source/lua/modules/monsters.cpp`, `Source/lua/modules/system.cpp`, `events.lua`, `init.lua`; PR docs in
+  `cpp_changes/monsters.md`.
+
+---
+
+## Phase 10 — MP self-healing sync layer + deploy-gate hardening + stat-hook class gating (Lua only, VERIFIED 2026-07-06)
+
+The bug-sweep wave after the first sustained multi-Hunter sessions (full forensics per bug in `bugs.md`;
+protocol now in `net_sync.md` §4). Principle established: **one-shot messages (SP/RM/CR/DF) are hints, the
+periodically re-asserted owner state is truth** — peers reconcile instead of trusting any single delivery.
+
+- **`RS` roster heartbeat (~2.5s, `system.gameTick()`-paced):** each Hunter broadcasts the ally/minion slot
+  ids it owns (an empty roster is meaningful). Same-level peers remove tracked copies not in the roster
+  (lost RM with the owner present) and RQ a resend for listed ids they're missing (lost SP). The SP receiver
+  is idempotent (an already-tracked live copy is kept, not clobber-reinitialised; the cached CO profile
+  survives an owner-matched resend); RQ answers now resend minions too (seed 0 + `parentId`;
+  `adoptOwnMinion` keeps `capturedDifficulty` for it).
+- **Capture replay:** the captor logs capture-removals per level (`capturedNaturalMonsters`) and replays
+  them as `CR`s in every RQ answer, so a client whose delta missed the kill reaps the regenerated wild
+  monster live (CR live-branch `hp > 0` guard keeps replays off dead copies).
+- **Reaper + tracking invariants:** `reapOrphanedRemoteAllies` also reaps when the owner left the LEVEL
+  (debounced); `trackDeployedAlly` evicts a stale same-slot entry (one slot = one live monster — the
+  mislabeled-scroll fix).
+- **Deploy gates (per-Hunter, user-confirmed design):** cap = `MAX_ALLIES = MAX_DEPLOYED_PER_HUNTER` (4);
+  one instance of a unique per Hunter (two Hunters may field the same unique). Gates count in-flight
+  `pendingDeploys` (the DR round-trip window) and skip minion entries safely (`seedGetUniqueType(nil)` was
+  an error that silently killed the hook and voided scrolls). The level owner mirrors both gates
+  authoritatively on `DR` (over the requester's `remoteAllies`) and answers `DF` on EVERY rejection;
+  requester-side `pendingDeploys` are tick-stamped with a ~5s self-refund, and a level change refunds
+  in-flight requests instead of dropping them (no more scrolls into the void).
+- **Stat hooks class-gated (join-validation fix):** `UnPackNetPlayer` recomputes and equality-validates
+  derived stats (`_pDamageMod`, `_pIAC`, `_pIMinDam/_pIMaxDam`, `baseToBlock`, …), so every
+  archetype/derived-stat/animation hook now gates on `p.className == HUNTER_CLASS` instead of `isMyPlayer`
+  (deterministic from synced class/stats/level on every client). Deliberate exception:
+  `OnGetMaxAttributeValue` stays isMyPlayer (unpack clamps incoming base stats against it — remote Hunters
+  must resolve the static TSV maxima). UI-only gates (item use, speedbook, Wirt, potions, shrines) stay
+  isMyPlayer.
+- **Scroll-origin heal extension:** `healHeldScrollModData` now recreates an ABSENT `scrollOrigin` record
+  (restore from the scroll's own blob; else claim locally — only our own creation is record-less AND
+  blob-less), fixing the starter pet's blank OH tag after reload.
+- **Files:** `init.lua` only (+ doc updates: `net_sync.md` §4, `bugs.md`).

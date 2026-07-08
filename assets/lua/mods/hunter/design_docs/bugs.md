@@ -6,17 +6,344 @@ Active and resolved bugs. New open bugs go to the top (under High); fixed bugs m
 
 ## High
 
-_(none open)_
+### MP: cursor pickup (inventory panel OPEN) never fires `OnItemPickedUp` — the entire restamp-on-acquire pipeline is skipped — pickup-side twin of the mouse-drop bug (found by audit A5, 2026-07-08; fix BUILT 2026-07-08 per the approved spec below, needs recompile)
+**Found:** 2026-07-08 (audit A5, by engine read — no playtest repro yet, but the path is the natural trade posture). `lua::OnItemPickedUp` fires ONLY from `AutoGetItem` (`inv.cpp:1776`). A left-click floor pickup routes by panel state (`diablo.cpp` `LeftMouseCmd`: `invflag ? CMD_GOTOGETITEM : CMD_GOTOAGETITEM`): inventory CLOSED → `AutoGetItem` (hooked ✅); inventory OPEN → `InvGetItem` (`inv.cpp:1670`) → item goes to the HAND, then `CheckInvPaste` into a slot — **neither fires the hook**. A floor trade completed with the panel open (checking your bag mid-trade) acquires the scroll with NO re-key, NO blob restore, NO delta-blob cleanup, NO presentation restamp, NO fresh-seed SD.
+**Consequences on the picker (B):** the scroll keeps A's seed; B's seed-keyed tables (`allyKillCounts`/`bondedImmunity`/`bondedTrn`/`scrollOrigin`/`scrollGamemode`/`scrollAreaLevel`) never populate — even though the delta/SD blob was delivered correctly, nothing reads it — so deploy yields kills=0 / non-Bonded (the exact symptom of the fixed drop-side bug, through the other door). Worse: on B's next save→reload the identity is gone PERMANENTLY (the tables are the save source; `receivedBlobs` is session-only; the held item's own modData is empty because the floor copy was recreated from the vanilla wire), and GameStart's `healHeldScrollModData` then CLAIMS B as Original Trainer — its comment's premise ("a traded scroll always carried its trainer in the blob") is precisely what this gap violates.
+**Why the drop-side fix looked complete:** panel-closed pickups (`AutoGetItem`) restamp fine, and the `OnLevelEnter` gold fixup papers over the visible gold-tier symptom after any level change (the name symptom heals on the next recreate round-trip). Both A5 guards are symptom-patches over THIS root — see the A5 disposition below.
+**Two smaller unhooked edges, same family:** (1) the swap-drop inside `InvGetItem` (`inv.cpp:1692` — clicking a floor item while holding an item drops the held item via `CMD_SYNCPUTITEM` with no `OnItemDropped`) → no delta blob/SD for the dropped scroll = the original staleness bug via a side door; (2) the off-level pickup echo `OnGetItem` → `InvGetItem` (`msg.cpp:1580–1582`) — covered automatically if the pickup hook lands inside `InvGetItem` itself.
+**Fix spec (approved; same shape as the accepted 3-site `OnItemDropped` fix; needs recompile):**
+1. **Engine, `Source/inv.cpp` `InvGetItem` — one call-out:** `lua::OnItemPickedUp(player, item); // Lua mod support` at the single point after the gold/hand if-else, immediately BEFORE `CleanupItems(ii)` (~line 1700). `item` is the floor copy and both args are already in scope; the engine's own comment notes the `HoldItem` copy happens first precisely so `CleanupItems` can run after — the hook slots in the same window, mirroring `AutoGetItem`'s fire-before-`CleanupItems`. One unconditional line covers BOTH branches (gold auto-place + to-hand) and ALL three callers (`msg.cpp` 1542/1582/1585, incl. the off-level `OnGetItem` echo).
+2. **Engine, `Source/inv.cpp` swap-drop — one call-out:** inside `InvGetItem`'s `if (MyPlayer == &player && !player.HoldItem.isEmpty())` block, add `lua::OnItemDropped(player, player.HoldItem); // Lua mod support` immediately after the `NetSendCmdPItem(true, CMD_SYNCPUTITEM, …)` at ~1692 — must be BEFORE `player.HoldItem = item` overwrites the held item. Identical shape to the three existing sibling sites (diablo.cpp 407, plrctrls.cpp 2421, inv.cpp 2263).
+3. **Binding, `Source/lua/modules/player.cpp`:** `heldItem() -> Item|nil` — return `&player.HoldItem` or nullptr when `HoldItem.isEmpty()`; same live-reference Item*-or-nil convention as `findScrollBySeed` (mutations stick; the later paste carries them into the slot). Additive only — do NOT widen `iterateInventory`/`findScrollBySeed` to include the hand; that would silently change every existing caller (speedbook counts, level-enter loop, `healHeldScrollModData`, the pickup handler's own old-seed check).
+4. **init.lua, `OnItemPickedUp` handler:** widen ONLY the live-copy search — check `p:heldItem()` for the seed+dwBuff+modData match before the `iterateInventory` scan (on the `InvGetItem` path the acquired copy is in the HAND, not inventory; it is a direct struct copy of the floor item so the 3-field match holds). Everything downstream is unchanged and already correct for both paths: the blob-precedence restore, the re-key (the hand copy's seed is re-keyed before the `findScrollBySeed(oldSeed)` old-table check, so that check keeps identical semantics), the `setItemDeltaModData(…, oldSeed, "")` floor-delta cleanup, `restampScrollPresentation`, and the fresh-seed SD. If the player re-drops from the hand instead of pasting, the normal `OnItemDropped` announce rides the NEW seed — harmless.
+5. **Docs:** `lua_api_reference.md` — `OnItemPickedUp` row gains the `InvGetItem` fire site ("fires when the local player takes a floor item — into inventory/belt/equipment via auto-pickup, or into the hand via click-pickup") + a note that the live copy may be in the hand (`player:heldItem()`); `OnItemDropped` row gains the 4th site; new `heldItem` binding row. `cpp_changes/items.md` — extend §OnItemDropped with the swap-drop site; add the `InvGetItem` `OnItemPickedUp` call-out (vanilla-invariance: unconditional event call-outs, no mod = no-op).
+6. **Post-fix cleanup (after the retest passes):** per the A5 disposition below, DELETE the two symptom-patches in the `OnLevelEnter` handler — the defensive `scrollCounter` bump AND the `scrollIsGoldTier` → `magical = 2` fixup (keep the per-held-scroll `broadcastScrollData` loop; that is A4's scope, untouched).
+**Rejected alternative (don't relitigate):** hooking the paste (`CheckInvPaste`) — it fires on every inventory rearrange with no way to distinguish acquisition from shuffle (would re-key seeds + re-broadcast SD on every bag shuffle).
+**Retest markers (two-client MP, after recompile):** repeat the Bonded floor-trade repro with the picker's INVENTORY PANEL OPEN, clicking the scroll into the hand and pasting it into a slot → scroll reads "Bonded …" + gold immediately, deploy yields full kills; picker saves+reloads → identity intact, Original Trainer still the true tamer. Swap-drop: hold any item, click a dropped Tame Scroll (held item swap-drops) → peer picking up the swap-dropped scroll gets full data. Then delete the two A5 guards (below) and re-run a plain panel-open trade to confirm nothing regresses.
+
+### Diablo's Apoc Boom makes enemy monsters' HEALTH GO UP — observed "500 health bars" on one monster — fix built 2026-07-07 (Lua only, no recompile needed), awaiting retest
+**Reported:** 2026-07-07 (user): every DiabloApocalypseBoom hit on an enemy monster makes its displayed health INCREASE; one monster reached "500 health bars of health". **Environment: two-client MP** (all user playtests are two-client MP).
+**Confirmed root cause = Leads 1 + 2 together (Lead 3 ruled out by read: `isDamageShifted=false` on a display-scale `_midam` is the correct/vanilla-matching convention — same as `ProcessHorkSpawn`; no double-shift found).** `OnMonsterMissileHit` (the mod's own resolution hook, fired from `CheckMissileCol` for any golem-involved missile) had **no client-authority gate at all** — every client that has the missile in its local `Missiles` list (every client, for rendering) independently: (1) rolls `MonsterTrapHit`'s to-hit via the **free-running global `GenerateRnd`**, not the per-monster synced stream (Lead 2 — clients legitimately disagree on hit/miss per tick), and (2) on a local hit, `ApplyMonsterDamage` both subtracts HP **locally** and broadcasts `CMD_MONSTDAMAGE` (Lead 1) — which every OTHER client's `OnMonstDamage` receiver applies **on top of its own independent roll**. Vanilla never has monster-vs-monster missile combat (only Diablo/pet missiles ever hit a monster with a golem on either end), so this code path never needed a resolver-authority concept the way "my own click" (player attacks) or "damage to my own player" already have. `ProcessApocalypseBoom` retrying `CheckMissileCol` every tick until `_miHitFlag` (a miss retries next tick) multiplies the number of distinct mis-synced roll events, compounding the stacking into the observed "500 health bars".
+**Fix (`init.lua`, `OnMonsterMissileHit`, pure Lua — no engine/C++ change):** added an authority gate right after the existing "vanilla Golem / non-ally → engine default" early return. Resolve `authority` = the attacking side's owner if the attacker is a tracked ally, else the victim's owner (mirrors "the attacker's client resolves the swing", the same shape as every other owner-authoritative decision in the mod). If the **local** player isn't that owner, return `0` (an explicit miss) instead of proceeding — no RNG roll, no `ApplyMonsterDamage`, no broadcast, on every non-owning client. The missile simply keeps flying and expires on duration on those clients (cosmetic-only: a bystander client may see the boom "miss" while the owner's client shows the real impact — an accepted class of residual per the project's existing minor-visual-desync precedents). Covers the primary boom AND the multi-target spread (both resolve through the same `OnMonsterMissileHit` chokepoint). SP is unaffected (the owner is always the local player there).
+**Retest markers (two-client MP):** tame/deploy Diablo, cast Apocalypse at a wild monster repeatedly — target's HP only ever goes DOWN, no "500 health bars"; spread booms on multiple hostiles all resolve sanely on both clients; a normal elemental pet's ranged attacks (Bonded Fire/Lightning/Magic casters) against wild monsters are undamaged in behavior (still land, still scale) — this fix applies to every golem-involved missile hit, not just Diablo's boom, so a quick spot-check there is worth it too.
+
+### Diablo Tame Scroll presentation: must get the full UNIQUE-scroll treatment (drop "Lvl 30"; hover shows "The Butcher's Cleaver" again) — fix built 2026-07-08 (Lua only, no recompile needed), awaiting retest
+**Reported:** 2026-07-07 (user, from the passing Taming-Diablo playtest). Two symptoms, one root:
+1. The scroll reads **"Tamed Lvl 30 The Dark Lord"** — the "Lvl N" belongs to the normal-species format; user wants the unique format ("Tamed/Bonded The Dark Lord", no level), like every other tamed unique.
+2. Hovering the scroll shows **"The Butcher's Cleaver"** — a regression of the resolved "Unique tame scroll hover popup" bug (see Fixed, below): the `OnPrepareUniqueInfoBox` handler populates the custom box only for `seedGetUniqueType(seed) >= 0`, so Diablo's gold (`magical = 2`) typeId-keyed scroll falls through to `DrawUniqueInfo` → `UniqueItems[_iUid = 0]` = Butcher's Cleaver.
+**Root:** Diablo is the one quest monster that is NOT unique, so his scroll rides the normal typeId seed path (`DIABLO_TYPE_ID` = 110 / `seedIsDiablo`, built 2026-07-06). The gold TIER was wired into every quality-stamping site, but every **unique-PRESENTATION** switch still keyed on `seedGetUniqueType(seed) >= 0` alone.
+**Fix (`init.lua`, pure Lua, all PRESENTATION-only — no engine change):** added `scrollPresentsAsUnique(seed)` next to `seedIsDiablo` (`= seedGetUniqueType(seed) >= 0 or seedIsDiablo(seed)`, commented as presentation-only — paths needing a real unique index keep `uIdx >= 0` semantics unchanged: `broadcastSpawnAlly`'s wire `uniq`, `categoryFromScroll`'s `CAT_DIABLO` branch, `isUniqueTypeDeployed`/`isDiabloDeployed` dedup, `recoverScrollData`'s `getUniqueName` lookup). Swept every surface that had the gap:
+- **`buildScrollParams`** (feeds fresh tame, recall, AND Pepin recovery-stock naming via `recoverScrollData`→`buildScrollParams`): the "no Lvl N" branch condition now also fires on `seedIsDiablo(seed)`.
+- **`OnCustomItemRecreated`** (name after a pfile/delta round-trip): same branch widened; the dead `typeId == DIABLO_TYPE_ID` gold-stamp special-case in the else branch was removed since Diablo now never reaches it.
+- **`OnPrepareUniqueInfoBox`/`setCustomUniqueBox`** (the hover popup — the actual Butcher's-Cleaver bug): the early-return guard now also passes for `seedIsDiablo(item.seed)`, with a new `elseif diablo` branch supplying the name (`getNameByTypeId(DIABLO_TYPE_ID)`) and a `tier = "Boss"` (unconditional — Diablo is always a Boss, independent of Bonded state, unlike a Bonded normal monster which has no champion/boss tier of its own).
+- **`OnGetMonsterDisplayName`** (`allyDisplayName`'s unique flag, live deployed-pet name): now ORs in `monster.typeId == DIABLO_TYPE_ID` — read straight off the live monster so it covers the own-ally AND remote-ally (CO-broadcast) branches uniformly with one check, no need to thread Diablo-ness through `rec` fields.
+- **Speedbook entry naming and the floating pet-infobox**: no separate fix needed — the speedbook reads `item.name` as-is (already correct via the two fixes above), and the floating stat box (`petFloatingBase`/`GameDrawComplete`) never renders a name/level string at all (stats only), so it was never affected.
+**Retest markers:** tame Diablo → scroll reads "Tamed The Dark Lord" (no "Lvl 30"); hover shows the custom Diablo infobox (Boss tier, HP, kills — NOT Butcher's Cleaver); recall/redeploy and a save/reload round-trip keep the correct name; once Bonded, the name/prefix updates to "Bonded The Dark Lord" and hover still shows the correct popup.
+
+### MP: floor-traded Tame Scroll carries STALE Plane-2 data — traded Bonded scrolls lose kills/Bonded state (Fallen One kills=0 repro 2026-07-08; Bonded Dark Lord lost a session) — ROOT CAUSE FOUND + fixed 2026-07-08, needs recompile
+**Reported:** 2026-07-07 (user): Hunter A drops a Tame Scroll containing a **Bonded** monster; Hunter B sees the floor/picked-up scroll named "Tamed …"; deploying yields a NON-Bonded ally with stale/zero kills. Escalation same day: a traded **Bonded Dark Lord** came back "~7 kills, not Bonded" — a whole session of progression missing. **Clean repro 2026-07-08 (user, screenshots):** Remote Bonds a Fallen One (kills 1, `BONDED_KILLS_PER_LEVEL=1`), drops the scroll, same-level Host sees "Tamed Lvl 1 Fallen One" and deploys a kills=0 pet — while the pet's OH tag ("Ash") arrived CORRECTLY.
+**ROOT CAUSE (verified in engine source, and it reproduces every observed detail):** `lua::OnItemDropped` — the hook that runs the mod's entire drop-time announce (`setItemDeltaModData` + the `SD` blob broadcast) — fired **only inside `TryDropItem` (`plrctrls.cpp`), which the ordinary MOUSE drop never reaches.** The mouse click-on-world drop (`diablo.cpp` `LeftMouseDown` held-item branch, line ~406) sends `CMD_PUTITEM` directly; `CloseStash` (`inv.cpp`) is a third uncovered drop site. All user drops are mouse drops → **no SD was ever sent at drop time, ever.** The vanilla item wire (`TItem`) carries no modData (by design — frozen format), so the peer's floor copy is blob-less, and pickup fell back to `receivedBlobs[seed]` = whatever the LAST SD for that seed carried — the fresh-tame / pickup-re-key era snapshot. That snapshot has kills=0 (Fallen One) or ~7 (the Dark Lord's re-key moment) **but a correct OH name — exactly matching the screenshots.** Not Diablo-specific, not ordering, not a stale-overwrite: the fresh data simply never left the owner's client. (The 2026-07-08 earlier entry's "on paper every send carries current kills" was wrong precisely here: it assumed `OnItemDropped` fires on a mouse drop.)
+**Fix (engine, 2 one-line call-outs — needs recompile):** `lua::OnItemDropped(...)` now fires at ALL three manual-drop paths — added the identical call-out (immediately after the same `NetSendCmdPItem(true, CMD_PUTITEM, …)`, `HoldItem` still valid, mirroring the existing `TryDropItem` site) to the `diablo.cpp` `LeftMouseDown` mouse drop and the `inv.cpp` `CloseStash` force-drop. Zero logic; no mod loaded = a no-op event. Documented in `cpp_changes/items.md` §OnItemDropped.
+**Fix (init.lua, two completions):**
+1. **Pickup blob candidates now include the level delta** (`items.getItemDeltaModData(currentDeltaLevel(), oldSeed)`) alongside `invItem.modData` / `receivedBlobs` / own tables — the delta is the authoritative at-rest copy (written by the dropper's `OnItemDropped` and mirrored by the SD receiver; survives a session restart, which `receivedBlobs` does not).
+2. **Pickup now re-stamps the scroll's name/gold** via the new shared `restampScrollPresentation(item)` (factored out of `OnCustomItemRecreated`): the peer's floor copy was recreated from the vanilla wire (no encoded name) BEFORE the SD arrived, so even with the kills restored the item kept reading "Tamed" until the next recreate round-trip — the old "heals after deploy+recall" symptom.
+**Removed (2026-07-08, the item-pipe consolidation):** the monotonic `blobKills` guard (SD receiver + freshest-wins pickup selection). It was built BEFORE the root cause was found, did not fix this bug, and defended against a trigger nobody could name: an SD can't regress a cache because only the current holder of a seed ever announces it, every emitter builds the blob from live tables at send time, and same-sender messages arrive in order. Guarding against confusion (vs. reconciling against nameable loss, like the RS heartbeat) is the anti-pattern; the guard, `blobKills`, and the freshest-wins comparison are deleted. Pickup now uses explicit first-non-empty precedence: item's own blob → level delta → `receivedBlobs` → own tables.
+**Retest markers (two-client MP, after recompile):** Remote Bonds a pet (kills ≥ threshold), MOUSE-drops the scroll, same-level Host picks it up → **after pickup** the inventory scroll reads "Bonded …" + gold, hover infobox shows the right kills, deploy yields a Bonded ally with full kill count. (Known cosmetic: the FLOOR copy's hover name on the peer may still read "Tamed" pre-pickup — `CMD_PUTITEM` recreates it before the SD lands; the pickup restamp is the correctness point.) Repeat with the Host off-level at drop time (walks to the level later — exercises the delta path; a programmatic drop now rides `CMD_SPAWNITEM`, see the 2026-07-08 item-pipe consolidation in `development_notes.md`). Also drop-and-quit: Remote drops, quits to menu, Host relogs/reloads the level → scroll present with full data.
+
+### MP PvP: a Hunter killed by another Hunter's TAMED monster drops items via the killed-by-MONSTER path — should be the killed-by-PLAYER path — fix built 2026-07-08, needs recompile
+**Reported:** 2026-07-07 (user): when a hostile Hunter's pet lands the killing blow on a player, the victim drops items as if killed by a wild monster. A tamed monster is its owner's weapon — the death should follow the killed-by-player path (ear drop, vanilla PvP semantics).
+**Engine shape (confirmed by read):** the drop branch in `StartPlayerKill` (`player.cpp`) is purely `deathReason == Player ? drop ear : drop items`, and the ear is built from the **victim's own** `_pName` — so there's NO killer id to plumb; the whole fix is flipping the one `DeathReason` enum for a hostile pet's fatal blow. Every monster-sourced hit hardwired `MonsterOrTrap` at two sites: the missile `PlayerMHit` dispatch (`CheckMissileCol`, `missiles.cpp` — the golem-gated site where `OnGolemMissileCanHitPlayer` already lives) and the melee apply (`MonsterAttackPlayer` → `ApplyPlrDamage`, `monster.cpp`).
+**Fix (one new thin hook `OnGolemKillIsPlayerKill(golem, player) -> bool|nil`, default false = vanilla; needs a recompile):** added at both sites, each hoisting the hardcoded `DeathReason::MonsterOrTrap` into a local initialised to `MonsterOrTrap` and flipped to `Player` only when `(source.flags & MFLAG_GOLEM) != 0 && lua::OnGolemKillIsPlayerKill(&source, victim, false)`. The gate mirrors the sibling `OnGolemMissileCanHitPlayer` (MFLAG_GOLEM predicate, args already in scope); `PlayerMHit`/`ApplyPlrDamage` already take a `DeathReason`, so no signatures changed. Engine files: `Source/missiles.cpp` (`CheckMissileCol`), `Source/monster.cpp` (`MonsterAttackPlayer`), `Source/lua/lua_event.hpp`/`.cpp`, `assets/lua/devilutionx/events.lua`. **Vanilla-invariant:** default false + MFLAG_GOLEM-only ⇒ wild monsters and the vanilla Golem hit the exact same `MonsterOrTrap` path; a Golem can't hit players anyway. **Lua handler (init.lua, next to the missile/apoc golem hooks):** returns true only for `isTamedAlly(golem.id)` with a resolvable owner that is **hostile** to the victim (not the owner itself, not peaceful) — a peaceful/own pet or a vanilla Golem keeps vanilla. Runs on the victim's own client (`&player == MyPlayer`, the only place drops are generated), where hostility resolves from synced `friendlyMode` + the `remoteAllies` roster; the reason then rides `CMD_PLRDEAD` to peers (they apply it without regenerating drops), so every client agrees on ear-vs-items. Docs: hook row in `lua_api_reference.md`; engine rationale in `cpp_changes/missiles.md` + `monsters.md`. Ties into the roadmap residual "verify which Ear type the Hunter drops" — the ear is the **victim's** class ear (vanilla `StartPlayerKill`), unchanged.
+**Retest markers (two-client MP, players hostile):** Hunter A's tamed pet lands the killing blow on Hunter B (both melee and a ranged pet) → B drops an **ear** (B's own), not gear; a wild monster killing B still drops **gear**; a vanilla Golem is unaffected; peaceful pets can't kill players anyway. Confirm both clients see the same drop.
+
+### MP debug assert: joining a level with another client's allies mid-fight — `InitializeSpawnedMonster` owner-tile assert (`monster.cpp:3935`) — fix built 2026-07-07, needs recompile
+**Reported:** 2026-07-07 (user, two-client, dlvl 16): Remote (level owner) had 4 allies actively fighting wild monsters; Host came down via town portal → CRT assert on the joining client: `!MyPlayer->isLevelOwnedByLocalClient() || (freePosition && position == *freePosition)`, stack = SP receiver → `monsters.netSpawnAt` → `InitializeSpawnedMonster`.
+**Root cause (vanilla assumption our spawn path legitimately violates — debug-only, no release bug):** the assert encodes "the level owner allocated this spawn tile, so on the owner it must be free." Level ownership follows the lowest player id on the level, so the HOST took ownership the instant it arrived — and then materialized the REMOTE's allies at their wire positions. A mid-fight ally is adjacent to wild monsters by definition, and on the joiner's freshly loaded level one of those tiles was occupied → assert. The engine path right below already handles it (the anticipated-occupied Crawl fallback + position sync convergence) — release builds are graceful; the tripwire is just over-strict for network-materialized extended-region spawns.
+**Fix (engine, one line + comment, `Source/monster.cpp`; documented in `cpp_changes/monsters.md`):** the assert is scoped with `monsterId >= MaxMonsters ||` — ally spawns allocate exclusively in the extended region, vanilla slots keep the full invariant, and unmodded the clause is dead (extended ids can't exist). Needs a recompile; until then this exact assert is safe to **Ignore** in-session (the fallback code runs).
+**Status:** fix built 2026-07-07 — retest: join a level where a peer's allies are actively fighting.
+
+### MP: RM/CR receivers dead for every LIVE copy — `m.hitPoints` is not a binding (fix built 2026-07-07, awaiting retest)
+**Found:** 2026-07-07, from the wild-Diablo-kill log: repeated `attempt to compare nil with number` (RM receiver) / `number with nil` (CR receiver).
+**Root cause:** the hp guards added in the 2026-07-05 death-RM/CR-replay fixes read `m.hitPoints` — the Lua monster binding is **`health`** (`hitPoints` doesn't exist → nil → the comparison throws → the whole handler dies, same failure class as the bare-`log` and `seedGetUniqueType(nil)` bugs). Net effect since 2026-07-05: every RM about a live copy was dropped (recalled/dead remote allies lingered until the roster heartbeat or reaper caught them) and every same-level CR was dropped (captured wild monsters stayed alive locally = unreaped ghosts + no delta kill). The self-healing layer masked much of this — which is why it survived the verified sessions.
+**Fix (init.lua):** both guards now read `m.health` (display-scale HP; `<= 0` keeps the intended "already dying" semantics).
+**Retest markers:** remote recalls an ally in view → it despawns immediately (not after ~2.5s); remote tames a wild monster in view → it vanishes cleanly. (The 2026-07-07 clean Diablo-kill session ran the fixed receivers with zero Lua errors — general health confirmed; the two specific markers still unexercised.)
+
+### MP: deploying a UNIQUE from a session-recovered scroll crashes the SP broadcast — `recoverScrollData` has no typeId for uniques (fix built 2026-07-07, awaiting retest)
+**Found:** 2026-07-07, same log: `invalid value (nil) at index 3 in table for 'concat'` in `broadcastSpawnAlly` from `finishDeploy`.
+**Root cause:** a unique scroll's seed stores `UNIQUE_SEED_FLAG + uniqueIdx` in the low bits — there is no species typeId to decode, so `recoverScrollData`'s unique branch (correctly) builds `data` without one. Local deploy works (`spawnUniqueAt` needs only the unique index), but the SP wire needs the base species for the receiver's `netSpawnAt` (`EnsureMonsterType` always takes a typeId) — `data.typeId` = nil → concat error → `finishDeploy` aborts after track/makeGolem but before snapshot/bonded/recalc, and peers never learn the ally exists (only the RS heartbeat's RQ resend — which reads the live `mon.typeId` and works — could heal it). Fresh same-session recalls were immune (`allyToMonsterData` snapshots `ally.typeId` live), which is why verified unique deploys never hit it.
+**Fix (init.lua, three sites):** `finishDeploy` and the DR receiver's SP echo now broadcast `monster.typeId` from the LIVE monster (mirroring the RQ resend path); the DR sender sends `data.typeId or -1` (the DR receiver only reads typeId in its non-unique branch).
+**Retest markers:** save/reload with a unique's scroll in inventory, deploy it in MP → no Lua error, peer sees the unique; same via the non-owner DR path.
+
+### Monk-archetype Hunter crashes instantly on entering any dungeon level (missing no-shield block animation)
+**Reported:** 2026-07-06 (user): stat the Hunter into the Monk archetype (str≥100, mag≥50, dex≥200) → entering any dungeon level crashes immediately. Visible crash is the known **masked-assert net-thread race** (`std::array<PlayerState,4>` subscript-out-of-range in `SNetGetTurnsInTransit`, `dvlnet/base.cpp:554` — see the 2026-07-05 "host hard-crashes" entry for the mask mechanism); the primary fatal is an asset-load failure on the main thread.
+**Root cause (asset gap, not logic):** `OnPlayerCanBlockWithoutShield` (Monk archetype) makes `CalcPlrBlockFlag` (`items.cpp:2710`) set `_pBlockFlag = true` while unarmed, holding a staff, or holding a single one-hand weapon — exactly vanilla Monk semantics. But the Hunter renders on **warrior sprites** (`sprites.tsv: classPath warrior`), and the warrior sheet only has block (`bl`) animations for **shield** combos (u/d/h). On dungeon entry `InitPlayerGFX` (`player.cpp:2280`) eagerly loads every graphic; the Block case (`player.cpp:2241`) skips only in town or when `_pBlockFlag` is false, so it requests e.g. `plrgfx\warrior\wln\wlnbl.cl2` — a file that does not exist (the engine's own comment at `items.cpp:2837` calls this exact load a crash) → `app_fatal` → masked by the net-thread race. Town is safe (Block loader returns early in town) and bow is safe (two-handed, not staff → `_pBlockFlag` stays false) — matching the observed "fine in town, dies on stairs".
+**MP note:** the hook is class+stat gated (deliberately, per the derived-stat join fix), so every client computes `_pBlockFlag = true` for a Monk-Hunter it renders — any peer sharing a level with one crashes the same way. The fix must make the animation resolvable, not just dodge the local load.
+**Fix (user-chosen: no copied assets — redirect the block animation instead):** new generic query hook **`OnGetPlayerBlockGraphic(player) -> "Hit"|"Stand"|nil`** consulted at all three places the engine equates "blocking" with the `bl` sheet (`Source/player.cpp`): the `LoadPlrGFX` Block case (skip loading `bl` when redirected — closes the `InitPlayerGFX` crash), `StartPlrBlock`'s `NewPlrAnim` (play the redirected graphic), and `Player::getGraphic()`'s `PM_BLOCK` case (save-restore/`SyncPlrAnim` + mid-block `CalcPlrGraphics` resolve the same graphic — no dangling nullopt sprites). Default `"Block"` at every site = byte-for-byte vanilla. `DoBlock` ends on `AnimInfo.isLastFrame()`, so block duration simply follows the played animation; the block sound (`PlaySfxLoc` in `StartPlrBlock`) is unaffected. New readonly Lua property `player.isHoldingShield`. Mod handler (init.lua, next to `OnPlayerCanBlockWithoutShield`): Monk-archetype shieldless Hunter blocks with the **hit-recovery flinch** (`"Hit"` — exists for every combo); shield combos keep the real `bl`. Class+stat+equipment gate = synced state, deterministic on every client. The flinch is 6 frames vs vanilla's 2-frame block, so the existing `OnGetAnimationSkipFrames` handler gained a `"Block"` branch (same gate as the redirect) returning skip 4 → only 2 frames show, keeping the block lockout at vanilla duration; shield blocks keep the default skip. Fallback if the flinch reads badly: swap `"Hit"`→`"Stand"` in the redirect handler for a no-animation block.
+**Status:** fix built 2026-07-06 — awaiting compile + playtest (enter dungeon as Monk-archetype Hunter unarmed/staff/1H; verify block plays the flinch and shield block is unchanged).
+
+---
+
+## Review backlog — MP/Lua subsystem audits (opened 2026-07-08; no visible bugs, fine-tooth comb)
+
+The 2026-07-08 item-pipe audit found a whole CLASS of problem, not one bug: mechanisms hand-rolling
+engine machinery on an unverified premise, plus guards defending against triggers nobody could name.
+Every custom MP/Lua subsystem was built in the same style and deserves the same pass. **Method (apply
+all four to each area):**
+1. **Premise check** — any comment/doc line justifying a mechanism by citing an engine limitation
+   ("the engine can't X", "CMD_Y was rejected because…") gets re-verified against engine source. The
+   items lesson: the limitation was hallucinated; the engine carried the item fine.
+2. **Native-overlap check** — before keeping any mod transport/registration, read the engine
+   receiver it parallels end-to-end. If a vanilla command already does it (validation, replication,
+   delta, dedup), ride the vanilla command and delete ours.
+3. **Guard check** — every guard/comparison must have a NAMEABLE trigger (concrete sequence of events
+   that produces the bad input). Can't name it → delete it. Reconciling against nameable loss (RS
+   heartbeat) is fine; guarding against confusion is not.
+4. **Consumer check** — every net message, cache table, and persisted field must have a live consumer
+   list; orphaned or double-covered consumers die.
+
+**Disposition rule:** an audit that finds a defect spawns a normal High/Low entry; an audit that
+comes back clean gets a dated "audited clean" line here and the item is struck. One subsystem at a
+time, in this order (highest state-loss risk × most accreted first):
+
+**Status 2026-07-08:** A5 done (defect → the cursor-pickup High entry — fix BUILT, awaiting recompile
++ retest; its two symptom-guards get deleted after the retest passes), A1 done (clean), A2 done
+(clean — presence map + cadence verified), A3 done (clean — all 29 CO fields consumer-verified).
+**Next: A4 (receivedBlobs + the two SD floods). Head start from the A3 pass:** `receivedBlobs` has
+exactly ONE reader left (pickup precedence #3) and the SD announce sites are mapped — change-time
+(placeScrollOnFloor / addTameScrollToInventory / OnItemDropped / OnItemPickedUp re-key), the
+`OnLevelEnter` unmasked flood (= the JOIN-side announce of my own held scrolls — the mirror of the RQ
+answer), and the RQ-answer masked flood (= session bootstrap for the requester, though it re-fires on
+every level change, not just join). The open question that decides the floods' fate: does the mod's
+level-delta BLOB store ride the engine's join-time delta transfer (a late joiner inheriting a delta
+containing a pre-join floor drop — does `DeltaLoadItems` find the blob)? If NOT, a floor scroll
+dropped before a client joins reaches that client through NO channel (both floods only cover HELD
+scrolls) — that would be a defect, not a deletion. Read `item_moddata.md` + the delta-transfer engine
+path before disposing.
+
+### ~~A1. Ally spawn/remove/capture plane vs the engine's monster delta~~ — audited CLEAN 2026-07-08
+**Audited 2026-07-08 — no redundant write, no unnameable guard, nothing to delete.** The verified facts,
+so nobody re-derives them:
+- **Q1 (double-written delta records): none.** Deltas are PER-CLIENT in devilutionX (each client keeps its
+  own; joiners inherit one), and a mod capture/removal is silent — it never traverses the engine's death
+  broadcast — so each client's own `removeAsKilled`/`recordDeltaKill` write is the SOLE writer of that
+  record on that client. Premise verified in source: `LuaDeltaKillMonster` mirrors `delta_kill_monster`
+  field-for-field (`position` + `hitPoints=0`, `msg.cpp` — nothing else is written by either).
+- **The ally-spawn plane writes NO delta records at all**: `netSpawnAt`/`spawnAt`/`makeGolem` are
+  local-only (the engine's `CMD_SPAWNMONSTER`, which fills `spawnedMonsters` + a live `DMonsterStr`, is
+  deliberately unused — the settled level-local-typeIndex decision, `cpp_changes/net.md`). Allies persist
+  by live resync (RQ/RS→SP), never at rest. The mod's `removeDeltaSpawnedMonster` calls are therefore pure
+  HYGIENE: they erase `DMonsterStr` records that the engine's own cross-level sync traffic (HP corrections
+  etc.) fills into ally slots — records only the mod knows are stale. Not redundant; sole eraser.
+- **Q2 (CR-replay-on-RQ trigger): nameable, keep.** (a) The same-level CR receiver with NO live copy at
+  arrival (id lookup fails mid-transition) records nothing — and blind-recording there is UNSAFE by
+  design (the slot may have been legitimately reused by an ally SP; a blind delta-kill would clobber it),
+  so the safe reconciliation point is exactly the requester's next level entry, when a regenerated ghost
+  has a live non-golem hp>0 copy to test. All three guards in the replayed-CR branch are load-bearing on
+  every healthy replay, not defensive cruft. (b) The receiver-failure class was OBSERVED in production
+  (the `m.hitPoints` nil-compare killed CR receivers for two days; the replay bounded the damage).
+- **Q3 (RM invalidation vs reaper): disjoint windows, no double coverage.** RM live-branch = the primary
+  remover; RM `m==nil` branch = off-level delta hygiene (the reaper can't reach it — it only inspects
+  live copies). The RS roster heals a lost RM only for a SAME-LEVEL owner (the RS receiver gates on
+  `sender:isOnActiveLevel()`); the reaper's two branches cover exactly the windows RS cannot: owner left
+  the GAME (no RS will ever come) and owner left the LEVEL (its RS is ignored here), debounced 2 passes.
+  Each removal-loss window has exactly ONE healer. (This settles A2's removal side; A2 retains the
+  presence side + cadence review.)
+- Consumer check: `capturedNaturalMonsters` written at capture, consumed by the RQ answer, reset at
+  GameStart — live, bounded, session-scoped. ✔
+
+### ~~A2. The self-healing layer's coverage map (RS heartbeat + RQ replay + reaper + deploy timeout)~~ — audited CLEAN 2026-07-08
+**Audited 2026-07-08 (presence side + cadence; removal side was settled by A1) — no triple coverage,
+no vestigial healer, nothing to delete.** The verified facts:
+- **Transport premise re-checked:** the pipe is reliable/in-order, so a "lost" one-shot in practice
+  means a RECEIVER-side drop — the `sender:isOnActiveLevel()` gate rejecting a message while a
+  player-level state lags, a mid-transition `remoteAllies` reset, or a handler error (the
+  production-observed `m.hitPoints` class) — all nameable; true in-flight loss is not the trigger.
+- **Presence loss-window → healer map: exactly TWO mechanisms, disjoint primary windows.**
+  (1) *Peer arrives after the deploy* (was never sent an SP) → `OnLevelEnter` RQ (primary bootstrap;
+  clears `remoteAllies` first, owners answer masked SP+CO pairs). (2) *SP gate-dropped on an on-level
+  peer* → RS missing-diff → rate-limited RQ back → idempotent SP+CO resend; repeats every heartbeat
+  until healed. A dropped RQ heals via the same RS-diff path on the next heartbeat. The reaper and the
+  deploy timeout touch presence not at all (removal hygiene / requester-side scroll refund). A
+  FALSE-positive reap self-corrects by design: the owner's next RS lists the id → missing-diff → RQ →
+  idempotent SP. No window has a third consumer; both healers earn their keep.
+- **One gap found and CLOSED (2026-07-08, pure Lua, no recompile):** a CO-only loss (SP applied, its
+  paired CO eaten by a receiver error — the production-precedented `m.hitPoints` failure class) had no
+  bounded healer; it healed only opportunistically on the next CO retrigger. Closed by extending the
+  EXISTING RS missing-diff: a roster-listed id tracked in `remoteAllies` but with `profile == nil` now
+  counts as missing → the same rate-limited RQ → the answer resends the SP+CO pair (SP side idempotent).
+  No new mechanism, no new message — the heartbeat that already owns SP loss now owns CO loss too;
+  detection latency ≤ one heartbeat. A CO merely in flight self-clears before the next heartbeat, so
+  the check can't churn. (`net_sync.md` §4 RS row updated.)
+- **Guard check:** the RS missing-diff's `not isDeployedAlly(id)` has a nameable trigger (a
+  sender-listed id transiently aliasing our own STALE `deployedAllies` entry inside the one-frame
+  isGolem-prune window); its suppression is bounded — the next heartbeat retries after the prune. Keep.
+- **Cadence review — all justified, keep as-is:** `ROSTER_INTERVAL_TICKS = 50` (~2.5s) bounds
+  presence/removal detection at ≤2.5s for ~20 B per Hunter per interval — negligible traffic. The
+  RQ-back rate limit is one GLOBAL timestamp (not per-sender): two owners with simultaneous deficits
+  heal one heartbeat apart — bounded, fine. `DEPLOY_TIMEOUT_TICKS = 100` (~5s) rides the SYNCED tick
+  clock, and ticks only advance while every client processes turns — so "owner stalled >5s while the
+  clock ran" cannot happen; the timeout fires only for a genuinely absent/never-answering owner, which
+  also closes the "late SP after a self-refund" double-deploy from a stall (remaining late-echo edges
+  are A7's scope). The reaper-cadence nit found here (sole frame-paced cadence in the layer) was CLOSED 2026-07-08
+  by the `GameTick` migration: a new thin `GameTick` event now fires at the end of each engine
+  game-logic tick (`GameLogic`, `diablo.cpp` — needs recompile), and ALL simulation-side upkeep
+  (reaper — now every 10 ticks on the synced clock, debounce unchanged — RS heartbeat, deploy
+  timeout, both leashes, stale-entry prune, buff-fingerprint recalc) moved onto it;
+  `GameDrawComplete` keeps only render work (flash blink, floating infobox). Frames can span
+  multiple catch-up ticks in MP, so the tick event is the correct domain for sim bookkeeping.
+
+### ~~A3. CO message field-by-field (29 fields, ~157 B of the 255 B budget)~~ — audited CLEAN 2026-07-08
+**Audited 2026-07-08 — every field has a live consumer, no engine-native overlap, no deletable
+double-carriage.** The verified facts:
+- **Engine-overlap check (fields 3–9, applied live to the monster):** the engine never syncs monster
+  stat BASELINES — vanilla monsters read static species data; the engine wire carries damage events
+  (`CMD_MONSTDAMAGE`) and position corrections only. A pipe-spawned ally materialises with species
+  defaults on the peer, so the CO snapshot (maxHP/HP/minDam/maxDam/toHit/AC/resistance) is the only
+  carrier of the owner's computed values. The DR path's owner-side HP pre-apply makes the follow-up CO
+  apply idempotent, not redundant (CO also corrects every later recalc).
+- **Consumer list (profile fields 10–29, all live):** `isMinion` → missile-scaling guard + kills-display
+  guard; `bonded` → TRN gate, glow mirror, outline, and the one-shot promotion-Flash EDGE detect
+  (prevProfile false→true — needs the explicit flag; a kills-derived recompute can't tell a fresh
+  record from a witnessed transition); `bondedImm` → the pierce-vs-target-pet check; `baseMaxDamage` →
+  the spell-scaling phys-buff strip + fbox base row; `sharePct`/`magicCurrent`/`resFire`/`resLight`/
+  `resMagic` → elemental spell scaling (owner-computed, incl. uncapped res the receiver can't read);
+  `trnVariant` → recolour index (owner's random roll); `nearBonded` → pre-Bonded flash;
+  `baseMin`/`baseToHit`/`baseAC`/`baseMaxHp` → fbox base rows (pre-buff snapshot exists only on the
+  owner); `kills` → remote-pet display name + infobox; `gamemode`/`areaLevel`/`ohId`/`ohName` → fbox
+  provenance rows. Nothing orphaned.
+- **Derivable-but-kept (3 fields, deliberate under DM1 "receivers apply, never re-derive"):** `isMinion`
+  (from the SP's `parentId`), `bonded`/`nearBonded` (from `kills` + the live monster level). Cost ≈2 B
+  each; keeping them keeps the own/remote profile struct uniform (`ownAllyProfile` builds the same
+  shape live) and the promotion edge-detect explicit. Not cruft — recorded so nobody "optimises" them
+  into receiver-side derivation.
+- **The CO∩SD double-carriage suspicion (kills/gamemode/areaLevel/ohId/ohName) is answered: two
+  disjoint windows, both earn their keep.** CO is the only reliable carrier for a LIVE pet's display —
+  the receiver's `remoteAllies` record keeps no seed, and the consumed scroll's SD is not guaranteed
+  cached (the held-scroll floods cover only scrolls IN inventory). SD is the only carrier for the
+  AT-REST scroll (no live monster exists to hang a CO on). Same content, different key (monster id vs
+  seed), different lifetime — not redundant transport.
+- **Guard check (receiver):** sender level gate (per-level slot ids), `rec == nil` drop (SP not yet
+  processed; healed by the SP/CO pairing + RS-diff), the <28-delimiter malformed return, and the
+  `prevProfile` edge-detect (replay suppression) — all nameable, keep.
+- **Budget:** ~157 B nominal + a player-name-bounded `ohName` stays comfortably under the 255 B cap. ✔
+
+### A4. `receivedBlobs` + join-time held-scroll SD floods (the items-audit phase 2, already named)
+Consumer-by-consumer: with floor blobs at rest in the level delta and pickup precedence explicit, what
+still READS `receivedBlobs`? Is the `OnLevelEnter` every-held-scroll SD broadcast + the RQ-answer
+flood double-covering the same trade window? Either shrink to one announce site or name each one's
+window.
+
+### ~~A5. Seed-space guards left from the collision era~~ — audited 2026-07-08, defect found (not a deletion yet)
+**Audited 2026-07-08.** Every clean inventory-entry path is collision-proof by construction: mints
+(`allocSeed`) and `AutoGetItem`-pickups (restamp) stay behind `scrollCounter`; the hero save persists
+counter + items atomically (load max-merges upward); Pepin buy-back restores seeds the counter already
+covered; the stash is barred to scrolls (`OnItemAllowedInStash`). BUT both guards still have a nameable
+trigger through one hole: **the cursor pickup path (`InvGetItem`, inventory panel open) never fires
+`OnItemPickedUp`** — a scroll can enter inventory un-restamped (counter trigger: crash-rollback floor
+scroll or a 1-in-128 charTag collision, then cursor-picked; gold trigger: ANY cursor-picked trade).
+Both guards are symptom-patches over that root, which got its own High entry (top of this file).
+**Disposition: fix the root, then delete BOTH the `OnLevelEnter` counter bump and the gold fixup —
+their only triggers die with it.** (The third thing in that handler, the per-held-scroll SD broadcast,
+is A4's question — untouched.)
+
+### A6. `healHeldScrollModData` (GameStart blob heal)
+Claims to restore "modData truncated by the last save→reload". Name the truncation source in the
+CURRENT save path (`luamoddata` rebuilds blobs at load; held-item modData was never hero-saved by
+design — so is this a heal, or the primary load-time rebuild mislabeled as one?). If it IS the
+primary path, rename/re-comment it as such; if it's a guard for a pre-`luamoddata` format, delete
+(no-backwards-compat rule).
+
+### A7. DR/DF deploy-echo protocol completeness
+The design (mirror of `CMD_REQUESTSPAWNGOLEM`, single-authority slot allocation) is settled — audit
+only the edges: every owner-side rejection answers DF (a silent return voids a consumed scroll until
+the timeout); the timeout self-refund + a LATE SP/DF echo can't double-refund or double-deploy
+(pendingDeploys clears exactly once on every path, incl. across a level change).
+
+### A8. Pepin recovery registry state machine (lower priority, mostly local state)
+`injured`/`lost`/`lostfull` transitions: verify the "backed up as lost the moment it deploys, deleted
+on clean recall/retame" invariant on EVERY exit path (death, level exit, quit, crash, capture-refund),
+and that no state is unreachable. Related hardening already on file: the `OnSavePlayerData` silent
+uint32 truncation (see the Low entry below) — fold into this pass.
 
 ---
 
 ## Low / Deferred
 
-_(none open)_
+### Weapon attack-speed frames: Monk-archetype Hunter with a Staff of Haste is visibly slower than a Sword of Haste — NOTE ONLY, not yet investigated
+**Reported:** 2026-07-07 (user): figure out the proper frames for certain weapon attack speeds — e.g. a Monk-archetype Hunter swinging a **Staff of Haste** is still visibly slower than the same Hunter swinging a **Sword of Haste**. No digging done yet; likely territory when picked up: per-weapon-class attack animation lengths on the warrior sprite set the Hunter renders with, vs the archetype's `OnGetAnimationSkipFrames` handling and how Haste (`_pIFlags` speed tiers) maps frames per weapon type.
+
+### Pepin recovery came back EMPTY once, after the CRASHED wild-Diablo session — did not reproduce; diagnostic on file
+**Reported:** 2026-07-07: reloading the Hunter from the crashed session (2 allies deployed at the kill + 1 earlier death) → nothing at Pepin. Ruled out by code read: persistence cadence (60s MP hero writes incl. `luamoddata` — `pfile_update`), load parser (registry section parses early + guard-robust; later-section errors can't un-populate it), stocking (`encodeDwBuff` clamps sanely; the 4-entry eviction can't clear all). Top remaining suspect: the engine-side `OnSavePlayerData` reader (`lua_event.cpp`) **silently truncates the blob at the first non-uint32 value** — fragile, worth hardening someday.
+**Downgraded 2026-07-07:** the clean wild-Diablo re-kill session (fixed init.lua) had every dead ally recoverable — the chain verified end-to-end; the one-off loss is attributed to the crashed session's Lua-error cascade. If it EVER recurs: watch debug output for `Lua error` (1) at character load (`OnLoadPlayerData`) and (2) at Pepin open (`StoreOpened`); no errors + empty stock → dig the save-side truncation.
 
 ---
 
 ## Fixed
+
+### MP: killing WILD Diablo → null-sprite assert during the ending ✓ (2026-07-07 — clean retest after the receiver fixes)
+**Reported:** 2026-07-07 (accidental wild-Diablo kill while playtesting Taming Diablo): `clx_sprite.hpp:614 value_.data_ != nullptr` — a monster-type `AnimStruct.sprites` deref, i.e. an animation change on a species whose GFX were never loaded on this client; `DiabloDeath`'s kill-all (which force-plays Death on every monster on the level) is where such a poisoned slot dies loudly. The session ran with the `m.hitPoints` receiver bug + the unique-SP typeId bug active (entries under High at the time, now below) — heavy poisoned sync state of exactly the class that produces bad monster slots. Hook audit was clean (wild Diablo reads byte-for-byte vanilla through `OnMonsterCanEndGame`; every mod spawn path runs full `InitMonsterGFX`).
+**Resolution:** re-kill of wild Diablo after those two Lua fixes → no assert; all allies died in the kill-all and were recoverable at Pepin. Resolved as fallout of the receiver fixes; the exact poisoned slot was never captured. If it EVER resurfaces on a clean session: breakpoints on `assert_fail` (`appfat.cpp:76`) + `DisplayFatalErrorAndExit` before reproducing.
+**Kept from the dig:** the kill-all kills allies by setting the death animation directly, bypassing `MonsterDeath`/`OnMonsterDeath` (untracked deaths, roster holding dead slots through the ending pan) — addressed separately by the ally kill-all exemption (`OnDiabloDeathCanKillMonster`, built 2026-07-07, needs recompile; `development_notes.md`).
+
+### MP: joining fails with "Player sent an invalid packet" when the host's Hunter has allocated stats ✓ (2026-07-06 — verified in two-client re-test)
+**Reported:** 2026-07-06 (user): a debug-leveled Hunter with allocated (legal, in-bounds) stats makes the joining client fail with "invalid packets"; drinking a Potion of Forgetting (clearing allocations) lets the join succeed.
+**Root cause (the appearance-hooks lesson, extended to DERIVED-STAT hooks):** `UnPackNetPlayer` (`Source/pack.cpp`) RECOMPUTES the incoming player's derived stats locally (CalcPlrInv) and validates them field-by-field against the packed values — `_pDamageMod`, `_pIAC`, `_pIMinDam/_pIMaxDam`, `getBaseToBlock`, etc. All the Hunter archetype hooks that feed those fields (`OnGetPlayerDamageMod`, `OnGetArmorLevelBonus`, `OnGetBlockChanceBonus`, `OnGetUnarmedDamageFloor`, `OnPlayerHasIronSkin`, …) were gated `isMyPlayer(p)` — so the OWNER computed them with the archetype formulas while the RECEIVER recomputed the same Hunter with vanilla formulas → mismatch → validation rejects the packet. With allocations cleared, no archetype threshold is met, both sides compute vanilla, join passes — exactly the Potion-of-Forgetting observation. (bugs.md had flagged `OnGetPlayerDamageMod`'s isMyPlayer gate as "review if needed" in the renderer-crash entry — this is that shoe dropping.)
+**Fix (init.lua):** every archetype/derived-stat/animation hook now gates on CLASS (`p.className == HUNTER_CLASS`) — they read only synced state (class, stats, level), so a class gate is deterministic on every client. Converted: `OnGetAnimationSkipFrames`, `OnGetPlayerDamageMod`, `OnPlayerHasCriticalStrike`, `OnPlayerHasIronSkin`, `OnPlayerHasNaturalResistance`, `OnGetBowDamageMod`, `OnGetArrowVelocityBonus`, `OnPlayerCanBlockWithoutShield`, `OnGetArmorLevelBonus`, `OnGetHitRecoveryThreshold`, `OnGetUnarmedDamageFloor`, `OnGetBlockChanceBonus`, `OnPlayerHasArmorPierce`, `OnPlayerCanCleave`. **Exception (deliberate, commented in-code): `OnGetMaxAttributeValue` stays isMyPlayer** — it is an allocation-UI freeze, and `UnPackNetPlayer` clamps incoming base stats against `GetMaximumAttributeValue` BEFORE applying them; class-gating it would clamp a freshly-leveled joiner's stats against the receiver's stale copy. Remote Hunters must resolve the static TSV maxima there.
+**Also fixed in passing:** UI-only gates stay isMyPlayer (item use, speedbook, Wirt, potions, shrines) — those are genuinely local.
+**Status:** ✅ verified 2026-07-06 (joins clean with allocated-stat Hunters).
+
+### MP: Pepin recovery missing on the REMOTE client for its dead allies ✓ (2026-07-06 — verified in re-test after the tracking fixes)
+**Reported:** 2026-07-06 (user): the remote player had allies (the starter scavenger included) die in the dungeon and could not recover ANY of them at Pepin — plural, so the remote's whole recovery chain looks broken, not one bad scroll.
+**Analysis:** the recovery chain is fully LOCAL to the owner — `putRecovery(seed, …, "lost")` at deploy, the `OnMonsterDeath` owner-branch upgrade to "injured" (requires the dying ally to be a TRACKED own entry with a seed), and the `StoreOpened` stocking from `recoveryRegistry` (skips silently only if `recoverScrollData` can't decode the stored dwBuff; drops an entry whose seed is found in inventory = "bought back"). No net dependence found — the prime suspect is the tracking desync this same session exhibited (5 deployed with 4 counted): an ally that dies while UNTRACKED takes the `entry == nil` path in `OnMonsterDeath` and its registry entry is never upgraded/announced. The deploy-time "lost" backup should still stock as a free recovery though, so if this reproduces after the tracking fixes it is NOT chaos fallout and needs its own dig (next suspects: the death-time `recoveryRegistry` upgrade writing a dwBuff `recoverScrollData` rejects, or the found-in-inventory cleanup eating entries).
+**Status:** ✅ verified 2026-07-06 — resolved alongside the tracking fixes (roster heartbeat + gate/eviction batch); the exact failing leaf was never isolated. If it ever recurs, the splitter: (1) no "…has been defeated and can be revived at Pepin" message at death → tracking layer; (2) message but absent at Pepin → stocking path (check for a same-seed scroll in inventory — the intentional "bought back" drop).
+
+### MP: remote's starter scavenger missing its OH (Original Hunter) tag ✓ (2026-07-06 — verified in re-test)
+**Reported:** 2026-07-06 (user), same session as the over-deploy + Pepin failures, all centered on the starter scavenger. (OH is only rendered on the DEPLOYED pet's floating box — the scroll item shows none — so the pet box is the only observable.)
+**Root cause (heal gap):** the pet box's OH line reads `scrollOrigin[seed]` with NO local fallback (`petFloatingBase` shows "?" when the record is missing). The starter scroll is the one scroll minted BEFORE the player exists (`OnCreatePlrItems`), and the `GameStart` heal (`healHeldScrollModData`) only filled an EMPTY NAME on an existing record — an ABSENT record (lost across a save→reload) was silently skipped, leaving the OH line blank forever. Related prior fix: "starter scroll shows blank OH name" (Fixed below) — same area; that fix handled empty-name, this handles record-gone.
+**Fix (init.lua, `healHeldScrollModData`):** when a held Tame Scroll has NO origin record, restore the true trainer from the scroll's own modData blob if it survived; otherwise claim it for the local Hunter (only our own creation is ever record-less AND blob-less — a traded scroll always carried its trainer in the blob/SD). Then the blob is rebuilt as before.
+**Status:** ✅ verified 2026-07-06.
+
+### MP: deploy gates ignored MP state — two Skeleton Kings at once, >4 allies per Hunter, and a unique scroll eaten with no refund ✓ (2026-07-06 — verified in re-test)
+**Reported:** 2026-07-06 (user): (a) two Skeleton Kings deployed simultaneously (one Tamed, one Bonded); (b) more than 4 allies deployable per Hunter; (c) an El Chupacabra (unique champion) Tame Scroll consumed on deploy with no monster and no refund.
+**Design rule (user-confirmed): one instance of a unique PER HUNTER** — regardless of Tamed/Bonded status or difficulty; Hunter A and Hunter B fielding their own copies of the same unique is fine. The gate's own-pets-only scan was therefore the RIGHT semantics; what failed was the state it reads and an error inside it:
+1. **Double-deploy of the same unique by ONE Hunter = the gate scanning a desynced roster.** `isUniqueTypeDeployed` reads `deployedAllies` — if the first copy is alive but UNTRACKED (a DR deploy whose SP echo was lost or arrived after its `pendingDeploys` entry was gone; or the pre-fix stale-alias corruption from the same session), the gate legitimately finds nothing and the second scroll passes. Closed structurally, not by the gate: the roster heartbeat reaps an owned-but-unlisted copy everywhere, and the deploy timeout refunds the scroll of an echo that never completed — an untracked live copy can no longer persist to fool the gate.
+2. **Cap constant didn't match the design:** the gate used `MAX_ALLIES = 8`, while every reservation (extra monster slots, extra species, `RECOVERY_CAP`) is sized on `MAX_DEPLOYED_PER_HUNTER = 4` — 8 deployed allies + minions can even exhaust the reserved slot pool. Fixed: `MAX_ALLIES = MAX_DEPLOYED_PER_HUNTER`; the DR path also enforces the requester's cap owner-side (counting its non-minion `remoteAllies`).
+3. **The scroll-void: `seedGetUniqueType(nil)` runtime error.** Minion entries in `deployedAllies` have `seed = nil`, and the gate loop did `entry.seed % 4096` on them — an arithmetic-on-nil error that silently kills the running hook (same failure class as the old `OnGolemCanSelect` bare-`log` bug). Casting a unique scroll whose unique was NOT already out forces a full-array scan → first minion entry → error. In `OnCanCastScroll` that meant "gate silently allows"; in `OnSpellActionFrame` the error aborted the handler AFTER the engine had committed to consuming the scroll → no spawn, no refund, scroll gone. Exactly reproduces El Chupacabra with Skeleton Kings + raised skeletons on the field. Fixed: nil-seed guard in the loop.
+The level owner additionally mirrors both gates authoritatively on the `DR` path, counted over the REQUESTER's pets only (`remoteAllies` filtered by `ownerId == senderId`): its unique already out → `DF`; at its cap → `DF`.
+**Addendum (2026-07-06 retest — remote reached FIVE deployed, the starter scavenger among them; back to four after the scavenger died):** fourth hole found — the **DR round-trip window**. On a non-level-owner client an ally enters `deployedAllies` only when the SP echo returns, so scrolls cast during the round trip weren't counted by either gate (cap or duplicate-unique). Fixed: `pendingDeploys` (in-flight DR requests) now count as deployed in both gate sites (`countPendingDeploys`) and in `isUniqueTypeDeployed`; NOT counted by the buff share. The owner-side DF answers + timeout refunds from the earlier fix cap the pending set's lifetime. NOTE: the 5th being the STARTER scavenger, which also showed a missing OH tag and failed Pepin recovery (own entries), keeps a second suspect alive — the starter pet being deployed while UNTRACKED (an untracked ally is invisible to the count). If a 5th deploy recurs after this fix, check whether the extra pet responds to a recall cast (untracked ones don't).
+**Additional void hole closed (DR path):** a non-owner deploy whose `DR` nobody answers (no live level owner, guard mismatch, lost message) used to hang forever in `pendingDeploys` — and a level change silently DROPPED in-flight requests. Now: the level owner answers `DF` for **every** rejection (including the sender-level guard), `pendingDeploys` entries are tick-stamped and self-refund after `DEPLOY_TIMEOUT_TICKS` (~5s) with a screen message, and a level change refunds instead of dropping.
+**Status:** ✅ verified 2026-07-06 (per-Hunter unique rule + 4-cap holding; no scroll voids).
+
+### MP: cross-client ally REMOVAL unreliable — leftover allies after the owner leaves the level, duplicate Leoric after off-level deploy/recall cycles ✓ (2026-07-06 — verified across re-test sessions)
+**Reported:** 2026-07-06 (user). Two symptoms, one suspected theme:
+1. When one client leaves a level (stairs or return-to-town after death), the staying client often keeps seeing the departed owner's allies standing there — the level-exit auto-recall's `RM`s are not taking effect.
+2. Host idle in town; Remote on dlvl3 tames Leoric, then deploys → recalls → deploys him. Host then enters dlvl3: **two** Leorics (Remote sees one); recalling on Remote leaves Host still seeing two; clears only after everyone leaves and Host re-enters.
+**Analysis so far (code-read, no smoking gun in the logic):** every receiver path reads correct: the `RM` receiver removes a live copy / invalidates the off-level delta; the `CR` receiver records the off-level kill; ally slots allocate exclusively in the extended region (`AllocateHighMonsterSlot`), so the `DeltaLoadMonsters`/`DeltaLoadEnemies` extended-region gate blocks ally delta ghosts at load; `CMD_LUAMSG` and `CMD_SYNCDATA` share one in-order stream and the engine receive path has no sender-level gating. The duplicate-Leoric evidence is consistent with **the CR kill record AND the recall RMs all failing on the town-bound Host**: no kill record → the natural (wild) Leoric regenerates from the level seed at Host's load = Leoric #1; RQ→SP materialises the tamed Leoric = #2; the later recall-RM also failing leaves both. Notably the only messages that ever mattered CROSS-level (CR, RM) are the ones failing, while same-level traffic (SP/CO/RQ) demonstrably works — suggesting a cross-level receive-side hole not yet identified, or send-time loss during the sender's transition window.
+**Hardening landed now (init.lua):**
+- `reapOrphanedRemoteAllies` also reaps a remote ally whose owner left the **level** (not just the game), debounced over consecutive passes — a lost RM can no longer leave a live copy standing on same-level peers (closes symptom 1's user-visible effect regardless of the transport question).
+- The `trackDeployedAlly` stale-entry eviction (scroll-mislabeling entry below) removes the one state-corruption mechanism found in this session's chaos; it may have been feeding these symptoms too (a poisoned roster mis-recalls / mis-RMs).
+**Self-healing sync layer (2026-07-06, after a second repro of the ghost Leoric):** one-shot messages structurally can't be trusted forever, so the mod now re-asserts state periodically instead (see `net_sync.md` §4):
+- **`RS` roster heartbeat** (~2.5s, `system.gameTick()`-paced): each Hunter broadcasts the ally/minion slot ids it owns; same-level peers remove tracked copies not in the roster (lost RM with the owner still present — the case the reap can't cover) and RQ a resend for listed ids they're missing (lost SP). The SP receiver is now idempotent (an already-tracked live copy is kept, not clobber-reinitialised), so resends are safe; RQ answers now include minions.
+- **Capture replay:** the captor logs its capture-removals per level (`capturedNaturalMonsters`) and replays them as `CR`s in every RQ answer — a client whose delta missed the kill (the suspected ghost-Leoric mechanism: the regenerated natural monster) reaps the live ghost on arrival and re-records the kill. The CR receiver's live branch gained an `hp > 0` guard so a replay never touches an already-dead copy.
+**Status:** ✅ verified 2026-07-06 — with the self-healing layer in, no ghosts across sessions (removal on level exit + death-return, minion cleanup on owner level-change, no duplicate uniques); final session fully clean. The one-shot delivery question was never conclusively answered — the reconciliation layer makes it moot (any lost RM/SP/CR now self-heals within a heartbeat). If ghosts EVER resurface, note whether they clear within ~5s (heartbeat working; spawn-side issue) or persist (heartbeat failing — new information).
+
+### MP: recalled scroll mislabeled — Skeleton King's Tame Scroll showed "Bonded Plague Beast"; deploy+recall self-healed ✓ (2026-07-06 — verified in re-test)
+**Reported:** 2026-07-06 (user), immediately after the duplicate-Leoric session above. The scroll DEPLOYED the Skeleton King correctly (seed-derived identity intact); only the item's name/HP payload was another ally's.
+**Root cause (mechanism found; trigger sequence not pinned):** `deployedAllies` entries hold the live monster by slot reference, and `trackDeployedAlly` inserted blindly. If a stale entry (whose monster is gone but which was never untracked — e.g. during the removal chaos above) shares its slot id with a NEW deploy, `deployedAlliesById[id]` gets overwritten but the ARRAY keeps both entries reading the SAME live monster. A later recall of the stale entry builds the scroll from `entry.monster` (the wrong, current occupant — a Bonded Plague Beast) while keeping `entry.seed` (the Skeleton King's) → mislabeled scroll that still deploys the right species; the next clean recall rebuilds the name = self-heal observed.
+**Fix (init.lua):** `trackDeployedAlly` now evicts any existing entry under the same slot id from the array before inserting (one slot = one live monster invariant).
+**Status:** ✅ verified 2026-07-06 (deploy/recall-heavy sessions, scroll names stayed correct).
+
+### MP: tamed-monster floating infobox sometimes shows base stats as 0 (buffed stats correct) ✓ (2026-07-06 — verified in re-test)
+**Reported:** 2026-07-06 (user); seen on both own and remote allies' boxes.
+**Analysis:** the box's base column comes from `entry.base` (own; written by `snapshotAllyBase` in every deploy path) or the CO profile fields (remote; `(entry.base and ...) or 0` on the sender). No static path yields zeros for a cleanly tracked OWN ally — but a stale-entry slot alias (previous entry) makes the array and `deployedAlliesById` disagree, and a CO built from a poisoned entry carries wrong/zero base fields to peers. Plausibly the same root event as the scroll mislabeling.
+**Also landed:** the DR receiver's `remoteAllies` record now stores `capturedDifficulty`/`uniqueIdx` (was `{ ownerId }` only — the level owner's own infobox for a requester's pet read difficulty 0 until the CO arrived); an idempotent SP resend keeps the cached CO profile (no infobox blank until the next CO).
+**Status:** ✅ verified 2026-07-06 (resolved with the eviction + resend fixes; no zeros in later sessions).
+
+### MP, Friendly Fire ON: Chain Lightning kept hitting a peaceful ally's pets after a hostile→friendly round-trip ✓ (2026-07-06 — verified in re-test)
+**Reported:** 2026-07-06 (user): with FF on, friendly state initially respected; after toggling hostile (hits work, correct) and back to friendly, chain lightning kept hitting the other Hunter's pets.
+**Root cause (coverage gap, not stale state):** the direct-target veto (`OnMissileCanTargetMonster` → `arePeaceful`) reads the LIVE `friendlyMode` flags and did recover on re-friend — but the FF-on collateral-path veto swept **only `deployedAllies` (own pets)**. A peaceful other-Hunter's pet was never in the path check, so a bolt could be aimed straight past it and the FF-on damage layer (vanilla `MonsterMHit`; `OnPlayerMissileCanHitGolem` deliberately returns nil with FF on) hit it in the path. The hostile round-trip only mattered positionally: during the hostile phase the pets closed in on the caster (retaliation), so afterwards they sat in the caster's firing lines — before it they idled out of them. Intended design (confirmed by user): the crawl must not pick a target when ANY protected allied pet is in the way, a friendly Hunter's pets included.
+**Fix (init.lua):** `ownAllyNearPath` → `friendlyAllyNearPath` — the sweep now covers own deployed allies AND tracked remote allies whose owner is at peace with us (same slot-alias guards as the reaper); a hostile owner's pets stay fair PvP game. Own ∪ peaceful-remote is the same protected set on every mutually-peaceful client, so the veto stays cross-client symmetric. FF-off behaviour unchanged (path veto still skipped; the damage layer makes the line safe).
+**Status:** ✅ verified 2026-07-06 (final session: FF veto behaviour correct through hostile→friendly round-trips).
 
 ### MP: owner quitting to menu with allies deployed leaves ghost golems for peers ✓ (2026-07-05 — verified in two-client re-test)
 **Reported:** 2026-07-05 (user; the last residual sibling of the recall/death delta bugs, reproduced deliberately: owner quits to menu with allies deployed → a peer later loading that level sees ghost golems).
@@ -136,6 +463,7 @@ Vanilla never hits this: every vanilla dynamic spawn (golem, King's skeletons, H
 **Symptom:** After taming, the reward scroll dropped on the floor disappeared and couldn't be interacted with (non-owner tamer); peers never saw it.
 **Root cause:** `items.spawnAt` placed the item via `PlaceItemInWorld` + `LuaDeltaRegisterDroppedItem` (`Source/msg.cpp`) — both **local-only**, no networked drop. So the level owner's authoritative delta never held it; a delta resync purged it on a non-owner tamer, and the owner couldn't agree to a pickup. `CMD_DROPITEM` was rejected as the fix because its receiver runs `IsPItemValid` + `SyncDropItem`→`RecreateItem` (the validation/recreate chokepoints the blob architecture avoids).
 **Fix (Lua only, `init.lua`):** new `DI` pipe message. `dropTameScroll` (and the deploy-refund path) broadcast it after the `SD` blob; each same-level peer — **including the level owner** — runs `items.spawnAt` locally. Every client now holds the item (owner's authoritative delta included → no purge), and MP pickup is identity-keyed (seed/index/createInfo), so the independently-placed copies are removed together. The encoded name is gated Hunter-only on the receiver (DM5). Tame Scrolls intentionally stay out of auto-pickup (`items.spawnAt` sets no item record).
+**CORRECTION (2026-07-08 audit):** the `CMD_DROPITEM` rejection rationale above was WRONG — it conflated the blob (which the vanilla wire truly can't carry) with the item (which it carries fine: createInfo 0 passes `IsPItemValid`, and `RecreateItem`'s createInfo==0 branch fires `OnCustomItemRecreated`, rebuilding the name — proven end-to-end by the playtested hand-drop trade, which rides `CMD_PUTITEM` through those exact chokepoints). The `DI` message hand-rolled what `CMD_SPAWNITEM`/`OnSpawnItem` does natively and has been **removed**: `items.spawnAt` now announces `CMD_SPAWNITEM` itself. See `cpp_changes/items.md` (rejected list) + `development_notes.md`.
 
 ### MP: create-game crash (null `MyPlayer`) + CO message truncation ✓ (2026-06-25 — verified, allies/Bonded now sync)
 **Symptom:** Creating an MP game as a new Hunter crashed (`Player::GetTargetPosition`, `this == nullptr`). Separately, remote clients didn't receive a deployed ally's full combat/cosmetic state (no Bonded display, no hover).

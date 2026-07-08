@@ -172,12 +172,11 @@ that if we later receive that scroll via a live trade (the floor item carries no
 pickup can restore its identity from here. (A scroll dropped by a player who then LEFT is instead restored
 from the level delta — see `items.setItemDeltaModData` / `item.modData`.)
 
-### `broadcastScrollData` / `broadcastDropScroll` (forward decls)
-`broadcastScrollData` announces a scroll's full identity blob to peers keyed by seed (no-op in SP), assigned
-in the net section once the message type + `luanet.send` are in scope. `broadcastDropScroll` replicates a
-freshly dropped Tame Scroll floor item onto same-level peers so the item exists on every client (incl. the
-level owner, whose delta is authoritative); assigned in the net section, used by the floor-drop helpers
-which run before that section is reached.
+### `broadcastScrollData` (forward decl)
+Announces a scroll's full identity blob to peers keyed by seed (no-op in SP), assigned in the net section
+once the message type + `luanet.send` are in scope; used by the floor-drop helpers which run before that
+section is reached. Only the BLOB needs this mod transport — the floor ITEM replicates itself over the
+engine wire (`items.spawnAt` announces `CMD_SPAWNITEM`; a hand drop sends `CMD_PUTITEM`).
 
 ### `packStringToWords` / `unpackStringFromWords`
 The luamoddata save blob is a uint32 sequence, so a name string is byte-packed: a length word, then
@@ -821,13 +820,17 @@ for a held scroll (display/trade cache only, no delta write). `mask` answers one
 other clients. The blob is the LAST field (it is binary — `string.pack` output — and may contain "|"; the
 receiver captures everything after the 2nd "|" verbatim). No-op in single-player.
 
-### `broadcastDropScroll`
-Replicate a freshly dropped Tame Scroll floor item onto same-level peers. Each peer spawns an identical item
-locally (same seed/mapping/position) so the floor item exists on every client — crucially on the level owner,
-whose delta is authoritative, so an item dropped by a non-owner is never purged by a delta resync. Pickup is
-identity-keyed (seed/index/createInfo), so the independently-placed copies are removed together. MUST be sent
-AFTER the scroll's SD message so the receiver already has the blob cached. The name is the LAST field
-(free-form, no "|"). No-op in single-player.
+### `placeScrollOnFloor`
+The ONE floor-drop primitive for a Tame Scroll (fresh tame, corrupt-scroll refund, full-inventory deploy
+refund all route through it). The ITEM replicates itself: `items.spawnAt` announces it over the engine wire
+(`CMD_SPAWNITEM` — same-level peers spawn a live copy via `SyncDropItem`, every client incl. the sender
+registers it in the level delta through `OnSpawnItem`, dedup built in), exactly like a vanilla quest/reward
+drop; the level owner's authoritative delta therefore always holds it, and MP pickup removes the
+identity-keyed (seed/index/createInfo) copies together. Only the BLOB needs mod plumbing, because the
+vanilla item wire/save structs are fixed-width: it is written at rest into the level delta
+(`setItemDeltaModData`, survives rejoin/restart) and announced live over SD (peers' caches). A peer's copy
+is recreated from the wire (no encoded name), so it reads as the base scroll until `OnCustomItemRecreated`
+/ the pickup restamp re-derives the name.
 
 ### `broadcastCombatOverride` / `broadcastAllCombatOverrides`
 `broadcastCombatOverride` broadcasts one owned ally's final combat values + caster profile (the CO message);
@@ -1251,20 +1254,23 @@ relationships always agree. Generic: works for any class's golems, not just Hunt
 All allies stay within the engage radius when chasing: blocked if the ally itself is outside the lit area (let
 idle pull it back), or chasing an unlit / out-of-range target.
 
-### `ownAllyNearPath` / `OnMissileCanTargetMonster`
-`ownAllyNearPath` answers: is one of OUR deployed allies/minions on or NEAR the straight line from (sx,sy) to
-(tx,ty)? Used to refuse a spell target whose firing line passes a pet, so an auto-targeting bolt is never fired
-"through" (or close past) a pet. Chain Lightning's spread bolts travel a line and `CheckMissileCol` along it,
-splashing tiles ADJACENT to the rounded path — an exact on-line test let a pet sitting one tile off the line
-still get hit (and, if it died, crash via the deferred re-entrant minion cleanup). So we pad: veto if a pet is
-within `PATH_PADDING` tiles (Chebyshev) of any sampled point. The target endpoint is included (catches a pet
-hugging the targeted enemy); the source endpoint is skipped so a pet next to the cast origin doesn't veto every
-shot. `OnMissileCanTargetMonster` is the pure TARGETING gate for auto-targeting spells (Chain Lightning spread
-+ bounces, Bone Spirit homing), fired with the candidate monster and the missile's origin tile (`source`);
-returning false means "do not fire a bolt at this monster": (1) never target our own allies/minions, nor a
-friendly other-Hunter's pet; (2) beyond base game, never target a monster whose firing line passes one of our
-own pets. A vanilla Golem matches neither pet test (and is not in `deployedAllies`), so it stays a normal,
-fully targetable base-game monster.
+### `friendlyAllyNearPath` / `OnMissileCanTargetMonster`
+`friendlyAllyNearPath` answers: is a PROTECTED pet — one of OUR deployed allies/minions, or a tracked remote
+ally whose owner is at peace with us — on or NEAR the straight line from (sx,sy) to (tx,ty)? Used to refuse a
+spell target whose firing line passes a pet, so an auto-targeting bolt is never fired "through" (or close past)
+a pet. A HOSTILE owner's pets are deliberately not swept (fair PvP game); own ∪ peaceful-remote is the same
+protected set on every mutually-peaceful client, so the veto stays symmetric across clients. Chain Lightning's
+spread bolts travel a line and `CheckMissileCol` along it, splashing tiles ADJACENT to the rounded path — an
+exact on-line test let a pet sitting one tile off the line still get hit (and, if it died, crash via the
+deferred re-entrant minion cleanup). So we pad: veto if a pet is within `PATH_PADDING` tiles (Chebyshev) of any
+sampled point. The target endpoint is included (catches a pet hugging the targeted enemy); the source endpoint
+is skipped so a pet next to the cast origin doesn't veto every shot. `OnMissileCanTargetMonster` is the pure
+TARGETING gate for auto-targeting spells (Chain Lightning spread + bounces, Bone Spirit homing), fired with the
+candidate monster and the missile's origin tile (`source`); returning false means "do not fire a bolt at this
+monster": (1) never target our own allies/minions, nor a friendly other-Hunter's pet; (2) beyond base game
+(only while Friendly Fire is ON — with FF off the damage layer makes the line safe), never target a monster
+whose firing line passes a protected pet. A vanilla Golem matches neither pet test (and is in neither tracking
+table), so it stays a normal, fully targetable base-game monster.
 
 ### `OnGolemCanSelect`
 Cursor selection (controls hover, infobox, and click-targeting). Own allies/minions are always selectable
@@ -1463,10 +1469,13 @@ inventory. Local player only: `AutoGetItem` runs for remote players too (on ever
 mutate only OUR own inventory item, never a remote player's. Locates the LIVE copy of the scroll we just picked
 up by matching on seed + dwBuff + modData rather than seed alone: if the incoming seed momentarily collides
 with a scroll we already hold (two characters' counters can both be low), this re-stamps the one we just
-acquired, never the existing one. Sources the scroll's full self-describing identity preferring the item's own
-blob (set for a floor item restored from the level delta — a scroll whose dropper has left the game), else the
-live announce cache (a trade where the dropper is present, since the wire carries no blob on the floor item),
-else our own tables (re-picking up a scroll we already owned). The Original Trainer rides INSIDE the blob, so
+acquired, never the existing one. Sources the scroll's full self-describing identity by explicit
+first-non-empty precedence: the item's own blob (set by the dropper's local spawn or restored from the level
+delta by `DeltaLoadItems`; empty only when the engine recreated the item from the item wire, which by design
+carries no blob) → the level-delta blob (the authoritative at-rest copy) → the live SD cache (same content
+for a floor item; also covers a scroll announced while held) → our own tables (re-picking up a scroll we
+already owned). Every channel is written from live state at drop/announce time, so whichever is present is
+current — no cross-channel freshness comparison. The Original Trainer rides INSIDE the blob, so
 the true tamer carries with the scroll however it arrived; fall back to the seed-keyed cache only if the blob
 had no name. Drops the old seed's tables only if no OTHER held scroll still uses it, so a transient seed
 collision never deletes a different scroll's data; clears the floor item's blob from the current level's delta

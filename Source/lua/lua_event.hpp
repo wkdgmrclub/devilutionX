@@ -14,6 +14,7 @@ namespace devilution {
 struct Player;
 struct Monster;
 struct Item;
+enum class player_graphic : uint8_t;
 
 namespace lua {
 
@@ -31,15 +32,18 @@ void OnMonsterTakeDamage(const Monster *monster, int damage, int damageType);
 void OnMonsterDeath(const Monster *monster);
 bool OnGolemCanTargetMonster(const Monster *golem, const Monster *candidate, bool defaultValue);
 bool OnGolemCanTargetGolem(const Monster *golem, const Monster *candidate, bool defaultValue);
+bool OnGolemCanTargetPlayer(const Monster *golem, const Player *candidate, bool defaultValue);
 bool OnGolemCanChaseTarget(const Monster *golem, const Monster *target, bool defaultValue);
 bool OnGolemCanSelect(const Monster *monster, bool defaultValue);
 // Returns: nullopt = engine default wander; empty optional<Point> = stand still; Point = walk toward.
 // When a Point is returned, GolumAi sets enemyPosition to it and tries AiPlanPath first (wall routing),
 // then falls back to RandomWalk if AiPlanPath returns false (clear line).
 std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTarget, Point enemyPosition);
-// `enemy` is the golem's current target monster, or null when it has none. A handler derives
-// distance / line of sight from it (e.g. monster:hasLineOfSightTo). Returns true to consume the tick.
-bool OnGolemChooseAction(const Monster *golem, const Monster *enemy);
+// `enemy` is the golem's current target monster and `enemyPlayer` its current target player; at most
+// one is non-null (a player target only exists when OnGolemCanTargetPlayer granted it). A handler
+// derives distance / line of sight itself (e.g. monster:hasLineOfSightTo). Returns true to consume
+// the tick.
+bool OnGolemChooseAction(const Monster *golem, const Monster *enemy, const Player *enemyPlayer);
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY);
 void OnSpellActionFrame(const Player *player, int spellId, int spellType, int targetX, int targetY);
 void OnPlayerGainExperience(const Player *player, uint32_t exp);
@@ -76,12 +80,14 @@ void OnOilyShrine(const Player *player);
 bool OnShouldExcludeWirtItem(const Player *player, int itemTypeInt, bool defaultValue);
 bool OnVendorWillBuyItem(const Item *item, bool defaultValue);  // query: false = vendor won't buy this item
 std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defaultGraphic);
+player_graphic OnGetPlayerBlockGraphic(const Player *player, player_graphic defaultGraphic); // query: which graphic plays for blocking ("Block", "Hit", or "Stand")
 void OnItemUsed(const Player &player, int mid, int spellID);
 std::string OnGetMiscItemDescription(const Item *item);
 bool OnPrepareUniqueInfoBox(const Item &item); // true = Lua populated slot, set _iUid = UITEM_LUA_CUSTOM
 
 void LoadModsComplete();
 void GameDrawComplete();
+void GameTick();
 void GameStart();
 void OnNewCharacter(const Player &player);
 void OnCreatePlrItems(Player &player);
@@ -110,9 +116,28 @@ uint8_t *OnGetMonsterTRN(const Monster *monster);
 int RegisterMonsterTRN(const uint8_t *data256);
 bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue);
 bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue);
+// Fired when a dying monster would run the game-ending death sequence (quest completion, level-wide
+// kill, camera pan, ending cinematic). Return false to let it die like any other monster instead;
+// default true = vanilla.
+bool OnMonsterCanEndGame(const Monster *monster, bool defaultValue);
+// Fired from the game-ending death sequence's level-wide kill for each monster about to be killed.
+// Return false to spare it; default true = vanilla.
+bool OnDiabloDeathCanKillMonster(const Monster *monster, bool defaultValue);
 bool OnGolemCanRunAI(const Monster *monster, bool defaultValue);
 bool OnMonsterCanShowResistances(const Monster *monster, bool defaultValue);
 bool OnMissileCanTargetMonster(const Monster *monster, Point source, bool defaultValue);
+// Fired for a player-minion (MFLAG_GOLEM) sourced missile resolving against a player. Return false to
+// veto the hit (the missile passes through and keeps flying); default true = vanilla resolution.
+bool OnGolemMissileCanHitPlayer(const Monster *golem, const Player *player, bool defaultValue);
+// The mirror direction: fired for a player-sourced missile resolving against a player-minion
+// (MFLAG_GOLEM) target. Same veto semantics; default true = vanilla resolution.
+bool OnPlayerMissileCanHitGolem(const Player *player, const Monster *golem, bool defaultValue);
+// Fired from the Apocalypse victim scan when it evaluates a player-minion, which vanilla always
+// excludes. Return true to let the scan target it; default false = vanilla exclusion.
+bool OnApocalypseCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue);
+// Fired (MFLAG_GOLEM sources only) to classify a player-minion's fatal hit on a player. Return true to
+// treat it as a player kill (ear/PvP death path); default false = vanilla monster/trap kill (item drop).
+bool OnGolemKillIsPlayerKill(const Monster *golem, const Player *player, bool defaultValue);
 int OnGolemMissileDamage(const Monster *golem, int missileId, int dam);
 // Fired for a missile's resolution against a monster when either the source or the target is a
 // player-minion (MFLAG_GOLEM); source may be null (e.g. a trap). Lets a mod fully own the hit

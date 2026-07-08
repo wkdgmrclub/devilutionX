@@ -9,7 +9,7 @@ documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
 
 ---
 
-## ▶ Current State (updated 2026-06-25)
+## ▶ Current State (updated 2026-07-06)
 
 - **Engine cleanup (Branch A): COMPLETE & compliant.** (`HISTORY.md` → "Phase 10 — Engine cleanup".)
 - **Net sync (Branch B): COMPLETE & two-client playtested** — graduated to `HISTORY.md` ("Phase 10 — Net
@@ -17,18 +17,32 @@ documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
   `net_sync.md` (mechanism + data model); per-session detail in memory `project_net_sync_progress`.
 - **Tamed-pet Infobox + Floating Infobox + OHID: COMPLETE & playtested** — graduated to `HISTORY.md`.
 - **Everything in the priority list through item 2 is shipped and playtested. ▶ Current work = item 3, Taming
-  Diablo (§3).**
+  Diablo (§3) — BUILT 2026-07-06, awaiting compile + playtest (`development_notes.md`).**
 
 ---
 
 ## ▶ Priority order (user)
 
-**Deferred indefinitely — minion friendly-fire:** handled by DevilutionX's built-in **Friendly Fire toggle**
-(an existing game option). No mod work; do not build a bespoke minion FF system.
+**Minion friendly-fire — resolved (no bespoke system):** governed by DevilutionX's built-in **Friendly
+Fire toggle**, extended to pets in **both directions** (the engine applies the toggle only to
+player-vs-player missiles; `PlayerMHit`/`MonsterMHit` have no faction/toggle checks of their own — see
+`lua_api_reference.md`): pet missiles vs players via `OnGolemMissileCanHitPlayer` (never the owner; FF off
++ friendly-mode owner → no player hit), player missiles vs pets via `OnPlayerMissileCanHitGolem` (FF off +
+owner/peaceful caster → pass through), and the `friendlyAllyNearPath` targeting veto (own pets + a peaceful
+Hunter's pets) active only while FF is on (with FF off the damage layer makes the firing line safe, so
+auto-aim spells keep full reach). Player
+Apocalypse: vanilla's own `isPlayerMinion` skip in `ProcessApocalypse` protects pets during peace (no mod
+gate, FF-independent — Apoc can't hit players even when hostile, so peace-time pets are equally
+untouchable); a **hostile** caster's Apoc may boom another player's tamed ally via
+`OnApocalypseCanTargetGolem` (default false = vanilla; vanilla Golems keep the vanilla exclusion). Do not
+build anything beyond this toggle-mirroring rule. (Diablo's `DiabloApocalypse` carrier does not route
+through these dispatches — `AddDiabloApocalypse` targets players directly; a **tamed** Diablo therefore
+never fires the carrier and uses the single-tile `DiabloApocalypseBoom` at his target instead, which
+resolves through the standard `CheckMissileCol` faction layer — see §3 / `development_notes.md`.)
 
 1. ✅ **DONE + verified** — Pepin Recovery unique-scroll quality (`HISTORY.md`).
 2. ✅ **DONE + playtested** — Infobox / Floating Infobox + OHID for tamed pets (`HISTORY.md`).
-3. ◀ **CURRENT — Taming Diablo** — §3.
+3. ◀ **CURRENT — Taming Diablo** — §3. **BUILT**, in verification (`development_notes.md`).
 4. **Town-following cosmetic ally** — §4.
 5. **Tame Tome** (more complex) — §5.
 6. **Monster Nickname** (more complex) — §6.
@@ -40,14 +54,20 @@ spot-checks in §Multiplayer Verification.
 
 ---
 
-## 3. Taming Diablo (CURRENT — planned, not yet scoped)
+## 3. Taming Diablo (CURRENT — BUILT 2026-07-06, awaiting compile + playtest)
 
-Intent: allow players to tame Diablo. The unlock gate is the **Tame+++** tier (CLVL 45, shipped — see `HISTORY.md`); this section covers the Diablo-ally *mechanics* once that gate is reached. Currently hard-blocked in `init.lua` (~L965: `isDiablo → return`). Captured here from the Apocalypse/Bone-Spirit targeting audit so the key landmine isn't rediscovered:
-
-- **Diablo's auto-attack does NOT go through the monster-seek veto.** Diablo's natural ranged attack is `MissileID::DiabloApocalypse` (`GetMissileType`, `monster.cpp`), and `AddDiabloApocalypse` (`missiles.cpp`) targets **players only** — it iterates active players and drops an `ApocalypseBoom` on each, never scanning `dMonster` / `FindClosest`. So the established `OnMissileCanTargetMonster` targeting-layer veto (which only fires on monster-seeking spells) **does not apply** to it.
-- **Design consequence:** a tamed Diablo firing `DiabloApocalypse` would hit **every active player including its own owner** — friendly-fire on *players*, not on friendly monsters. Stopping that needs a different mechanism than the monster-seek veto: an owner/faction-aware exclusion at the `AddDiabloApocalypse` player loop (skip the owner / friendlies), kept generic and leaving enemy-Diablo behaviour byte-for-byte vanilla.
-- **More than removing the block:** also revisit the quest-monster classification + level-45 boss gate, unique/boss tier handling, scroll naming, and the already-present `AVOIDANCE_RANGED[AIID.Diablo]` kite entry. Ties into Net Sync (multi-player friendly-fire faction checks).
-- **Physical-damage spell ↔ spellcaster damage buff — circle back.** The spellcaster damage formula (`OnGolemMissileDamage`) scales **elemental** missiles — `SPELL_ELEMENT_OF` maps Fire/Lightning/Magic, and **Acid → Magic resistance** (acid has no player resistance of its own); only **Physical** missiles fall through unchanged. Diablo's signature **Apocalypse** appears to be a **physical**-damage spell (and it's the only physical-damage *spell* in the game — only Diablo uses it), so a tamed Diablo's main attack would get **no** spell buff (physical isn't in `SPELL_ELEMENT_OF`), *and* it isn't a melee swing either, so it likely doesn't pick up the physical melee buff (which rides the monster's `min/max`) the way a normal attack does. **Open question for when we scope Diablo:** how should a tamed Diablo's Apocalypse scale? Options to weigh — (a) treat physical spells as the *physical* analogue of the spellcaster formula (scale off the Hunter's Damage/Strength instead of Magic, full or share-divided), (b) fold Apocalypse into the standard physical melee buff path, or (c) leave it vanilla. First step at implementation: confirm Apocalypse's actual `DamageType` and where `AddDiabloApocalypse`/`ApocalypseBoom` sources its damage from (it may not read `min/max` at all), since that determines which buff path, if any, even touches it today.
+Diablo is tameable at **Tame+++** (CLVL 45, ≤5% HP). Full build write-up, decisions, and the playtest
+checklist live in **`development_notes.md`** (the live doc); the durable state is in
+`hunter_class_design.md` ("Diablo status"), the `OnMonsterCanEndGame` hook row + binding updates in
+`lua_api_reference.md`, and the `checkQuestKill` Diablo-coverage rationale in `cpp_changes/monsters.md`.
+Highlights: taming completes `Q_DIABLO` without the game-ending sequence and credits **every** player's
+`pDiabloKillLevel` (CR message + `player:creditDiabloKill()`); a tamed Diablo dies like any other ally
+(resurrect beam, no corpse, no quest clear/ending — `OnMonsterCanEndGame` veto, wild Diablo
+byte-for-byte vanilla); his pet attack keeps Apocalypse **multi-target** faction-aware — primary
+`DiabloApocalypseBoom` at his target + `spreadDiabloApocalypse` booms every other valid hostile in the
+envelope through the standard pet faction layer (the player-seeking `DiabloApocalypse` carrier is never
+fired by a pet), Physical damage riding the monster `min/max` → the standard physical ally buff (closes
+the old physical-scaling open question). Graduate to `HISTORY.md` once playtested.
 
 ---
 
@@ -106,7 +126,7 @@ Split off from the auto-targeting audit (the targeting exemption itself is shipp
      this path is unexercised — faction checks in the monster-attacks-player / `CheckMissileCol` path need auditing).
   4. *Net sync:* deterministic AI must agree on player-targeting on every client → cross-client hostility agreement.
 - **Faction-aware hostile-pet targeting.** `ProcessApocalypse` / `GuardianTryFireAt` / `AddBerserk` skip *all* player minions via `isPlayerMinion()` — faction-blind, so these won't target a **hostile** Hunter's pets either (observed with Guardian). A faction-aware hook that overrides the vanilla skip only when the two players are hostile, still protecting friendly/own pets and never the vanilla Golem. Ties into Net Sync.
-- **Pet spell-damage immunity (QoL).** The shipped exemption is *targeting* only — a spell that legitimately fires (a pure-AoE, or a bolt fired along a pet-free line a pet later walks into) can still damage a pet. Optional QoL: make own/friendly pets immune to the owner's spell damage. Separate from targeting; decide if wanted. (A Bonded ally's promotion Flash burst and Diablo's Apocalypse share this owner-adjacency friendly-fire class.) **Note:** minion friendly-fire specifically is now **deferred indefinitely** to the base-game Friendly Fire toggle (see priority list).
+- **Pet spell-damage immunity (QoL).** The shipped exemption is *targeting* only — a spell that legitimately fires (a pure-AoE, or a bolt fired along a pet-free line a pet later walks into) can still damage a pet. Optional QoL: make own/friendly pets immune to the owner's spell damage. Separate from targeting; decide if wanted. (A Bonded ally's promotion Flash burst is the remaining owner-adjacency friendly-fire case; a tamed Diablo's Apocalypse boom is owner-safe via `OnGolemMissileCanHitPlayer`.) **Note:** minion friendly-fire specifically is now **deferred indefinitely** to the base-game Friendly Fire toggle (see priority list).
 
 ---
 

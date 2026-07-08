@@ -113,6 +113,31 @@ bool OnGolemCanTargetGolem(const Monster *golem, const Monster *candidate, bool 
 	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetGolem", golem, candidate);
 }
 
+bool OnGolemCanTargetPlayer(const Monster *golem, const Player *candidate, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanTargetPlayer", golem, candidate);
+}
+
+bool OnGolemMissileCanHitPlayer(const Monster *golem, const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemMissileCanHitPlayer", golem, player);
+}
+
+bool OnPlayerMissileCanHitGolem(const Player *player, const Monster *golem, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerMissileCanHitGolem", player, golem);
+}
+
+bool OnApocalypseCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnApocalypseCanTargetGolem", player, golem);
+}
+
+bool OnGolemKillIsPlayerKill(const Monster *golem, const Player *player, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemKillIsPlayerKill", golem, player);
+}
+
 bool OnGolemCanChaseTarget(const Monster *golem, const Monster *target, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnGolemCanChaseTarget", golem, target);
@@ -136,9 +161,9 @@ std::optional<std::optional<Point>> OnGolemIdle(const Monster *golem, bool hasTa
 	return std::nullopt;                                                                  // nil = engine default
 }
 
-bool OnGolemChooseAction(const Monster *golem, const Monster *enemy)
+bool OnGolemChooseAction(const Monster *golem, const Monster *enemy, const Player *enemyPlayer)
 {
-	return CallLuaEventReturn<bool>(false, "OnGolemChooseAction", golem, enemy);
+	return CallLuaEventReturn<bool>(false, "OnGolemChooseAction", golem, enemy, enemyPlayer);
 }
 
 void OnSpellCast(const Player *player, int spellId, int spellType, const Monster *targetMonster, int targetX, int targetY)
@@ -230,6 +255,10 @@ void LoadModsComplete()
 void GameDrawComplete()
 {
 	CallLuaEvent("GameDrawComplete");
+}
+void GameTick()
+{
+	CallLuaEvent("GameTick");
 }
 void OnCustomItemRecreated(Item &item)
 {
@@ -430,6 +459,16 @@ std::string OnGetPlayerArmorGraphic(const Player *player, std::string_view defau
 	return CallLuaEventReturn<std::string>(std::string(defaultGraphic), "OnGetPlayerArmorGraphic", player, std::string(defaultGraphic));
 }
 
+player_graphic OnGetPlayerBlockGraphic(const Player *player, player_graphic defaultGraphic)
+{
+	const std::string result = CallLuaEventReturn<std::string>(std::string("Block"), "OnGetPlayerBlockGraphic", player);
+	// Only graphics guaranteed to be loaded whenever blocking is possible are accepted.
+	if (result == "Hit") return player_graphic::Hit;
+	if (result == "Stand") return player_graphic::Stand;
+	if (result == "Block") return player_graphic::Block;
+	return defaultGraphic;
+}
+
 void OnItemUsed(const Player &player, int mid, int spellID)
 {
 	CallLuaEvent("OnItemUsed", &player, mid, spellID);
@@ -510,6 +549,16 @@ bool OnMonsterCanCompleteQuest(const Monster *monster, bool defaultValue)
 bool OnMonsterCanPlaceCorpse(const Monster *monster, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanPlaceCorpse", monster);
+}
+
+bool OnMonsterCanEndGame(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnMonsterCanEndGame", monster);
+}
+
+bool OnDiabloDeathCanKillMonster(const Monster *monster, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnDiabloDeathCanKillMonster", monster);
 }
 
 bool OnGolemCanRunAI(const Monster *monster, bool defaultValue)

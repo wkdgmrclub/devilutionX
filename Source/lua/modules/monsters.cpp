@@ -358,9 +358,18 @@ void InitMonsterUserType(sol::state_view &lua)
 		    LuaChangeMonsterToGolem(monster, ownerId.has_value() ? static_cast<uint8_t>(*ownerId) : MyPlayerId);
 	    });
 	LuaSetDocFn(monsterType, "checkQuestKill", "()",
-	    "Run this monster's quest-completion side effects as if it had been killed (quest state + death speech, e.g. Skeleton King -> Q_SKELKING done + 'Rest well, Leoric'; Lazarus -> opens the path to Diablo). No-op for non-quest monsters. Wraps the engine's CheckQuestKill. // Lua mod support",
+	    "Run this monster's quest-completion side effects as if it had been killed (quest state + death speech, e.g. Skeleton King -> Q_SKELKING done + 'Rest well, Leoric'; Lazarus -> opens the path to Diablo; Diablo -> Q_DIABLO done + difficulty kill credit, WITHOUT the game-ending sequence). No-op for non-quest monsters. Wraps the engine's CheckQuestKill. // Lua mod support",
 	    [](const Monster &monster) {
 		    CheckQuestKill(monster, true);
+		    // Diablo's quest completion lives in his game-ending death sequence (DiabloDeath), not in
+		    // CheckQuestKill; mirror just its quest/progress side effects here (quest state + the local
+		    // player's difficulty kill credit) so this binding covers every quest monster.
+		    if (monster.type().type == MT_DIABLO) {
+			    auto &quest = Quests[Q_DIABLO];
+			    quest._qactive = QUEST_DONE;
+			    NetSendCmdQuest(true, quest);
+			    MyPlayer->pDiabloKillLevel = std::max(MyPlayer->pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
+		    }
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isLit", "boolean",
 	    "Whether the tile this monster stands on is currently illuminated by any light source (readonly)",
@@ -478,6 +487,11 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &monster, const Monster &other) -> bool {
 		    return LineClearMovingMissile(monster.position.tile, other.position.tile);
 	    });
+	LuaSetDocFn(monsterType, "hasLineOfSightToPlayer", "(player: Player) -> boolean",
+	    "Returns true if a clear missile line of sight exists between this monster and the given player. // Lua mod support",
+	    [](const Monster &monster, const Player &player) -> bool {
+		    return LineClearMovingMissile(monster.position.tile, player.position.tile);
+	    });
 	LuaSetDocFn(monsterType, "startRangedAttack", "(missileId: integer)",
 	    "Fire a ranged attack at the monster's current target using the given MissileID integer. Damage is drawn from the monster's natural min/max damage range. Use monsters.MissileID for missile ID constants.",
 	    [](const Monster &constMonster, int missileIdInt) {
@@ -501,6 +515,17 @@ void InitMonsterUserType(sol::state_view &lua)
 	    [](const Monster &constMonster, int missileIdInt) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
 		    LuaStartMonsterSpecialRangedAttack(monster, static_cast<MissileID>(missileIdInt));
+	    });
+	LuaSetDocFn(monsterType, "fireMissileAt", "(missileId: integer, x: integer, y: integer)",
+	    "Fire the given MissileID from this monster at the target tile (TARGET_PLAYERS with this monster as "
+	    "source, damage drawn from its natural min/max range) without changing the monster's mode or "
+	    "animation — for effects needing extra projectiles beyond the single missile the attack mode fires "
+	    "(e.g. a multi-target special attack). Use monsters.MissileID.* for missile IDs. // Lua mod support",
+	    [](const Monster &constMonster, int missileIdInt, int x, int y) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    const WorldTilePosition dst { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
+		    AddMissile(monster.position.tile, dst, monster.direction, static_cast<MissileID>(missileIdInt),
+		        TARGET_PLAYERS, monster, RandomIntBetween(monster.minDamage, monster.maxDamage), 0);
 	    });
 	LuaSetDocFn(monsterType, "naturalRangedMissileId", "() -> integer",
 	    "Returns the MissileID integer this monster's authentic ranged/special attack would fire, derived from its original AI (Counselor/Advocate by intelligence, Mega->Inferno, others by type), without firing it. Combine with monsters.getMissileDamageType to derive the attack's element. // Lua mod support",
@@ -546,6 +571,12 @@ void InitMonsterUserType(sol::state_view &lua)
 			    monster.lightId = AddLight(monster.position.tile, r);
 		    else
 			    ChangeLightRadius(monster.lightId, r);
+	    });
+	LuaSetDocFn(monsterType, "startAttack", "()",
+	    "Trigger this monster's normal melee attack (Attack animation + MeleeAttack mode) against its current enemy target. Hit resolution dispatches on MFLAG_TARGETS_MONSTER, so it works for monster and player targets alike. // Lua mod support",
+	    [](const Monster &constMonster) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    LuaStartMonsterAttack(monster);
 	    });
 	LuaSetDocFn(monsterType, "startSpecialAttack", "()",
 	    "Trigger this monster's special melee attack (Special animation + SpecialMeleeAttack mode), e.g. the Goat Melee low-HP special. // Lua mod support",
@@ -867,6 +898,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		missileIdTable["HolyBolt"]       = static_cast<int>(MissileID::HolyBolt);
 		missileIdTable["Fireball"]       = static_cast<int>(MissileID::Fireball);
 		missileIdTable["HorkSpawn"]      = static_cast<int>(MissileID::HorkSpawn);
+		missileIdTable["DiabloApocalypseBoom"] = static_cast<int>(MissileID::DiabloApocalypseBoom);
 		table["MissileID"] = missileIdTable;
 	}
 	// Lua mod support: monster_resistance bitflags for use with monster.resistance / monster:setResistance()

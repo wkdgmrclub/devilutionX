@@ -1,5 +1,6 @@
 #include "lua/modules/player.hpp"
 
+#include <algorithm>
 #include <optional>
 
 #include <magic_enum/magic_enum.hpp>
@@ -15,6 +16,7 @@
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "msg.h"
+#include "multi.h"
 #include "player.h"
 #include "spells.h"
 #include "tables/itemdat.h"
@@ -184,6 +186,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "friendlyMode", "boolean",
 	    "Whether this player is in friendly (non-hostile) mode. False = hostile, i.e. PvP is enabled toward other players. readonly",
 	    [](const Player &player) -> bool { return player.friendlyMode; });
+	LuaSetDocReadonlyProperty(playerType, "isHoldingShield", "boolean",
+	    "Whether a shield is currently equipped in either hand (readonly)",
+	    [](const Player &player) -> bool { return player.isHoldingItem(ItemType::Shield); });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer, modData?: string) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) -> bool {
@@ -203,6 +208,13 @@ void InitPlayerUserType(sol::state_view &lua)
 		    if (!AutoPlaceItemInInventory(player, item, false)) return false;
 		    CalcPlrInv(player, true);
 		    return true;
+	    });
+	LuaSetDocFn(playerType, "heldItem", "() -> Item|nil",
+	    "Return the Item currently held on the cursor (HoldItem), or nil if the hand is empty. The Item is passed by reference; modifications are live.",
+	    [](Player &player) -> Item * {
+		    if (player.HoldItem.isEmpty())
+			    return nullptr;
+		    return &player.HoldItem;
 	    });
 	LuaSetDocFn(playerType, "findScrollBySeed", "(seed: integer) -> Item|nil",
 	    "Return the Item in inventory or belt whose _iSeed matches the given seed, or nil if not found.",
@@ -246,6 +258,13 @@ void InitPlayerUserType(sol::state_view &lua)
 	    "Play the player's voice line for the given HeroSpeech enum ID",
 	    [](const Player &player, int speechId) {
 		    player.Say(static_cast<HeroSpeech>(speechId));
+	    });
+	LuaSetDocFn(playerType, "creditDiabloKill", "()",
+	    "Raise this player's Diablo kill level (pDiabloKillLevel) to the current game difficulty — the "
+	    "difficulty-unlock credit the engine grants when Diablo dies (DiabloDeath/PrepDoEnding). Idempotent "
+	    "(max, never lowers). Only meaningful for the local player: the field is hero save-file state. // Lua mod support",
+	    [](Player &player) {
+		    player.pDiabloKillLevel = std::max(player.pDiabloKillLevel, static_cast<uint8_t>(sgGameInitInfo.nDifficulty + 1));
 	    });
 	LuaSetDocFn(playerType, "enterHealOtherMode", "()",
 	    "Switch the cursor to CURSOR_HEALOTHER targeting mode.",

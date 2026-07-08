@@ -514,7 +514,9 @@ void CheckMissileCol(Missile &missile, DamageType damageType, int minDamage, int
 				    ? MonsterTrapHit(monster, minDamage, maxDamage, missile._midist, missile._mitype, damageType, isDamageShifted)
 				    : resolved != 0;
 			} else if (IsAnyOf(missile._micaster, TARGET_BOTH, TARGET_MONSTERS)) {
-				isMonsterHit = MonsterMHit(*missile.sourcePlayer(), monster, minDamage, maxDamage, missile._midist, missile._mitype, missile.position.start, damageType, isDamageShifted);
+				// Lua mod support: a mod may veto a player missile's hit on a golem
+				if ((monster.flags & MFLAG_GOLEM) == 0 || lua::OnPlayerMissileCanHitGolem(missile.sourcePlayer(), &monster, true))
+					isMonsterHit = MonsterMHit(*missile.sourcePlayer(), monster, minDamage, maxDamage, missile._midist, missile._mitype, missile.position.start, damageType, isDamageShifted);
 			}
 		}
 	}
@@ -535,7 +537,11 @@ void CheckMissileCol(Missile &missile, DamageType damageType, int minDamage, int
 					isPlayerHit = Plr2PlrMHit(Players[missile._misource], *player, minDamage, maxDamage, missile._midist, missile._mitype, damageType, isDamageShifted, &blocked);
 			} else {
 				Monster &monster = Monsters[missile._misource];
-				isPlayerHit = PlayerMHit(*player, &monster, missile._midist, minDamage, maxDamage, missile._mitype, damageType, isDamageShifted, DeathReason::MonsterOrTrap, &blocked);
+				// Lua mod support: a player-minion source may classify the death (default = vanilla monster/trap)
+				const DeathReason deathReason = ((monster.flags & MFLAG_GOLEM) != 0 && lua::OnGolemKillIsPlayerKill(&monster, player, false)) ? DeathReason::Player : DeathReason::MonsterOrTrap;
+				// Lua mod support: a mod may veto a Golems hit on this player
+				if ((monster.flags & MFLAG_GOLEM) == 0 || lua::OnGolemMissileCanHitPlayer(&monster, player, true))
+					isPlayerHit = PlayerMHit(*player, &monster, missile._midist, minDamage, maxDamage, missile._mitype, damageType, isDamageShifted, deathReason, &blocked);
 			}
 		} else {
 			const DeathReason deathReason = missile.sourceType() == MissileSource::Player ? DeathReason::Player : DeathReason::MonsterOrTrap;
@@ -3898,7 +3904,8 @@ void ProcessApocalypse(Missile &missile)
 			const int mid = dMonster[k][j] - 1;
 			if (mid < 0)
 				continue;
-			if (Monsters[mid].isPlayerMinion())
+			// Lua mod support: vanilla Apocalypse never targets a Golem. A mod may permit it
+			if (Monsters[mid].isPlayerMinion() && !lua::OnApocalypseCanTargetGolem(missile.sourcePlayer(), &Monsters[mid], false))
 				continue;
 			if (TileHasAny(PointOf { k, j }, TileProperties::Solid))
 				continue;

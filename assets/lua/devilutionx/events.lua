@@ -118,6 +118,12 @@ local events = {
   GameDrawComplete = CreateEvent(),
   __doc_GameDrawComplete = "Called every frame at the end.",
 
+  ---Called at the end of each game-logic tick (the synced simulation step; may fire several times
+  ---per rendered frame during multiplayer catch-up). Use for per-tick logic; use GameDrawComplete
+  ---for rendering.
+  GameTick = CreateEvent(),
+  __doc_GameTick = "Called at the end of each game-logic tick (the synced simulation step; may fire several times per rendered frame during catch-up). Use for per-tick logic; GameDrawComplete is for rendering.",
+
   ---Called when opening a towner store. Passes the towner name as argument (e.g., "griswold", "adria", "pepin", "wirt", "cain").
   StoreOpened = CreateEvent(),
   __doc_StoreOpened = "Called when opening a towner store. Passes the towner name as argument.",
@@ -315,6 +321,15 @@ local events = {
   OnGetPlayerArmorGraphic = CreateQueryEvent(),
   __doc_OnGetPlayerArmorGraphic = "Query: return \"Light\", \"Medium\", or \"Heavy\" to override the resolved armor sprite tier. Receives (player, currentGraphic). AC bonuses still apply. Return nil for default behavior.",
 
+  ---Query event fired wherever the engine resolves the blocking animation (sprite load, block start,
+  ---and animation restore). Receives (player). Return "Hit" or "Stand" to play that animation instead
+  ---of the block sheet — for sprite sets that have no block ("bl") file for the current weapon combo;
+  ---the "bl" file is then never loaded. Return nil (or "Block") for the default block animation.
+  ---Block duration follows the played animation's frame count (tune via OnGetAnimationSkipFrames "Block").
+  ---Must resolve identically on every client (gate on synced state, not the local player).
+  OnGetPlayerBlockGraphic = CreateQueryEvent(),
+  __doc_OnGetPlayerBlockGraphic = "Query: return \"Hit\" or \"Stand\" to play that animation while blocking instead of the block (\"bl\") sheet, which is then never loaded. Receives (player). Return nil for the default block animation. Must be deterministic across clients.",
+
   ---Query event fired from UpdateEnemy for every MFLAG_GOLEM monster evaluating a new target.
   ---Args: ally (Monster), candidate (Monster).
   ---Runs once per active monster per ally per tick, so keep the handler cheap: gate on distance first
@@ -329,6 +344,15 @@ local events = {
   ---Return true to allow targeting. Return nil or false to keep them from fighting (default: false).
   OnGolemCanTargetGolem = CreateQueryEvent(),
   __doc_OnGolemCanTargetGolem = "Query: return true to allow a golem/ally to target another golem/ally (e.g. mutually-hostile players' pets). Args: ally, candidate. Return nil or false to prevent (default: false).",
+
+  ---Query event fired from UpdateEnemy when a golem/player-minion evaluates a PLAYER as a target.
+  ---Vanilla never lets a golem target a player; this hook can permit it (e.g. a player hostile to the golem's owner).
+  ---Args: ally (Monster), candidate (Player).
+  ---Runs per player per ally per tick, so keep the handler cheap; query line of sight lazily via
+  ---ally:hasLineOfSightToPlayer(candidate) only for candidates worth it.
+  ---Return true to allow targeting. Return nil or false to reject (default: false).
+  OnGolemCanTargetPlayer = CreateQueryEvent(),
+  __doc_OnGolemCanTargetPlayer = "Query: return true to allow a golem/ally to target the candidate player (e.g. a player hostile to its owner). Args: ally, candidate (Player). Return nil or false to reject (default: false).",
 
   ---Query event fired from GolumAi when a golem has a target not yet in melee range, before pathing toward it.
   ---Args: ally (Monster), target (Monster).
@@ -350,11 +374,15 @@ local events = {
   __doc_OnGolemIdle = "Query: return Point to walk (AiPlanPath first, RandomWalk fallback), false to stand still, nil for engine default. Args: ally, hasTarget (bool), enemyPosition (Point).",
 
   ---Query event fired from GolumAi after UpdateEnemy, before the melee-attack and chase block.
-  ---Args: ally (Monster), enemy (Monster|nil — the ally's current target, nil if none). Derive
-  ---distance via ally.position/enemy.position and line of sight via ally:hasLineOfSightTo(enemy).
+  ---Args: ally (Monster), enemy (Monster|nil — the ally's current monster target), enemyPlayer
+  ---(Player|nil — the ally's current player target; only ever set when OnGolemCanTargetPlayer granted
+  ---it). At most one of enemy/enemyPlayer is non-nil. Derive distance via positions and line of sight
+  ---via ally:hasLineOfSightTo(enemy) / ally:hasLineOfSightToPlayer(enemyPlayer). Note the engine
+  ---melee-attack and chase block only handles monster targets; acting on a player target is entirely
+  ---up to handlers of this event (e.g. ally:startAttack() when adjacent).
   ---Return true to signal Lua handled this tick entirely (engine skips attack/chase/idle). Return nil or false to let engine proceed normally.
   OnGolemChooseAction = CreateQueryEvent(),
-  __doc_OnGolemChooseAction = "Query: return true to consume the GolumAi tick (skip melee/chase/idle). Args: ally, enemy (Monster|nil).",
+  __doc_OnGolemChooseAction = "Query: return true to consume the GolumAi tick (skip melee/chase/idle). Args: ally, enemy (Monster|nil), enemyPlayer (Player|nil).",
 
   ---Query event fired from SpawnBoy (Wirt's item generation) for classes not handled by the built-in switch.
   ---itemType is one of: "LightArmor", "MediumArmor", "HeavyArmor", "Shield", "Axe", "Bow", "Mace", "Sword", "Helm", "Staff", "Ring", "Amulet".
@@ -501,6 +529,18 @@ local events = {
   OnMonsterCanCompleteQuest = CreateQueryEvent(),
   __doc_OnMonsterCanCompleteQuest = "Query: return false to prevent a dying monster from completing its quest (CheckQuestKill). Args: monster. Return nil or true to allow (default: true).",
 
+  ---Query event fired when a dying monster would run the game-ending death sequence (quest completion,
+  ---level-wide kill, camera pan to the monster, ending cinematic). Args: monster. Return false to let it
+  ---die like any other monster instead; return nil or true for the vanilla sequence (default: true).
+  OnMonsterCanEndGame = CreateQueryEvent(),
+  __doc_OnMonsterCanEndGame = "Query: return false to skip the game-ending death sequence for a dying monster (it dies like any other monster instead). Args: monster. Return nil or true for vanilla (default: true).",
+
+  ---Query event fired from the game-ending death sequence's level-wide kill for each monster about to
+  ---be killed. Args: monster. Return false to spare it; return nil or true to kill (default: true).
+  ---Must resolve identically on every client (the sweep runs on every client's simulation).
+  OnDiabloDeathCanKillMonster = CreateQueryEvent(),
+  __doc_OnDiabloDeathCanKillMonster = "Query: return false to spare a monster from the game-ending level-wide kill. Args: monster. Return nil or true for vanilla (default: true). Must be deterministic across clients.",
+
   ---Query event fired from MonsterDeath on the final death-animation frame, before the monster's
   ---corpse is placed on the floor. Args: monster. Return false to suppress corpse placement for this
   ---death (the monster still vanishes and is reaped); return nil or true to place the corpse (default: true).
@@ -541,6 +581,42 @@ local events = {
   ---whole resolution is one synchronous call, any transient resistance change is set and restored inline.
   OnMonsterMissileHit = CreateQueryEvent(),
   __doc_OnMonsterMissileHit = "Query (MFLAG_GOLEM on either end — source or target): a missile is resolving against a monster. Args: source (may be nil), target, missileId (int), damageType (int), minDam, maxDam, dist, shifted. Return <0 to let the engine resolve it normally (default), or resolve it yourself (e.g. via target:resolveMissileHit) and return 1 (hit) / 0 (miss).",
+
+  ---Query event fired when a golem / player-minion (MFLAG_GOLEM) sourced missile resolves against a
+  ---PLAYER standing in its path (the PlayerMHit dispatch); wild-monster missiles never fire it.
+  ---Args: golem (the source monster), player (the player about to be hit).
+  ---Return false to veto the hit — the missile passes through the player and keeps flying (the same
+  ---pass-through the engine uses for a friendly player-vs-player missile). Return nil or true for the
+  ---vanilla hit resolution (default: true).
+  OnGolemMissileCanHitPlayer = CreateQueryEvent(),
+  __doc_OnGolemMissileCanHitPlayer = "Query (MFLAG_GOLEM sources only): return false to veto a golem/player-minion missile's hit on a player (missile passes through, e.g. friendly-fire rules). Args: golem, player. Return nil or true for vanilla resolution (default: true).",
+
+  ---Query event fired when a PLAYER-sourced missile resolves against a golem / player-minion
+  ---(MFLAG_GOLEM) monster (the MonsterMHit dispatch) — the mirror direction of
+  ---OnGolemMissileCanHitPlayer; wild-monster targets never fire it.
+  ---Args: player (the casting player), golem (the monster about to be hit).
+  ---Return false to veto the hit — the missile passes through and keeps flying. Return nil or true
+  ---for the vanilla hit resolution (default: true).
+  OnPlayerMissileCanHitGolem = CreateQueryEvent(),
+  __doc_OnPlayerMissileCanHitGolem = "Query (MFLAG_GOLEM targets only): return false to veto a player missile's hit on a golem/player-minion (missile passes through, e.g. friendly-fire rules). Args: player, golem. Return nil or true for vanilla resolution (default: true).",
+
+  ---Query event fired from the Apocalypse victim scan when it evaluates a golem / player-minion
+  ---(MFLAG_GOLEM) — vanilla always excludes player-minions from Apocalypse, so this can only ever
+  ---widen the scan, never narrow vanilla behaviour.
+  ---Args: player (the caster), golem (the player-minion being evaluated).
+  ---Return true to let Apocalypse drop its boom on this minion (e.g. a hostile player's pet).
+  ---Return nil or false for the vanilla exclusion (default: false).
+  OnApocalypseCanTargetGolem = CreateQueryEvent(),
+  __doc_OnApocalypseCanTargetGolem = "Query (fires only for MFLAG_GOLEM monsters, which vanilla Apocalypse always skips): return true to let a player's Apocalypse target this golem/player-minion (e.g. a hostile player's pet). Args: player, golem. Return nil or false for the vanilla exclusion (default: false).",
+
+  ---Query event fired (MFLAG_GOLEM sources only) when a player-minion's hit could be fatal to a
+  ---player, to resolve how the death is classified. Vanilla always treats a monster-sourced kill as
+  ---monster/trap (drops items); return true to classify it as a player kill instead (drops an ear,
+  ---the PvP death path) — e.g. a hostile player's minion is that player's weapon.
+  ---Args: golem (the player-minion), player (the victim). Return nil or false for the vanilla
+  ---monster/trap classification (default: false).
+  OnGolemKillIsPlayerKill = CreateQueryEvent(),
+  __doc_OnGolemKillIsPlayerKill = "Query (MFLAG_GOLEM sources only): return true to classify a player-minion's kill of a player as a player kill (ear/PvP death path) instead of the vanilla monster/trap kill (item drop). Args: golem, player. Return nil or false for vanilla (default: false).",
 
   ---Query event fired before a player's left-click attack or offensive spell cast is queued on a monster.
   ---Args: player, monster. Return false to cancel (silently no-op); return nil or true to allow (default: true).

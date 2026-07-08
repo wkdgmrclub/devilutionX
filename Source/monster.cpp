@@ -689,23 +689,28 @@ void UpdateEnemy(Monster &monster)
 	bool bestsameroom = false;
 	const WorldTilePosition position = monster.position.tile;
 	const bool isPlayerMinion = monster.isPlayerMinion();
-	if (!isPlayerMinion) {
-		for (size_t pnum = 0; pnum < Players.size(); pnum++) {
-			const Player &player = Players[pnum];
-			if (!player.plractive || !player.isOnActiveLevel() || player._pLvlChanging
-			    || (player.hasNoLife() && gbIsMultiplayer))
+	for (size_t pnum = 0; pnum < Players.size(); pnum++) {
+		const Player &player = Players[pnum];
+		if (!player.plractive || !player.isOnActiveLevel() || player._pLvlChanging
+		    || (player.hasNoLife() && gbIsMultiplayer))
+			continue;
+		// Lua mod support: vanilla never lets a player-minion acquire a player as its target. A mod
+		// may permit it (e.g. players hostile to the minion's owner) by returning true; default
+		// false preserves vanilla behaviour (every candidate skipped, as if the loop never ran).
+		if (isPlayerMinion) {
+			if (!lua::OnGolemCanTargetPlayer(&monster, &player, false))
 				continue;
-			const bool sameroom = (dTransVal[position.x][position.y] == dTransVal[player.position.tile.x][player.position.tile.y]);
-			const int dist = position.WalkingDistance(player.position.tile);
-			if ((sameroom && !bestsameroom)
-			    || ((sameroom || !bestsameroom) && dist < bestDist)
-			    || (menemy == -1)) {
-				monster.flags &= ~MFLAG_TARGETS_MONSTER;
-				menemy = static_cast<int>(pnum);
-				target = player.position.future;
-				bestDist = dist;
-				bestsameroom = sameroom;
-			}
+		}
+		const bool sameroom = (dTransVal[position.x][position.y] == dTransVal[player.position.tile.x][player.position.tile.y]);
+		const int dist = position.WalkingDistance(player.position.tile);
+		if ((sameroom && !bestsameroom)
+		    || ((sameroom || !bestsameroom) && dist < bestDist)
+		    || (menemy == -1)) {
+			monster.flags &= ~MFLAG_TARGETS_MONSTER;
+			menemy = static_cast<int>(pnum);
+			target = player.position.future;
+			bestDist = dist;
+			bestsameroom = sameroom;
 		}
 	}
 	for (size_t i = 0; i < ActiveMonsterCount; i++) {
@@ -901,7 +906,8 @@ void DiabloDeath(Monster &diablo, bool sendmsg)
 	for (size_t i = 0; i < ActiveMonsterCount; i++) {
 		const int monsterId = ActiveMonsters[i];
 		Monster &monster = Monsters[monsterId];
-		if (monster.type().type == MT_DIABLO || diablo.activeForTicks == 0)
+		if (monster.type().type == MT_DIABLO || diablo.activeForTicks == 0
+		    || !lua::OnDiabloDeathCanKillMonster(&monster, true)) // Lua mod support: a mod may spare a monster from the level-wide kill; default true = vanilla
 			continue;
 
 		NewMonsterAnim(monster, MonsterGraphic::Death, monster.direction);
@@ -1240,7 +1246,9 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 			const int reflectedDamage = CheckReflect(monster, player, dam);
 			dam = std::max(dam - reflectedDamage, 0);
 		}
-		ApplyPlrDamage(DamageType::Physical, player, 0, 0, dam);
+		// Lua mod support: a player-minion source may classify the death (default = vanilla monster/trap)
+		const DeathReason deathReason = ((monster.flags & MFLAG_GOLEM) != 0 && lua::OnGolemKillIsPlayerKill(&monster, &player, false)) ? DeathReason::Player : DeathReason::MonsterOrTrap;
+		ApplyPlrDamage(DamageType::Physical, player, 0, 0, dam, deathReason);
 	}
 
 	// Reflect can also kill a monster, so make sure the monster is still alive
@@ -1516,7 +1524,9 @@ void ShrinkLeaderPacksize(const Monster &monster)
 void MonsterDeath(Monster &monster)
 {
 	monster.var1++;
-	if (monster.type().type == MT_DIABLO) {
+	// Lua mod support: same game-ending veto as the death start; vetoed, the death animation finishes
+	// through the generic last-frame path below. Default true = vanilla.
+	if (monster.type().type == MT_DIABLO && lua::OnMonsterCanEndGame(&monster, true)) {
 		if (monster.position.tile.x < ViewPosition.x) {
 			ViewPosition.x--;
 		} else if (monster.position.tile.x > ViewPosition.x) {
@@ -3925,7 +3935,10 @@ void InitializeSpawnedMonster(Point position, Direction dir, size_t typeIndex, s
 	});
 
 	assert(freePosition);
-	assert(!MyPlayer->isLevelOwnedByLocalClient() || (freePosition && position == *freePosition));
+	// Lua mod support: extended-region spawns materialize from a network message whose position may be
+	// occupied locally (the crawl fallback below adjusts); the owner-allocated-tile invariant only holds
+	// for base-game slots. Dead clause unmodded (monsterId is always < MaxMonsters).
+	assert(monsterId >= MaxMonsters || !MyPlayer->isLevelOwnedByLocalClient() || (freePosition && position == *freePosition));
 	position = freePosition.value_or(position);
 
 	monster.occupyTile(position, false);
@@ -4097,7 +4110,9 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 
 	SpawnLoot(monster, sendmsg);
 
-	if (monster.type().type == MT_DIABLO)
+	// Lua mod support: a mod may veto the game-ending death sequence for this monster; vetoed, the
+	// death proceeds like any other monster's. Default true = vanilla.
+	if (monster.type().type == MT_DIABLO && lua::OnMonsterCanEndGame(&monster, true))
 		DiabloDeath(monster, true);
 	else
 		PlayEffect(monster, MonsterSound::Death);
@@ -4315,6 +4330,11 @@ void LuaStartMonsterHeal(Monster &monster)
 	StartHeal(monster);
 }
 
+void LuaStartMonsterAttack(Monster &monster)
+{
+	StartAttack(monster);
+}
+
 void LuaStartMonsterEat(Monster &monster)
 {
 	StartEating(monster);
@@ -4353,17 +4373,22 @@ void GolumAi(Monster &golem)
 		return;
 	}
 
-	// Lua mod support: forward the current enemy monster (or null when there is none) so a handler
-	// can derive distance / line of sight itself. Only values already in scope are passed — nothing
-	// is computed here purely to feed the hook. (golem.enemy indexes Monsters[] while NO_ENEMY is
-	// clear, matching the enemy read just below.)
+	// Lua mod support: forward the current enemy (or null when there is none) so a handler can
+	// derive distance / line of sight itself. Only values already in scope are passed — nothing
+	// is computed here purely to feed the hook. golem.enemy indexes Monsters[] while
+	// MFLAG_TARGETS_MONSTER is set and Players[] otherwise (same dispatch as MonsterAttackEnemy);
+	// a golem only holds a player target when a mod granted one via OnGolemCanTargetPlayer.
 	{
-		Monster *enemy = ((golem.flags & MFLAG_NO_ENEMY) == 0) ? &Monsters[golem.enemy] : nullptr;
-		if (lua::OnGolemChooseAction(&golem, enemy))
+		Monster *enemy = ((golem.flags & MFLAG_NO_ENEMY) == 0 && (golem.flags & MFLAG_TARGETS_MONSTER) != 0) ? &Monsters[golem.enemy] : nullptr;
+		const Player *enemyPlayer = ((golem.flags & MFLAG_NO_ENEMY) == 0 && (golem.flags & MFLAG_TARGETS_MONSTER) == 0) ? &Players[golem.enemy] : nullptr;
+		if (lua::OnGolemChooseAction(&golem, enemy, enemyPlayer))
 			return;
 	}
 
-	if ((golem.flags & MFLAG_NO_ENEMY) == 0) {
+	// Lua mod support: the MFLAG_TARGETS_MONSTER check keeps this block's Monsters[] reads valid.
+	// Redundant in vanilla (UpdateEnemy above only ever gives a golem a monster target, so
+	// NO_ENEMY clear implies TARGETS_MONSTER set); a mod-granted player target skips the block.
+	if ((golem.flags & MFLAG_NO_ENEMY) == 0 && (golem.flags & MFLAG_TARGETS_MONSTER) != 0) {
 		Monster &enemy = Monsters[golem.enemy];
 		const int mex = golem.position.tile.x - enemy.position.future.x;
 		const int mey = golem.position.tile.y - enemy.position.future.y;

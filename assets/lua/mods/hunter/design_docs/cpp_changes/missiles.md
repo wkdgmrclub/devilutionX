@@ -53,6 +53,24 @@ Fires in `AddMissile` after `addFn`, gated to `MFLAG_GOLEM` sources (wild monste
 override point for resistance-scaled spell damage; fires once per missile incl. each spawned segment of
 multi-tick spells (Inferno/Lightning). Melee never routes here.
 
+## Player-kill classification for a pet's killing blow — `OnGolemKillIsPlayerKill`
+Query, fires only for a `MFLAG_GOLEM` source, at the `PlayerMHit` dispatch in `CheckMissileCol` (the
+melee sibling site is `MonsterAttackPlayer` in `Source/monster.cpp` — same hook, see `monsters.md`).
+Vanilla hardcoded `DeathReason::MonsterOrTrap` inline at the `PlayerMHit` call. The change resolves it in a
+**single `const DeathReason` ternary** — `(MFLAG_GOLEM && OnGolemKillIsPlayerKill(...)) ? Player : MonsterOrTrap`
+— the exact idiom vanilla itself uses for the sibling branch two lines down
+(`sourceType() == Player ? Player : MonsterOrTrap`). The `MFLAG_GOLEM` gate mirrors the adjacent
+`OnGolemMissileCanHitPlayer` (same predicate, same `&monster`/`player` args already in scope). `PlayerMHit`
+already takes a `DeathReason` parameter, so no signature change — only the argument's value can now be the
+mod's. With no mod / a `false` return it evaluates to `MonsterOrTrap`, so a wild monster and a vanilla
+Golem are byte-for-byte vanilla.
+
+**Why the classification and not a killer id:** the drop split in `StartPlayerKill` is purely
+`deathReason == Player ? drop ear : drop items`, and the ear is built from the **victim's own** `_pName`
+— there is no killer field to plumb. So the entire fix is the one enum value. MP-safe: the resolve runs
+where `&player == MyPlayer` (the victim's client), which broadcasts the reason via `CMD_PLRDEAD`; peers
+apply the same reason without regenerating drops (vanilla remote-death path).
+
 ---
 
 ## Lazy monster-missile GFX — crash hazard for mod spawns (no engine change; document)

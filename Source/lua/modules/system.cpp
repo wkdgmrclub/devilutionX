@@ -31,6 +31,10 @@ sol::table LuaSystemModule(sol::state_view &lua)
 	    "Returns true if the current game is running in the Hellfire gamemode, false for Diablo.",
 	    []() { return gbIsHellfire; });
 
+	LuaSetDocFn(table, "isFriendlyFireEnabled", "() -> boolean",
+	    "Returns the game's Friendly Fire option (part of the synced game-init info, identical on every client). // Lua mod support",
+	    []() { return sgGameInitInfo.bFriendlyFire != 0; });
+
 	// Lua mod support: the synced lockstep tick counter. Multiplayer runs a deterministic lockstep
 	// simulation; this counter advances once per game tick identically on every client, and a client
 	// that joins mid-game is initialized to the current value (ParseTurn) -- so at a given tick it reads
