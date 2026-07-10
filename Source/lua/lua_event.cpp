@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <string_view>
@@ -128,9 +129,19 @@ bool OnPlayerMissileCanHitGolem(const Player *player, const Monster *golem, bool
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerMissileCanHitGolem", player, golem);
 }
 
+bool OnGolemMissileCanHitGolem(const Monster *golem, const Monster *target, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGolemMissileCanHitGolem", golem, target);
+}
+
 bool OnApocalypseCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnApocalypseCanTargetGolem", player, golem);
+}
+
+bool OnGuardianCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue)
+{
+	return CallLuaEventReturn<bool>(defaultValue, "OnGuardianCanTargetGolem", player, golem);
 }
 
 bool OnGolemKillIsPlayerKill(const Monster *golem, const Player *player, bool defaultValue)
@@ -338,6 +349,16 @@ int OnGetManaCost(const Player *player, int baseCost, int defaultValue)
 int OnGolemMissileDamage(const Monster *golem, int missileId, int dam)
 {
 	return CallLuaEventReturn<int>(dam, "OnGolemMissileDamage", golem, missileId, dam);
+}
+
+int OnGolemMeleeHitChance(const Monster *attacker, const Monster *target, int hitChance)
+{
+	return CallLuaEventReturn<int>(hitChance, "OnGolemMeleeHitChance", attacker, target, hitChance);
+}
+
+int OnGolemMissileHitChance(const Monster *golem, const Player *player, int missileId, int dist, int hitChance)
+{
+	return CallLuaEventReturn<int>(hitChance, "OnGolemMissileHitChance", golem, player, missileId, dist, hitChance);
 }
 
 int OnMonsterMissileHit(const Monster *source, const Monster *target, int missileId, int damageType, int minDamage, int maxDamage, int dist, bool isDamageShifted)
@@ -693,8 +714,23 @@ std::vector<uint32_t> OnSavePlayerData(){
 	std::vector<uint32_t> data;
 	const sol::table tbl = result.as<sol::table>();
 	for (int i = 1; ; ++i) {
-		const sol::optional<uint32_t> entry = tbl.get<sol::optional<uint32_t>>(i);
-		if (!entry) break;
+		const sol::object raw = tbl.get<sol::object>(i);
+		if (raw == sol::lua_nil) break; // end of the array
+		sol::optional<uint32_t> entry = raw.as<sol::optional<uint32_t>>();
+		if (!entry) {
+			// Lua arithmetic routinely yields float-typed whole numbers (e.g. `2^n`), which the
+			// SOL_SAFE_NUMERICS integer conversion rejects by subtype; accept any number with an
+			// exact uint32 value so the subtype cannot corrupt a save.
+			const sol::optional<double> num = raw.as<sol::optional<double>>();
+			if (num && *num >= 0.0 && *num <= 4294967295.0 && *num == std::floor(*num))
+				entry = static_cast<uint32_t>(*num);
+		}
+		if (!entry) {
+			// A value not representable as uint32 previously truncated the remainder
+			// silently; fail loudly so the handler bug is attributable.
+			LogError("OnSavePlayerData: value at index {} is not a uint32; dropping the remainder", i);
+			break;
+		}
 		data.push_back(*entry);
 	}
 	return data;

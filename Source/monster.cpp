@@ -1136,6 +1136,10 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 	if (!target.isPossibleToHit())
 		return;
 
+	// Lua mod support: when a player-minion is on either side, a mod may override the hit chance (default = the passed-in value)
+	if (((attacker.flags | target.flags) & MFLAG_GOLEM) != 0)
+		hper = lua::OnGolemMeleeHitChance(&attacker, &target, hper);
+
 	int hit = GenerateRnd(100);
 	if (target.mode == MonsterMode::Petrified)
 		hit = 0;

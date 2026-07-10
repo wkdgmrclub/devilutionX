@@ -24,6 +24,7 @@
 #include "lua/metadoc.hpp"
 #include "missiles.h"
 #include "monster.h"
+#include "monsters/validation.hpp"
 #include "msg.h"
 #include "multi.h"
 #include "player.h"
@@ -623,6 +624,30 @@ void InitMonsterUserType(sol::state_view &lua)
 		    if (LuaMonsterPlanPath(monster)) return true;
 		    const WorldTilePosition dest { static_cast<WorldTileCoord>(x), static_cast<WorldTileCoord>(y) };
 		    return Walk(monster, GetDirection(monster.position.tile, dest));
+	    });
+	LuaSetDocFn(monsterType, "encodedEnemy", "() -> integer|nil",
+	    "This monster's current enemy in the engine's wire encoding (encode_enemy: monster targets = the "
+	    "monster id, player targets = playerId + GetMaxMonsters()), or nil when it has no enemy "
+	    "(MFLAG_NO_ENEMY). Pair with setEncodedEnemy to replicate a target across clients the same way the "
+	    "engine's own monster sync does. // Lua mod support",
+	    [](const Monster &constMonster) -> sol::optional<int> {
+		    if ((constMonster.flags & MFLAG_NO_ENEMY) != 0) return sol::nullopt;
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    return static_cast<int>(encode_enemy(monster));
+	    });
+	LuaSetDocFn(monsterType, "setEncodedEnemy", "(enemyId: integer|nil)",
+	    "Set this monster's enemy from the engine's wire encoding (see encodedEnemy) — the same "
+	    "application the engine's monster sync performs (decode_enemy), validated like an incoming sync "
+	    "record (invalid or dead targets are ignored). Pass nil to clear the enemy (MFLAG_NO_ENEMY). // Lua mod support",
+	    [](const Monster &constMonster, sol::optional<int> enemyId) {
+		    Monster &monster = const_cast<Monster &>(constMonster);
+		    if (!enemyId.has_value()) {
+			    monster.flags |= MFLAG_NO_ENEMY;
+			    return;
+		    }
+		    if (*enemyId < 0 || !IsEnemyValid(monster.getId(), static_cast<size_t>(*enemyId))) return;
+		    decode_enemy(monster, static_cast<uint8_t>(*enemyId));
+		    monster.flags &= ~MFLAG_NO_ENEMY;
 	    });
 }
 

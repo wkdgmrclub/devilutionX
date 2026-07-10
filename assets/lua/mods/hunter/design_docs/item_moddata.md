@@ -41,8 +41,9 @@ item.modData = encodeBlob(kills, immIdx, trn, gamemode, ohId, ohName)
 
 Pickup sources the blob from `item.modData` (delta-restored) → `receivedBlobs[seed]` (live announce) →
 `blobForSeed` (own tables). Drops (`dropTameScroll`, manual via `OnItemDropped`, refund) persist to the
-delta + announce. `healHeldScrollModData` (at `GameStart`) rebuilds `modData` from `luamoddata` so a
-held scroll saved/reloaded since acquisition still trades losslessly.
+delta + announce. `rebuildHeldScrollModData` (at `GameStart`) is the PRIMARY load-time rebuild of
+held-scroll `modData` from the `luamoddata`-persisted tables — held modData is never hero-saved, so
+every reload empties it; the rebuild is what keeps a reloaded scroll trading losslessly.
 
 ## Watch-items
 - **Trivially-copyable.** `Item` is never raw-copied (it copies by assignment, saves field-by-field via

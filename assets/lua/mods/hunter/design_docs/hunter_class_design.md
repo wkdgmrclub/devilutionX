@@ -51,13 +51,26 @@ Speedbook name reflects the unlocked tier: **Tame / Tame+ / Tame++ / Tame+++** (
 
 **Cast-time refusal:** out-of-criteria targets/scrolls are **actively refused** with the spoken "I can't do that", not silently no-op'd. Skill path via the generic `OnCanCastSkill` C++ hook (reads the cursor-targeted monster); scroll path via three Lua actions — red/unusable in inventory (`OnCanPlayerUseItem`), hidden from the speedbook (filtered in `OnGetCustomSpeedbookScrollEntries`), and pre-cast refusal (`OnCanCastScroll`). The HP threshold remains the in-cast capture condition for a valid-category target (you may keep casting Tame at it until it drops low enough).
 
+**Untameable targets (deliberate rules, enforced at both the `OnCanCastSkill` upfront gate and the
+action-frame capture veto — `target.isGolem`):**
+- **Your own deployed ally** — Tame on it is the *recall* (retame), never a capture. Own minions: no-op.
+- **Another Hunter's deployed ally** — refused. A pet is not a wild monster; capturing it would remove
+  the local copy while every peer's copy survives the `CR` receiver's golem guard (split existence) and
+  mint a duplicate scroll from a live pet (see `bugs.md` 2026-07-09, the Diablo duplication).
+- **The vanilla Golem** — refused (barometer: never captured, converted, or given non-vanilla treatment).
+- **A Berserk'd monster** — refused, **permanently** (not just "while it lasts"): the engine's Berserk
+  sets `MFLAG_BERSERK | MFLAG_GOLEM` for the monster's remaining life and never clears them
+  (`AddBerserk`, missiles.cpp), randomly mutates all four damage stats, and `CheckMissileCol` lets ANY
+  monster's missile hit a `MFLAG_BERSERK` target regardless of faction — a "tamed ex-berserk" would be
+  a permanently friendly-fire-hittable pet with corrupted stats by engine rule. Not a capturable state.
+
 Monster categories as implemented in Lua (note: C++ binding sets `isQuestMonster = isUnique() || MT_DIABLO`, so flag-based champion/boss distinction is impossible):
 - Normal: `!isUnique`
 - Champion unique: `isUnique` and `target.name` not in `BOSS_NAMES` table
 - Quest boss: `isUnique` and `target.name` in `BOSS_NAMES` table (13 named bosses — see init.lua)
 - Diablo: `isQuestMonster && !isUnique` (only non-unique quest monster)
 
-> **Diablo status:** tameable at **Tame+++** (CLVL 45), ≤5% HP — the hard-blocks are gone. Diablo is the one quest monster that is **not unique**, so his scroll travels the normal typeId seed path (`DIABLO_TYPE_ID` = `MT_DIABLO` = 110, keyed via `seedIsDiablo`); it renders **gold tier** and follows the one-per-Hunter deploy rule (`isDiabloDeployed`, mirroring the unique dedup). Taming him completes `Q_DIABLO` **without** the game-ending sequence (`monster:checkQuestKill()` covers Diablo) and grants the difficulty kill credit to **every** player in the game (taming client via the binding; peers via the `CR` capture message → `player:creditDiabloKill()`), like the vanilla ending would. A tamed Diablo's death is a normal ally death (`OnMonsterCanEndGame` veto — no quest clear, no ending, resurrect beam + no corpse). His pet attack keeps Apocalypse's multi-target nature faction-aware: the primary `DiabloApocalypseBoom` fires at his actual target and `spreadDiabloApocalypse` fans extra booms onto every other valid hostile in the ranged envelope (awake non-golem monsters + hostile players, LOS each; never owner/peaceful/pets) — the player-seeking `DiabloApocalypse` carrier is never fired by a pet, and standard pet faction rules + the physical ally buff apply.
+> **Diablo status:** tameable at **Tame+++** (CLVL 45), ≤5% HP — the hard-blocks are gone. Diablo is the one quest monster that is **not unique**, so his scroll travels the normal typeId seed path (`DIABLO_TYPE_ID` = `MT_DIABLO` = 110, keyed via `seedIsDiablo`); it renders **gold tier** and follows the one-per-Hunter deploy rule (`isDiabloDeployed`, mirroring the unique dedup). Taming him completes `Q_DIABLO` **without** the game-ending sequence (`monster:checkQuestKill()` covers Diablo) and grants the difficulty kill credit only to players **standing on his level at the tame** (taming client via the binding; a same-level peer via the `CR` capture message → `player:creditDiabloKill()`) — vanilla MP's own model (`PrepDoEnding` credits only on-level clients); a CR replay never credits. A tamed Diablo's death is a normal ally death (`OnMonsterCanEndGame` veto — no quest clear, no ending, resurrect beam + no corpse). His pet attack keeps Apocalypse's multi-target nature faction-aware: the primary `DiabloApocalypseBoom` fires at his actual target and `spreadDiabloApocalypse` fans extra booms onto every other valid hostile in the ranged envelope (awake non-golem monsters + hostile players, LOS each; never owner/peaceful/pets) — the player-seeking `DiabloApocalypse` carrier is never fired by a pet, and standard pet faction rules + the physical ally buff apply.
 
 ---
 
@@ -131,8 +144,17 @@ All stat-raising elixirs (ElixirStr/Mag/Dex/Vit + Spectral Elixir) show red and 
 
 ## Per-Stat Cap + Total Budget
 
-- Each stat capped at 250 in `attributes.tsv`
-- `OnGetMaxAttributeValue` freezes all four stats when `STR+MAG+DEX+VIT >= 460` — all display golden simultaneously
+- Each stat capped at 250 in `attributes.tsv` (archetype headroom in every stat)
+- A shared total budget caps the four base stats SUMMED at `STAT_BUDGET = 460` — the vanilla
+  Warrior/Sorcerer maxima total (Rogue's 455 quirk is not emulated)
+- `OnGetMaxAttributeValue` implements the budget as a pure function of the player's own base stats:
+  `max(attr) = clamp(attr + (460 − total), 0, 250)`. At total 460 each max equals the current value —
+  all four display golden simultaneously and allocation is blocked. Identical result in every state
+  (fresh, mid-load, post-Forgetting, joining), so debug give-stats always lands exactly 460 total and
+  a full Forgetting refund is always 375 (= 460 − the 85 class-start points)
+- `_pStatPts` is a single BYTE in the hero file, so refunds >255 are persisted by the mod
+  (`OnSavePlayerData` trailing field + `restoreStatPoints()` at GameStart via the writable
+  `player.statPoints` binding)
 - Shrine grinding to 460 is intentional game design
 
 ---
@@ -147,6 +169,8 @@ All stat-raising elixirs (ElixirStr/Mag/Dex/Vit + Spectral Elixir) show red and 
 
 - Potion of Healing → restore `min(current + 30% maxHp, maxHp)` to targeted ally
 - Potion of Full Healing → restore ally to 100% HP
+- Two independent per-use procs: **freecast** (potion not consumed) = `clvl%`; **overheal** (ally healed
+  to 150% maxHP instead) = `(clvl + 10)%`
 
 ---
 
@@ -154,13 +178,20 @@ All stat-raising elixirs (ElixirStr/Mag/Dex/Vit + Spectral Elixir) show red and 
 
 Hunter's class mechanics adapt based on current stat distribution. No selection — archetypes unlock automatically.
 
+Threshold design: every archetype's threshold values sum to 300 (Sorc-lite, single-stat, is 140).
+Inside the 460 budget — with class-start floors str20/mag15/dex30/vit20 — that makes every non-Barb
+DUAL reachable: Rogue+Sorc and Warrior+Sorc land at exactly 460 (min-max builds), Monk+Sorc 410,
+Rogue+Warrior 405, Warrior+Monk 390, Rogue+Monk 370; the Rogue+Monk+Sorc triple also fits at exactly
+460. Barb's `mag ≤ 15` keeps it a committed solo identity (excludes Sorc/Monk by design; its
+Warrior/Rogue duals miss the budget by 5–55).
+
 | Archetype | STR | MAG | DEX | VIT | MAG gate | Unlocks |
 |---|---|---|---|---|---|---|
-| Barbarian | ≥150 | — | — | ≥200 | `mag ≤ 15` | `strMod/75 + level*vit/100` dmg, iron skin AC, natural resistances, armor pierce, cleave (axe/2H), hit-recovery stagger resistance (`level+level/4` threshold), block bonus 30; Wirt excludes Bow/Staff |
-| Warrior | ≥200 | — | ≥150 | — | — | `strMod/100` dmg, critical strike, block bonus 30; Wirt excludes Bow/Staff |
-| Rogue | ≥100 | — | ≥250 | — | — | `strDexMod/200` dmg, full bow dmg mod, arrow velocity, block bonus 20; Wirt excludes Sword/Staff/Axe/Mace/Shield |
-| Monk | ≥100 | ≥50 | ≥200 | — | — | `strDexMod/150` dmg (staff/unarmed), block unarmed/staff, armor AC bonus, cleave (staff), unarmed damage floor (`min≥level/2, max≥level`), block bonus 25; Wirt excludes Bow/MediumArmor/Shield/Mace |
-| Sorcerer-lite | — | ≥150 | — | — | — | Optimal cast frames, 25% mana cost reduction; no Wirt filter |
+| Barbarian | ≥150 | — | — | ≥150 | `mag ≤ 15` | `strMod/75 + level*vit/100` dmg, iron skin AC, natural resistances, armor pierce, cleave (axe/2H), hit-recovery stagger resistance (`level+level/4` threshold), block bonus 30; Wirt excludes Bow/Staff |
+| Warrior | ≥170 | — | ≥130 | — | — | `strMod/100` dmg, critical strike, block bonus 30; Wirt excludes Bow/Staff |
+| Rogue | ≥100 | — | ≥200 | — | — | `strDexMod/200` dmg, full bow dmg mod, arrow velocity, block bonus 20; Wirt excludes Sword/Staff/Axe/Mace/Shield |
+| Monk | ≥100 | ≥50 | ≥150 | — | — | `strDexMod/150` dmg (staff/unarmed), monk attack frames on staff (13) / unarmed (12), block unarmed/staff, armor AC bonus, cleave (staff), unarmed damage floor (`min≥level/2, max≥level`), block bonus 25; Wirt excludes Bow/MediumArmor/Shield/Mace |
+| Sorcerer-lite | — | ≥140 | — | — | — | Optimal cast frames, 25% mana cost reduction; no Wirt filter |
 
 All archetype Lua handlers implemented in `init.lua`. 30 C++ hooks total.
 
@@ -172,9 +203,16 @@ Negative skip = slower than Warrior baseline. VIT has no frame axis (contributes
 
 | Axis | Stat | Starting | Tier 1 | Tier 2 | Tier 3 | Tier 4 (archetype gate) |
 |---|---|---|---|---|---|---|
-| Melee (Attack) | STR | −4 (Sorcerer-slow) | 75 → −3 | 125 → −2 | 175 → −1 | 200 STR (Warrior) or 150 STR+200 VIT (Barb) → 0 |
-| Ranged (Bow) | DEX | 0 (Warrior baseline) | 75 → +1 | 125 → +2 | 175 → +3 | 250 DEX (Rogue) → +4 |
-| Cast | MAG | 0 (Warrior baseline) | 40 → +2 | 80 → +4 | 120 → +6 | 150 (Sorc-lite) → +8 |
+| Melee (Attack) | STR | −4 (Sorcerer-slow) | 75 → −3 | 125 → −2 | 150 → −1 | 170 STR (Warrior) or 150 STR+150 VIT (Barb) → 0 |
+| Ranged (Bow) | DEX | 0 (Warrior baseline) | 75 → +1 | 125 → +2 | 175 → +3 | 200 DEX (Rogue) → +4 |
+| Cast | MAG | 0 (Warrior baseline) | 40 → +2 | 80 → +4 | 120 → +6 | 140 (Sorc-lite) → +8 |
+
+**Monk-archetype weapon override (melee only):** with the Monk archetype active, staff = `max(ladder, +3)`
+and unarmed/unarmed+shield = `max(ladder, +4)` — the warrior sheet's 16 frames play as the vanilla
+Monk's exact totals (staff 13, unarmed 12), additive with Haste like vanilla (staff of haste 13−4 = 9).
+Weapon context via `player.weaponGraphic` (synced equipment state). Sword/mace/axe stay on the STR
+ladder — staff/unarmed is the monk identity, and vanilla Monk's axe (23f) ≈ the ladder at monk-typical
+STR anyway. Rogue bow is already exact through the DEX axis (16−4 = the rogue TSV's 12).
 
 ---
 

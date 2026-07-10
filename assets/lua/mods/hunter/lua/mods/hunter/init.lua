@@ -21,7 +21,7 @@ local render   = require("devilutionx.render")
 -- load-order dependency, and a silent no-op when the LuaNet mpq isn't enabled.
 local luanet
 do
-  local pending = {}  -- channel -> handler, applied once LuaNet becomes available
+  local pending = {} -- channel -> handler, applied once LuaNet becomes available
   local function apply(ch, h)
     local ln = events.luanet
     if ln == nil then return false end
@@ -46,12 +46,12 @@ do
 end
 
 -- Ally bookkeeping caps.
-MAX_HUNTERS              = 4
-MAX_DEPLOYED_PER_HUNTER  = 4
-SKELKING_MAX_MINIONS     = 3   -- cap of simultaneous skeleton minions per tamed Skeleton King
-HORK_MAX_MINIONS         = 3   -- cap of simultaneous Hork minions per tamed Hork Demon
+MAX_HUNTERS             = 4
+MAX_DEPLOYED_PER_HUNTER = 4
+SKELKING_MAX_MINIONS    = 3                                           -- cap of simultaneous skeleton minions per tamed Skeleton King
+HORK_MAX_MINIONS        = 3                                           -- cap of simultaneous Hork minions per tamed Hork Demon
 -- Reserve extra per-level monster-TYPE + live-monster slots for a full party's worst case: every hunter fields a full deploy including a Skeleton King AND a Hork Demon at full minions = 4 * (4+3+3) = 40 slots, inside the extended region (AbsoluteMaxMonsters 252 - natural 200 = 52).
-monsters.requestExtraTypes(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER + 2)  -- +2: skeleton + hork-spawn minion species, shared across hunters
+monsters.requestExtraTypes(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER + 2) -- +2: skeleton + hork-spawn minion species, shared across hunters
 monsters.requestExtraMonsters(MAX_HUNTERS * (MAX_DEPLOYED_PER_HUNTER + SKELKING_MAX_MINIONS + HORK_MAX_MINIONS))
 
 -- Queued in SpellDataLoaded, resolved in SpellsAssigned (see spells.registerSpell below).
@@ -65,25 +65,25 @@ FORGET_POTION_PRICE  = 1000000 -- gold cost in Pepin's shop
 forgetPotionSnapshot = nil
 
 -- Session cache: tameScrollData[seed] = { typeId, savedHp, maxHp, name, level }.
-tameScrollData = {}
+tameScrollData       = {}
 
 -- List of { monster, seed } for all currently deployed allies.
-deployedAllies = {}
+deployedAllies       = {}
 
 -- Parallel monsterId -> entry index for O(1) membership; mutate only via trackDeployedAlly/untrackDeployedAt.
-deployedAlliesById = {}
+deployedAlliesById   = {}
 
 -- Plane-1 runtime registry of allies owned by ANOTHER client, recreated from a net SP message.
-remoteAllies = {}
+remoteAllies         = {}
 
 -- Local delta level cached at level entry (OnLevelExit RM broadcasts need the departing level; plrlevel is already the destination by then).
-myDeltaLevel = 0
+myDeltaLevel         = 0
 
 -- Plane-2 runtime: seed -> ally `data` for a deploy we requested from the level owner.
-pendingDeploys = {}
+pendingDeploys       = {}
 
 -- Saved deployed-ally roster awaiting re-link on the next level entry (nil when nothing to re-link).
-pendingAllyRoster = nil
+pendingAllyRoster    = nil
 
 
 -- Last-seen fingerprint of the Hunter's buff-relevant stats; polled to re-derive ally buffs on change.
@@ -96,7 +96,7 @@ corpselessDeaths = {}
 allyKillCounts = {}
 
 function trackDeployedAlly(entry)
-  entry.id = entry.monster.id  -- capture the id once; survives the monster userdata going stale
+  entry.id = entry.monster.id -- capture the id once; survives the monster userdata going stale
   -- One slot id = one live monster: an existing entry under this id is STALE (its monster is gone and
   -- the engine reused the slot). Evict it from the array too, or deployedAllies holds two entries whose
   -- userdata read the SAME live monster — a later recall of the stale entry then builds a scroll from
@@ -147,8 +147,8 @@ end
 -- Should the local observer see the rich Tamed-pet info readout for this monster?
 function isFriendlyTamedView(monster)
   if monster == nil then return false end
-  if isDeployedAlly(monster.id) then return true end        -- our own ally/minion
-  if remoteAllies[monster.id] == nil then return false end   -- not a tamed pet we track
+  if isDeployedAlly(monster.id) then return true end       -- our own ally/minion
+  if remoteAllies[monster.id] == nil then return false end -- not a tamed pet we track
   return arePeaceful(player.self(), player.get(monster.ownerPlayerId))
 end
 
@@ -234,7 +234,10 @@ function packStringToWords(t, s)
     local w = 0
     for j = 0, 3 do
       local b = (i + j <= len) and s:byte(i + j) or 0
-      w = w + b * (2 ^ (8 * j))
+      -- Integer ops on purpose: `2^n` arithmetic yields FLOAT-typed words, which fail the engine
+      -- save reader's integer conversion (SOL_SAFE_NUMERICS) and silently truncate the whole blob
+      -- from the first name onward — the root of the "Found: Unknown"/blank-OH class.
+      w = w | (b << (8 * j))
     end
     t[#t + 1] = w
     i = i + 4
@@ -280,7 +283,7 @@ function isProtectedFromOffense(attacker, monster)
   if monster.isGolem then
     local owner = player.get(monster.ownerPlayerId)
     if owner ~= nil and owner.id ~= attacker.id
-       and owner.className == HUNTER_CLASS and arePeaceful(attacker, owner) then
+        and owner.className == HUNTER_CLASS and arePeaceful(attacker, owner) then
       return true
     end
   end
@@ -288,7 +291,7 @@ function isProtectedFromOffense(attacker, monster)
 end
 
 -- Named quest bosses: require Tame++ (level 45, ≤10% HP); regular uniques only need Tame+ (level 30, ≤20% HP).
-BOSS_NAMES = {
+BOSS_NAMES       = {
   ["Arch-Bishop Lazarus"] = true,
   ["Zhar the Mad"]        = true,
   ["Sir Gorash"]          = true,
@@ -311,14 +314,14 @@ STARTER_LEVEL    = 2
 STARTER_MAX_HP   = 6
 STARTER_NAME     = "Scavenger"
 
-UNIQUE_SEED_FLAG = 0x800  -- bit 11 of the 12-bit type field marks a unique-monster scroll
+UNIQUE_SEED_FLAG = 0x800 -- bit 11 of the 12-bit type field marks a unique-monster scroll
 
 -- Seed layout (31 bits, signed-int32 safe): [7-bit charTag][12-bit counter][12-bit type field].
 -- charTag = OHID % 128 keeps seeds globally unique across characters in MP. Without it, two Hunters
 -- mint identical seeds (every starter scroll is counter 1 + MT_NSCAV) and one player's SD broadcast
 -- poisons the other's seed-keyed caches (scrollOrigin/receivedBlobs/item delta) — see bugs.md.
 function allocSeed(typeId, uniqueTypeIdx)
-  local counter = scrollCounter   -- monotonic, never reused (see scrollCounter)
+  local counter = scrollCounter -- monotonic, never reused (see scrollCounter)
   scrollCounter = scrollCounter + 1
   local upper = (getMyOhId() % 128) * 4096 + counter
   if uniqueTypeIdx ~= nil and uniqueTypeIdx >= 0 then
@@ -343,7 +346,7 @@ end
 
 -- Diablo is the one quest monster that is NOT unique, so his scrolls travel the normal typeId seed
 -- path; every Diablo special case keys off the seed's stored type, never a unique index.
-DIABLO_TYPE_ID = 110  -- MT_DIABLO (Source/tables/monstdat.h)
+DIABLO_TYPE_ID = 110 -- MT_DIABLO (Source/tables/monstdat.h)
 function seedIsDiablo(seed)
   return seedToTypeId(seed) == DIABLO_TYPE_ID
 end
@@ -395,8 +398,8 @@ function encodeDwBuff(savedHp, maxHp, level, difficulty)
   local pct = 0
   if mhp > 0 and hp > 0 then
     pct = math.floor(hp / mhp * 100 + 0.5)
-    if pct < 1 then pct = 1 end       -- a living ally must never round down to 0%
-    if pct > 100 then pct = 100 end   -- current HP is never above max
+    if pct < 1 then pct = 1 end     -- a living ally must never round down to 0%
+    if pct > 100 then pct = 100 end -- current HP is never above max
   end
   local lv  = math.min(math.max(math.floor(level), 0), 63)
   local dif = math.min(math.max(math.floor(difficulty or 0), 0), 3)
@@ -416,7 +419,7 @@ end
 
 -- Recovery registry: backup ledger of deployed allies, rebuildable from seed+dwBuff. recoveryRegistry[seed] = { dwBuff, state="lost"|"injured", order }.
 recoveryRegistry = {}
-RECOVERY_CAP = MAX_DEPLOYED_PER_HUNTER  -- mirror the deploy cap; evict oldest past this
+RECOVERY_CAP = MAX_DEPLOYED_PER_HUNTER -- mirror the deploy cap; evict oldest past this
 RECOVERY_INJURED_COST_PER_LEVEL = 100
 
 -- Monotonic insertion order, used only to pick the oldest entry to evict at the cap.
@@ -456,8 +459,8 @@ end
 -- Ally Progression: Tamed -> Bonded promotion + CLVL-scaled stat buffs.
 
 -- Resistance bitflags exposed by the engine (monsters.Resistance.*).
-RES = monsters.Resistance
-BONDED_IMMUNE_OPTIONS = { RES.ImmuneFire, RES.ImmuneMagic, RES.ImmuneLightning }
+RES                      = monsters.Resistance
+BONDED_IMMUNE_OPTIONS    = { RES.ImmuneFire, RES.ImmuneMagic, RES.ImmuneLightning }
 -- Each immunity supersedes (drops) the same-element resistance, matching vanilla's UI pattern.
 BONDED_IMMUNE_SUPERSEDES = {
   [RES.ImmuneFire]      = RES.ResistFire,
@@ -465,26 +468,26 @@ BONDED_IMMUNE_SUPERSEDES = {
   [RES.ImmuneLightning] = RES.ResistLightning,
 }
 -- Sentinel stored in bondedImmunity for the "already has all three immunities -> +200 AC" fallback.
-BONDED_AC       = 4096
-BONDED_AC_BONUS = 200
-BONDED_KILLS_PER_LEVEL = 100
+BONDED_AC                = 4096
+BONDED_AC_BONUS          = 200
+BONDED_KILLS_PER_LEVEL   = 100
 
 -- Kill-scaled ToHit bonus: +1% per KILL_TOHIT_PER kills, hard-capped at KILL_TOHIT_CAP%.
-KILL_TOHIT_PER = 10
-KILL_TOHIT_CAP = 500
+KILL_TOHIT_PER           = 10
+KILL_TOHIT_CAP           = 500
 
 -- Pre-Bonded "about to evolve" flash: a Tamed ally one kill short of Bonded flashes via a solid-colour TRN.
-BONDED_FLASH_COLOR  = 0xB0   -- palette index drawn while flashing (global range 128-255 = cross-palette safe)
-FLASH_PERIOD_FRAMES = 80     -- how often a blink starts (frame-driven, FPS-relative)
-FLASH_ON_FRAMES     = 20     -- how long the solid peak holds each blink
+BONDED_FLASH_COLOR       = 0xB0 -- palette index drawn while flashing (global range 128-255 = cross-palette safe)
+FLASH_PERIOD_TICKS       = 28 -- how often a blink starts (game ticks, 20/s — synced clock, so peers blink in phase)
+FLASH_ON_TICKS           = 7 -- how long the solid peak holds each blink
 function buildSolidTrn(colorIndex)
   local t = {}
   for i = 1, 256 do t[i] = colorIndex end
   return t
 end
+
 -- Registered once at load; the handle is returned from OnGetMonsterTRN while a flash is "on".
-BONDED_FLASH_TRN  = monsters.registerTrn(buildSolidTrn(BONDED_FLASH_COLOR))
-flashFrameCounter = 0
+BONDED_FLASH_TRN    = monsters.registerTrn(buildSolidTrn(BONDED_FLASH_COLOR))
 
 -- Bonded "aura" glow: a permanent light source on a Bonded ally (the engine 'lighted'-unique mechanic).
 BONDED_LIGHT_RADIUS = 3
@@ -510,12 +513,13 @@ function brightnessRank(i)
   end
   return 0
 end
+
 -- Bake a 256-entry TRN by cycling `pattern` across brightness ranks (numeric slot = repaint, false = keep pixel).
 function buildScatterTrn(pattern)
   local n = #pattern
   local t = {}
   for i = 0, 255 do
-    local target = i  -- default / level-specific 0-127: keep the monster's own pixel
+    local target = i -- default / level-specific 0-127: keep the monster's own pixel
     if i >= 128 then
       local slot = pattern[(brightnessRank(i) % n) + 1]
       if slot then target = slot end
@@ -524,16 +528,17 @@ function buildScatterTrn(pattern)
   end
   return t
 end
+
 -- Registered TRN handles, indexed by variant (1..5).
-BONDED_TRN_TABLE = {
+BONDED_TRN_TABLE       = {
   monsters.registerTrn(buildScatterTrn { 230, 205, false }), -- 1 Fire:      bright red   + bright yellow
   monsters.registerTrn(buildScatterTrn { 186, 254, false }), -- 2 Lightning: bright blue  + white
-  monsters.registerTrn(buildScatterTrn { 254, 230, false }), -- 3 Magic:     white        + bright red
+  monsters.registerTrn(buildScatterTrn { 255, 252, false }), -- 3 Magic:     brightest white + light grey (all-bright white speckle; AC's identity is its near-black component)
   monsters.registerTrn(buildScatterTrn { 240, 253, false }), -- 4 +200 AC:   near-black grey + bright grey
   monsters.registerTrn(buildScatterTrn { 203, 255, false }), -- 5 Gilded:    gold         + white-gold
 }
 -- Map a rolled bonus to its default variant; Gilded (5) is the Hell-only override (see rollBondedTrn).
-BONDED_TRN_GILDED = 5
+BONDED_TRN_GILDED      = 5
 BONDED_TRN_BY_IMMUNITY = {
   [RES.ImmuneFire]      = 1,
   [RES.ImmuneLightning] = 2,
@@ -541,24 +546,25 @@ BONDED_TRN_BY_IMMUNITY = {
   [BONDED_AC]           = 4,
 }
 -- A Hell-tamed ally has HELL_GILD_CHANCE% to wear the rare Gilded Metal recolour. bondedTrn[seed] = rolled variant, saved.
-HELL_DIFFICULTY  = 2
-HELL_GILD_CHANCE = 15
-bondedTrn = {}
+HELL_DIFFICULTY        = 2
+HELL_GILD_CHANCE       = 15
+bondedTrn              = {}
 -- scrollGamemode[seed] = 0 (Diablo) | 1 (Hellfire): gamemode the scroll was first tamed in; captured once, saved.
-scrollGamemode = {}
+scrollGamemode         = {}
 -- scrollAreaLevel[seed] = dungeon level the scroll was first tamed in; mapped to an area name for the "Found:" field.
-scrollAreaLevel = {}
-flashOn           = false
+scrollAreaLevel        = {}
+-- Pre-Bonded flash phase, derived from the synced tick clock once per GameTick (read per-frame by OnGetMonsterTRN).
+flashOn                = false
 
 -- Spellcaster allies scale cast damage off the Hunter's matching resistance; maps DamageType -> resistance key.
-SPELL_ELEMENT_OF = {
+SPELL_ELEMENT_OF       = {
   [monsters.DamageType.Fire]      = "fire",
   [monsters.DamageType.Lightning] = "lightning",
   [monsters.DamageType.Magic]     = "magic",
   [monsters.DamageType.Acid]      = "magic",
 }
 -- The local Hunter's UNCAPPED resistances (may exceed the 75% display cap), refreshed from OnCalcPlayerResistances.
-hunterResist = { fire = 0, lightning = 0, magic = 0 }
+hunterResist           = { fire = 0, lightning = 0, magic = 0 }
 
 -- Cache the local Hunter's uncapped resistances for spellcaster damage scaling.
 events.OnCalcPlayerResistances.add(function(p, fire, lightning, magic)
@@ -578,7 +584,7 @@ IMMUNITY_BY_INDEX = { [1] = RES.ImmuneFire, [2] = RES.ImmuneMagic, [3] = RES.Imm
 IMMUNITY_TO_INDEX = {}
 for idx, val in pairs(IMMUNITY_BY_INDEX) do IMMUNITY_TO_INDEX[val] = idx end
 
-SCROLL_BLOB_FMT = "I2 B B B B I4 s1"  -- kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName
+SCROLL_BLOB_FMT = "I2 B B B B I4 s1" -- kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName
 
 function encodeBlob(kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName)
   return string.pack(SCROLL_BLOB_FMT,
@@ -626,16 +632,26 @@ function isOneKillFromBonded(entry)
   return kills >= needed - 1 and kills < needed
 end
 
--- Bonded check for a scroll ITEM (no live monster): mlvl from the dwBuff-encoded level, kills from allyKillCounts[seed].
-function scrollIsBonded(item)
-  local _, _, level = decodeDwBuff(item.buff)
-  return isBonded(item.seed, level)
+-- Kills for a scroll ITEM, for presentation: our own tables when we hold the seed's identity (its
+-- owner), else the scroll's announced identity blob — the item's own modData (a delta-restored floor
+-- copy), the live SD cache, then the level-delta blob. Same source family as the pickup restore, so
+-- a FOREIGN scroll (another Hunter's floor drop) presents its true kills before we ever own it.
+function scrollKillsFor(item)
+  local k = allyKillCounts[item.seed]
+  if k ~= nil then return k end
+  local blob = item.modData or ""
+  if blob == "" then blob = receivedBlobs[item.seed] or "" end
+  if blob == "" then blob = items.getItemDeltaModData(items.currentDeltaLevel(), item.seed) end
+  if blob == "" then return 0 end
+  local kills = decodeBlob(blob)
+  return kills or 0
 end
 
--- Gold/"unique"-tier scroll = a seed-unique champion/boss scroll, a Diablo scroll, OR any Bonded scroll.
-function scrollIsGoldTier(item)
-  if seedGetUniqueType(item.seed) >= 0 or seedIsDiablo(item.seed) then return true end
-  return scrollIsBonded(item)
+-- Bonded check for a scroll ITEM (no live monster): mlvl from the dwBuff-encoded level, kills via scrollKillsFor (own tables or the announced blob).
+function scrollIsBonded(item)
+  local _, _, level = decodeDwBuff(item.buff)
+  if level == nil or level <= 0 then return false end
+  return scrollKillsFor(item) >= level * BONDED_KILLS_PER_LEVEL
 end
 
 -- Base-vs-applied stat machinery: each ally's BASE (pre-buff) stats snapshot into entry.base; the live buff layers on top, recomputed in place and never baked into the persisted scroll.
@@ -659,7 +675,7 @@ function allySharePct(entry)
   local me = player.self()
   if me == nil or me.className ~= HUNTER_CLASS then return 0 end
   local count = countDeployedAllies()
-  if count < 1 then count = 1 end           -- guard: self may not be tracked yet at first-deploy recalc
+  if count < 1 then count = 1 end -- guard: self may not be tracked yet at first-deploy recalc
   local bonded = isBonded(entry.seed, entry.monster.level)
   return (me.characterLevel / count) * (bonded and 2 or 1)
 end
@@ -667,18 +683,18 @@ end
 -- Live, share-divided, CLVL-scaled physical buff pool (HP / dmg / ToHit / AC) + an additive kill-scaled ToHit bonus. Governs MELEE; missile damage is scaled separately in OnGolemMissileDamage.
 function computeAllyBuff(entry)
   local zero = { hp = 0, minDamage = 0, maxDamage = 0, toHit = 0, armorClass = 0 }
-  if entry.isMinion then return zero end  -- minions get a static spawn-time buff, not this live pool
+  if entry.isMinion then return zero end -- minions get a static spawn-time buff, not this live pool
   local me = player.self()
   if me == nil or me.className ~= HUNTER_CLASS then return zero end
-  local clvl   = me.characterLevel
-  local bonded = isBonded(entry.seed, entry.monster.level)
+  local clvl     = me.characterLevel
+  local bonded   = isBonded(entry.seed, entry.monster.level)
 
   local sharePct = allySharePct(entry)
   local function share(stat) return math.ceil(stat * sharePct / 100) end
 
   -- Kill-scaled ToHit (additive, per-ally): +1% per KILL_TOHIT_PER kills, clamped to CLVL*10, doubled if Bonded, capped at KILL_TOHIT_CAP%.
-  local raw      = math.floor((allyKillCounts[entry.seed] or 0) / KILL_TOHIT_PER)
-  raw            = math.min(raw, clvl * 10)
+  local raw       = math.floor((allyKillCounts[entry.seed] or 0) / KILL_TOHIT_PER)
+  raw             = math.min(raw, clvl * 10)
   local killToHit = math.min(raw * (bonded and 2 or 1), KILL_TOHIT_CAP)
 
   return {
@@ -692,7 +708,7 @@ end
 
 -- Re-derive and re-apply the live buff for one ally from its base + current inputs.
 function applyAllyBuff(entry)
-  if entry.isMinion then return end       -- minions get a static spawn-time buff, not the live pool
+  if entry.isMinion then return end -- minions get a static spawn-time buff, not the live pool
   if entry.base == nil then return end
   local m = entry.monster
   local base = entry.base
@@ -734,9 +750,9 @@ function ownAllyProfile(entry)
   -- The pet's Original Trainer (may be a DIFFERENT Hunter if received via trade); rides the CO message for peers.
   local origin = originForSeed(entry.seed) or { name = me.name, id = getMyOhId() }
   return {
-    isMinion      = minion,
-    bonded        = (not minion) and isBonded(entry.seed, entry.monster.level) or false,
-    bondedImm     = bondedImmunity[entry.seed] or 0,
+    isMinion       = minion,
+    bonded         = (not minion) and isBonded(entry.seed, entry.monster.level) or false,
+    bondedImm      = bondedImmunity[entry.seed] or 0,
     baseMinDamage  = (entry.base and entry.base.minDamage) or 0,
     baseMaxDamage  = (entry.base and entry.base.maxDamage) or 0,
     baseToHit      = (entry.base and entry.base.toHit) or 0,
@@ -744,17 +760,17 @@ function ownAllyProfile(entry)
     baseMaxHp      = (entry.base and entry.base.maxHp) or 0,
     ohId           = origin.id or 0,
     ohName         = origin.name or "?",
-    kills          = allyKillCounts[entry.seed] or 0,    -- lifetime kill count (info box; minions have no seed -> 0)
-    gamemode       = scrollGamemode[entry.seed] or 0,    -- tamed-in gamemode (floating box "Version:")
-    areaLevel      = scrollAreaLevel[entry.seed] or 0,   -- tamed-in dungeon level (floating box "Found:")
-    sharePct      = allySharePct(entry),
-    magicCurrent  = me.magicCurrent,
-    resFire       = hunterResist.fire,
-    resLight      = hunterResist.lightning,
-    resMagic      = hunterResist.magic,
+    kills          = allyKillCounts[entry.seed] or 0,  -- lifetime kill count (info box; minions have no seed -> 0)
+    gamemode       = scrollGamemode[entry.seed] or 0,  -- tamed-in gamemode (floating box "Version:")
+    areaLevel      = scrollAreaLevel[entry.seed] or 0, -- tamed-in dungeon level (floating box "Found:")
+    sharePct       = allySharePct(entry),
+    magicCurrent   = me.magicCurrent,
+    resFire        = hunterResist.fire,
+    resLight       = hunterResist.lightning,
+    resMagic       = hunterResist.magic,
     -- Cosmetic Plane-2 state a peer can't derive locally: Bonded recolour variant + pre-Bonded flash window.
-    trnVariant    = bondedTrn[entry.seed] or 0,
-    nearBonded    = isOneKillFromBonded(entry),
+    trnVariant     = bondedTrn[entry.seed] or 0,
+    nearBonded     = isOneKillFromBonded(entry),
   }
 end
 
@@ -762,7 +778,7 @@ end
 function profResForElement(prof, element)
   if element == "fire" then return prof.resFire end
   if element == "lightning" then return prof.resLight end
-  return prof.resMagic  -- "magic" (also acid, reclassified to magic)
+  return prof.resMagic -- "magic" (also acid, reclassified to magic)
 end
 
 -- The caster/combat profile for ANY tamed ally on this client (own = built live, remote = cached CO broadcast). nil for a non-ally.
@@ -800,16 +816,33 @@ end
 events.OnGolemMissileDamage.add(function(golem, missileId, dam)
   if golem == nil then return dam end
   -- A tamed Diablo's primary Apocalypse boom fans out to every other valid hostile in the envelope
-  -- (see spreadDiabloApocalypse, defined by the ranged handler); the spread's own booms re-enter this
-  -- handler and are guarded out by apocSpreadActive. Only a tamed Diablo ever fires this missile as a
-  -- golem (a berserk'd wild Diablo's carrier booms fail isTamedAlly → vanilla).
-  if missileId == monsters.MissileID.DiabloApocalypseBoom and not apocSpreadActive and isTamedAlly(golem.id) then
+  -- (see spreadDiabloApocalypse, defined by the ranged handler). OWNER-ONLY (isDeployedAlly, never a
+  -- remote pet): the fan-out reads owner-local state, so the owner computes ONE boom set and
+  -- replicates it to peers over AB — firing it per-client from each client's own view produced
+  -- divergent boom sets (the spread-desync bug). The spread's own booms — local and AB-received —
+  -- re-enter this handler and are guarded out by apocSpreadActive / the isDeployedAlly gate. Only a
+  -- tamed Diablo ever fires this missile as a golem (a berserk'd wild Diablo's carrier booms are
+  -- nobody's deployed ally → vanilla).
+  if missileId == monsters.MissileID.DiabloApocalypseBoom and not apocSpreadActive and isDeployedAlly(golem.id) then
     spreadDiabloApocalypse(golem)
   end
+  -- Single-writer fire replication (AT): an OWN ally's missile just spawned — broadcast it so peers
+  -- render the same shot (their copies hold instead of self-firing; see the choose-action handlers).
+  -- The choose-time stash is consumed on the FIRST spawn of the attack: a multi-part missile's later
+  -- segments (e.g. Inferno) find no stash and are skipped — the peer's one AT-fired missile recreates
+  -- the whole effect through the same engine processor. Spread booms ride AB, not AT (apocSpreadActive
+  -- guard); a peer's AT/AB-fired missile re-enters here as a REMOTE ally and never re-broadcasts.
+  if system.isMultiplayer() and not apocSpreadActive and isDeployedAlly(golem.id) then
+    local scratch = allyScratch(golem.id)
+    if scratch ~= nil and scratch.pendingFireX ~= nil then
+      broadcastFireAction(golem.id, missileId, scratch.pendingFireX, scratch.pendingFireY)
+      scratch.pendingFireX, scratch.pendingFireY = nil, nil
+    end
+  end
   local prof = allyMissileProfile(golem)
-  if prof == nil or prof.isMinion then return dam end    -- not our ally / minions: static buff only
+  if prof == nil or prof.isMinion then return dam end -- not our ally / minions: static buff only
   local element = SPELL_ELEMENT_OF[monsters.getMissileDamageType(missileId)]
-  if element == nil then return dam end                  -- physical missile: keep the phys-buffed roll
+  if element == nil then return dam end               -- physical missile: keep the phys-buffed roll
   if prof.baseMaxDamage == 0 then return dam end
   -- Strip the physical buff so the spell scales off Magic + resistance, keeping the missile's native multiplier.
   local cur = golem.maxDamage
@@ -828,9 +861,9 @@ events.OnGolemMissileCanHitPlayer.add(function(ally, victim)
   if not isTamedAlly(ally.id) then return nil end
   local owner = allyOwner(ally)
   if owner == nil then return nil end
-  if victim.id == owner.id then return false end  -- own owner: never
+  if victim.id == owner.id then return false end -- own owner: never
   if not system.isFriendlyFireEnabled() and owner.friendlyMode then return false end
-  return nil  -- FF enabled or hostile owner: vanilla hit resolution
+  return nil                                     -- FF enabled or hostile owner: vanilla hit resolution
 end)
 
 -- OnPlayerMissileCanHitGolem: the mirror direction — a PLAYER's missile resolving against a tamed ally (MonsterMHit has no faction or toggle check either). With Friendly Fire OFF, a caster who is the pet's owner or peaceful with the owner passes through (the missile keeps flying, so a spell aimed past the pet still reaches its enemy); hostility or FF ON -> vanilla resolution (pets are fair game in PvP, mirroring how a hostile player's missiles hit players regardless of the toggle). Tamed allies only — a vanilla Golem stays vanilla-hittable (base-mechanics barometer). Deterministic on every client: isTamedAlly (synced roster), friendlyMode (synced), isFriendlyFireEnabled (game-init info).
@@ -839,9 +872,9 @@ events.OnPlayerMissileCanHitGolem.add(function(caster, target)
   if not isTamedAlly(target.id) then return nil end
   local owner = allyOwner(target)
   if owner == nil then return nil end
-  if caster.id == owner.id then return false end       -- own pet: pass through
-  if arePeaceful(caster, owner) then return false end  -- peaceful allied Hunter's pet: pass through
-  return nil  -- hostile: vanilla hit resolution
+  if caster.id == owner.id then return false end      -- own pet: pass through
+  if arePeaceful(caster, owner) then return false end -- peaceful allied Hunter's pet: pass through
+  return nil                                          -- hostile: vanilla hit resolution
 end)
 
 -- OnGolemKillIsPlayerKill: a tamed pet is its owner's weapon, so a killing blow it lands on a HOSTILE
@@ -852,22 +885,50 @@ end)
 -- an unknown owner, our own pet (can't be hit by it regardless), and a PEACEFUL owner (not PvP). Only a
 -- hostile owner's pet flips it to a player kill. Deterministic: isTamedAlly (synced roster), friendlyMode (synced).
 events.OnGolemKillIsPlayerKill.add(function(golem, victim)
-  if not isTamedAlly(golem.id) then return nil end   -- vanilla Golem / untracked source: vanilla monster/trap
+  if not isTamedAlly(golem.id) then return nil end -- vanilla Golem / untracked source: vanilla monster/trap
   local owner = allyOwner(golem)
   if owner == nil then return nil end
-  if victim.id == owner.id then return nil end       -- own owner: not PvP
-  if arePeaceful(owner, victim) then return nil end  -- peaceful owner: not PvP
-  return true                                        -- hostile owner's pet landed the blow → player kill
+  if victim.id == owner.id then return nil end      -- own owner: not PvP
+  if arePeaceful(owner, victim) then return nil end -- peaceful owner: not PvP
+  return true                                       -- hostile owner's pet landed the blow → player kill
 end)
 
 -- OnApocalypseCanTargetGolem: vanilla Apocalypse skips ALL player-minions (its own isPlayerMinion continue) — even a hostile caster's Apoc can't touch pets. Widen it for PvP only: a HOSTILE caster's Apocalypse may boom another player's tamed ally (mirrors the OnGolemCanTargetGolem hostility rule; the boom's damage then resolves normally through OnPlayerMissileCanHitGolem, which lets hostile hits through in both FF modes). Own pets and peaceful owners' pets keep the vanilla protection unconditionally — Apoc can't hit players even when hostile, so peace-time pets stay equally untouchable, independent of Friendly Fire. Tamed allies only: a vanilla Golem keeps the vanilla exclusion (barometer). Deterministic: synced roster/flags.
 events.OnApocalypseCanTargetGolem.add(function(caster, target)
-  if not isTamedAlly(target.id) then return nil end     -- vanilla Golem etc.: vanilla exclusion
+  if not isTamedAlly(target.id) then return nil end -- vanilla Golem etc.: vanilla exclusion
   local owner = allyOwner(target)
   if owner == nil then return nil end
-  if caster.id == owner.id then return nil end          -- own pets: never
-  if arePeaceful(caster, owner) then return nil end     -- peace: never
-  return true                                           -- hostile: Apoc may boom the pet
+  if caster.id == owner.id then return nil end      -- own pets: never
+  if arePeaceful(caster, owner) then return nil end -- peace: never
+  return true                                       -- hostile: Apoc may boom the pet
+end)
+
+-- OnGuardianCanTargetGolem: vanilla Guardian skips ALL player-minions (GuardianTryFireAt's isPlayerMinion return) — even a hostile caster's turret ignores pets (observed in PvP testing). Widen it for PvP only, the OnApocalypseCanTargetGolem rule verbatim: a HOSTILE caster's Guardian may fire at another player's tamed ally; the firebolt's damage then resolves normally through OnPlayerMissileCanHitGolem (hostile hits pass in both FF modes). Own pets and peaceful owners' pets keep the vanilla protection unconditionally — a Guardian never fires at players, so peace-time pets stay equally untouchable, independent of Friendly Fire. Tamed allies only: a vanilla Golem keeps the vanilla exclusion (barometer). Deterministic: the turret scans on every simulating client, and every input here is synced state (roster, friendlyMode).
+events.OnGuardianCanTargetGolem.add(function(caster, target)
+  if not isTamedAlly(target.id) then return nil end -- vanilla Golem etc.: vanilla exclusion
+  local owner = allyOwner(target)
+  if owner == nil then return nil end
+  if caster.id == owner.id then return nil end      -- own pets: never
+  if arePeaceful(caster, owner) then return nil end -- peace: never
+  return true                                       -- hostile: Guardian may fire at the pet
+end)
+
+-- OnGolemMissileCanHitGolem: vanilla never resolves one player-minion's missile against another (the
+-- CheckMissileCol faction gate skips the pair — the missile passes through), which made ranged
+-- pet-vs-pet combat undeliverable: the targeting layer permits the fight (OnGolemCanTargetGolem), so
+-- a ranged pet would lock a hostile pet and spam booms that never register (the zero-damage half of
+-- the Apoc-desync bug). Open the pair with EXACTLY the targeting layer's rule — mutually-hostile
+-- owners — so a boom is only deliverable where the fight is permitted; the admitted hit then resolves
+-- through OnMonsterMissileHit (owner-authoritative) like any minion-involved hit. Same-owner and
+-- peaceful pairs keep the vanilla pass-through (a stray boom crossing a friendly pet's tile never
+-- resolves), the vanilla Golem included on both ends — same symmetry as the melee rule.
+events.OnGolemMissileCanHitGolem.add(function(source, target)
+  local a = player.get(source.ownerPlayerId)
+  local b = player.get(target.ownerPlayerId)
+  if a == nil or b == nil then return nil end -- unknown owner -> vanilla pass-through
+  if a.id == b.id then return nil end         -- same owner -> never
+  if arePeaceful(a, b) then return nil end    -- both friendly -> never
+  return true                                 -- at least one hostile -> the hit may resolve
 end)
 
 -- Acid-as-magic + Bonded immunity piercing: two behaviours expressed in OnMonsterMissileHit, both
@@ -875,17 +936,23 @@ end)
 
 -- DamageType -> { IMMUNE_* flag we clear, RESIST_* (75%) flag we set } for elements with a real resist tier.
 PIERCE_OF = {
-  [monsters.DamageType.Fire]      = { immune = RES.ImmuneFire,      resist = RES.ResistFire },
+  [monsters.DamageType.Fire]      = { immune = RES.ImmuneFire, resist = RES.ResistFire },
   [monsters.DamageType.Lightning] = { immune = RES.ImmuneLightning, resist = RES.ResistLightning },
-  [monsters.DamageType.Magic]     = { immune = RES.ImmuneMagic,     resist = RES.ResistMagic },
+  [monsters.DamageType.Magic]     = { immune = RES.ImmuneMagic, resist = RES.ResistMagic },
 }
 
--- OnMonsterMissileHit: single resolution call-out for any missile with a player-minion on either end. Acts only for OUR allies (vanilla Golem returns -1); resolves inline (acid-as-magic, Bonded pierce, XP tag, resolve, restore).
+-- OnMonsterMissileHit: single resolution call-out for any missile with a player-minion on either end. Acts only for OUR allies (vanilla Golem returns -1); resolves inline (acid-as-magic, Bonded pierce, melee-parity to-hit, XP tag, resolve, restore).
 events.OnMonsterMissileHit.add(function(source, target, missileId, damageType, minDam, maxDam, dist, shifted)
   if target == nil then return -1 end
-  local srcProf = source ~= nil and allyMissileProfile(source) or nil   -- our/another's ally as attacker?
-  local tgtProf = allyMissileProfile(target)                            -- a tamed ally as victim?
-  if srcProf == nil and tgtProf == nil then return -1 end               -- vanilla Golem / non-allies → engine default
+  local srcProf = source ~= nil and allyMissileProfile(source) or nil -- our/another's ally as attacker?
+  local tgtProf = allyMissileProfile(target)                          -- a tamed ally as victim?
+  -- Barometer gate on ROSTER tracking (scratch presence), not profile presence: a vanilla Golem is in
+  -- neither roster → -1 (pure engine default), while a TRACKED pet whose CO profile hasn't landed yet
+  -- must still fall through to the authority DECLINE below — a -1 here would run a local vanilla
+  -- resolution alongside the authority's (a second resolver in the CO-lag window).
+  local srcTracked = source ~= nil and allyScratch(source.id) ~= nil
+  local tgtTracked = allyScratch(target.id) ~= nil
+  if not srcTracked and not tgtTracked then return -1 end -- vanilla Golem / non-allies → engine default
 
   -- MP resolution authority: vanilla never has monster-vs-monster missile combat, so this collision has
   -- no natural single resolver the way "my own click" (player attacks) or "damage to my own player"
@@ -895,19 +962,26 @@ events.OnMonsterMissileHit.add(function(source, target, missileId, damageType, m
   -- CMD_MONSTDAMAGE broadcast from every OTHER client's own roll, stacks damage without bound (observed
   -- as HP going UP: the "500 health bars" corruption). Only the owner of whichever side is the ATTACKER
   -- (falling back to the victim's owner) may resolve; every other client silently declines — the missile
-  -- keeps flying and simply expires on duration once its authority is gone. Deterministic per client:
-  -- ownerPlayerId is synced roster state, and player.self() is the same value everywhere it's read.
+  -- keeps flying and simply expires on duration once its authority is gone. The election reads ENGINE
+  -- state (isGolem + ownerPlayerId, synced with the spawn), never the CO-profile cache: profile arrival
+  -- is per-client timing, and an election that read it could seat two resolvers in the lag window
+  -- (matters for pet-vs-pet, where BOTH sides have an electable owner). Owner-is-Hunter is the usual
+  -- cross-player pet proxy: a berserk'd wild source carries MFLAG_GOLEM too, but its owner field is AI
+  -- scratch — the class check keeps a garbage read from electing a resolver (falls to the victim's owner).
   local me = player.self()
   local authority = nil
-  if srcProf ~= nil then authority = allyOwner(source) end
-  if authority == nil and tgtProf ~= nil then authority = allyOwner(target) end
+  if source ~= nil and source.isGolem then
+    local srcOwner = allyOwner(source)
+    if srcOwner ~= nil and srcOwner.className == HUNTER_CLASS then authority = srcOwner end
+  end
+  if authority == nil and tgtTracked then authority = allyOwner(target) end
   if me == nil or authority == nil or authority.id ~= me.id then return 0 end
 
   local bondedAttacker = srcProf ~= nil and not srcProf.isMinion and srcProf.bonded
 
-  local res    = target.resistance
-  local newRes = res
-  local effectiveType = damageType
+  local res            = target.resistance
+  local newRes         = res
+  local effectiveType  = damageType
 
   -- (A)/(B-acid) Acid resolves as Magic; a Bonded attacker bypasses acid immunity, otherwise it is respected.
   if damageType == monsters.DamageType.Acid then
@@ -933,18 +1007,117 @@ events.OnMonsterMissileHit.add(function(source, target, missileId, damageType, m
 
   if newRes ~= res then target:setResistance(newRes) end
 
+  -- (C) Attacker-aware to-hit for OUR ally's missiles. The engine's monster-missile resolution
+  -- (MonsterTrapHit) rolls 90 - targetAC - dist and never consults the ATTACKER, so a high-toHit
+  -- caster pet bottoms out at the 5% floor against high-AC targets (a Hell Blood Knight shrugs off
+  -- ~19 in 20 Advocate fireballs). Express the wanted chance through a transient victim-AC change so
+  -- the engine's own roll computes it (the engine subtracts one dist itself; its 5..95 clamp applies):
+  --   * PET target (tgtTracked): the full duel formula, mirroring the engine's own
+  --     monster-arrow-vs-player math (PlayerMHit): toHit + 2*(srcLvl-tgtLvl) + 30 - targetAC - 2*dist.
+  --     The defender's AC (incl. a Bonded +AC bonus) genuinely protects it.
+  --   * WILD target: melee parity (MonsterAttackMonster rolls d100 < toHit, AC ignored): toHit - dist.
+  -- source.toHit reads golemToHit for player-minions, so the kill-count toHit bonus applies to
+  -- missiles too. Gated on srcTracked (roster truth): a vanilla Golem is never tracked and keeps the
+  -- pure vanilla roll (the barometer), and wild/berserk attackers shooting our pets stay vanilla
+  -- (attacker-side only). A remote pet target in its CO-lag window reads as wild for a moment (melee
+  -- parity instead of the duel formula) — harmless. Set/restored inline around the one synchronous
+  -- resolve, like the resistance transient above.
+  local origAC = nil
+  if srcTracked then
+    origAC = target.armorClass
+    local wantHper -- the engine still subtracts dist once after this
+    if tgtTracked then
+      wantHper = source.toHit + 2 * (source.level - target.level) + 30 - origAC - dist
+    else
+      wantHper = source.toHit
+    end
+    target:setArmorClass(math.min(math.max(90 - wantHper, 0), 255))
+  end
+
   -- XP credit: an OUR-ally attacker tags its owner BEFORE resolution so a fatal shot still counts.
   if srcProf ~= nil then target:tagForPlayer(source.ownerPlayerId) end
 
   -- Resolve through the engine (to-hit, resistance/immunity, damage, death/hit reactions).
   local hit = target:resolveMissileHit(missileId, effectiveType, minDam, maxDam, dist, shifted)
 
-  if newRes ~= res then target:setResistance(res) end  -- restore the transient pierce/reclass
+  if origAC ~= nil then target:setArmorClass(origAC) end -- restore the transient to-hit AC
+  if newRes ~= res then target:setResistance(res) end    -- restore the transient pierce/reclass
 
   -- Bonded kill-count for an OWN ally that landed the fatal blow (no-op for remote allies).
   if hit and srcProf ~= nil and target.hasNoLife then creditAllyKill(source, target) end
 
   return hit and 1 or 0
+end)
+
+-- Deterministic cross-client pet test for hooks that resolve in the lockstep AI sim on EVERY client
+-- (monster melee): engine-synced state only (isGolem + owner class — both set by the replayed
+-- conversion), never per-client rosters or CO profiles, whose arrival timing differs per client —
+-- two clients disagreeing on the inputs would resolve the same synced d100 swing differently and
+-- desync HP. Known limitation (same proxy as isOtherHuntersAlly): a HUNTER-owned vanilla Golem would
+-- pass it; deferred with the other cross-player Golem-vs-pet ambiguities.
+function isHunterOwnedGolem(monster)
+  if monster == nil or not monster.isGolem then return false end
+  local owner = player.get(monster.ownerPlayerId)
+  return owner ~= nil and owner.className == HUNTER_CLASS
+end
+
+-- OnGolemMeleeHitChance: SINGLE-WRITER pet melee + pet-vs-pet toHit-vs-AC duels. The engine's
+-- MonsterAttackMonster resolves on EVERY simulating client and its ApplyMonsterDamage each time also
+-- broadcasts CMD_MONSTDAMAGE (whose receiver SUBTRACTS on top of the local application) — so any
+-- pet-involved melee hit multiplied by the number of same-level clients, and a swing whose inputs
+-- diverged per-client (stat in CO transit, position skew) drifted the victim's HP apart permanently.
+-- Fix = the same authority election as OnMonsterMissileHit: exactly ONE client rolls and applies
+-- (its ApplyMonsterDamage broadcast carries the result to everyone); every other client returns 0 —
+-- the engine's d100 still draws there, so the per-monster RNG stream stays aligned, but 0 never
+-- hits: no local apply, no broadcast. Authority = the ATTACKER's owner when the attacker is a
+-- Hunter pet (kill credit lands where creditAllyKill runs), else the VICTIM's owner (wild/berserk
+-- attacker vs our pet). Election reads ENGINE state only (isGolem + owner class — the synced
+-- conversion), never rosters/profiles whose arrival timing differs per client. Fights with a pet on
+-- NEITHER side (incl. the vanilla Golem, both directions) return nil = pure vanilla multi-writer
+-- resolution — the barometer keeps exact base behaviour.
+-- Authority chance: hitChance >= 500 is the engine's forced-hit charge/rush value — keep it forced.
+-- Pet-vs-pet DUELS roll toHit vs AC (vanilla monster melee ignores the defender's AC entirely):
+-- passedHitChance + 2*(atkLvl-tgtLvl) + 30 - targetAC, clamped 5..95, mirroring the engine's own
+-- monster-melee-vs-player formula. Built on the PASSED value so per-attack-type variants (special
+-- attacks, magma +10 / storm -20) survive; for a pet's normal swing that value IS golemToHit, kill
+-- bonus included. Pet-vs-wild keeps the engine's chance (melee parity), just resolved once.
+events.OnGolemMeleeHitChance.add(function(attacker, target, hitChance)
+  local atkTracked = allyScratch(attacker.id) ~= nil
+  local tgtTracked = allyScratch(target.id) ~= nil
+  if not atkTracked and not tgtTracked then return nil end -- no pet involved (vanilla Golem included): vanilla
+  local me = player.self()
+  local authority = nil
+  if attacker.isGolem then
+    local atkOwner = allyOwner(attacker)
+    if atkOwner ~= nil and atkOwner.className == HUNTER_CLASS then authority = atkOwner end
+  end
+  if authority == nil and tgtTracked then authority = allyOwner(target) end
+  if me == nil or authority == nil or authority.id ~= me.id then return 0 end
+  if hitChance >= 500 then return nil end
+  if isHunterOwnedGolem(attacker) and isHunterOwnedGolem(target) then
+    local hper = hitChance + 2 * (attacker.level - target.level) + 30 - target.armorClass
+    return math.min(math.max(hper, 5), 95)
+  end
+  return nil
+end)
+
+-- OnGolemMissileHitChance: pet SPELL missiles vs PLAYERS roll toHit vs AC. Vanilla's PlayerMHit
+-- SPELL branch is 40 + 2*(mlvl-plvl) - 2*dist — the attacker's toHit and the player's armor are
+-- never consulted, so a 249-toHit caster pet vs a lvl-45 player sits at the ~10% min-hit floor
+-- while the same pet's ARROWS already roll the full formula. Mirror the arrow branch exactly:
+-- vanilla rolls toHit + 2*(mlvl-plvl) + 30 - 2*dist - GetArmor(), and player.armorClass (sheet AC)
+-- = GetArmor() + 2*plvl, so toHit + 2*mlvl + 30 - 2*dist - sheetAC is that same math rearranged.
+-- Clamp 5..95 like the other two duel rules; the engine's block roll + resistances still follow,
+-- so the player keeps real defenses. Arrow-class missiles return nil (the engine already rolled
+-- toHit vs AC — don't re-derive). Resolution runs on the victim's own client (its HP is the
+-- authority), so no lockstep constraint; golemToHit arrives there via the event-driven CO. A
+-- vanilla Golem never fires missiles, so the proxy gate is belt-and-braces for the barometer.
+events.OnGolemMissileHitChance.add(function(golem, victim, missileId, dist, hitChance)
+  local MID = monsters.MissileID
+  if missileId == MID.Arrow or missileId == MID.FireArrow or missileId == MID.LightningArrow then return nil end
+  if not isHunterOwnedGolem(golem) then return nil end
+  local hper = golem.toHit + 2 * golem.level + 30 - 2 * dist - victim.armorClass
+  return math.min(math.max(hper, 5), 95)
 end)
 
 -- Bonded defensive bonus: on promotion the ally gains ONE random immunity it lacks (Fire/Magic/Lightning), or +200 AC if it has all three. Rolled once, stored by seed, persisted.
@@ -988,10 +1161,10 @@ end
 -- The discrete promotion moment: roll/store the bonus, apply it, re-derive stats, and fire a celebratory Flash burst.
 function promoteToBonded(entry)
   rollBondedBonus(entry)
-  rollBondedTrn(entry)          -- pick the recolour matching the rolled bonus (or rare Hell Gilded)
+  rollBondedTrn(entry) -- pick the recolour matching the rolled bonus (or rare Hell Gilded)
   applyBondedBonus(entry)
   applyAllyBuff(entry)
-  applyBondedGlow(entry)        -- permanent Bonded aura light
+  applyBondedGlow(entry) -- permanent Bonded aura light
   entry.monster:castFlashSelf()
 end
 
@@ -1022,8 +1195,8 @@ end
 
 -- Capture-HP threshold (percent of max HP), keyed by category, fixed at every tier.
 function categoryHpThreshold(category)
-  if category == CAT_DIABLO then return 5  end
-  if category == CAT_BOSS   then return 10 end
+  if category == CAT_DIABLO then return 5 end
+  if category == CAT_BOSS then return 10 end
   if category == CAT_CHAMPION then return 20 end
   return 30 -- normal
 end
@@ -1031,17 +1204,17 @@ end
 -- mlvl/category gate for the active tier: may this category at this mlvl be tamed by a Hunter of this clvl?
 function mlvlGateAllows(tier, category, clvl, mlvl)
   if category == CAT_DIABLO then
-    return tier >= 3 -- only Tame+++, mlvl-blind
+    return tier >= 3                             -- only Tame+++, mlvl-blind
   end
-  if tier >= 3 then return true end                 -- Tame+++: any non-Diablo, any mlvl
-  if tier == 2 then return mlvl <= clvl + 10 end     -- Tame++: all non-Diablo categories
+  if tier >= 3 then return true end              -- Tame+++: any non-Diablo, any mlvl
+  if tier == 2 then return mlvl <= clvl + 10 end -- Tame++: all non-Diablo categories
   -- Tame (0) and Tame+ (1):
   if category == CAT_NORMAL then return mlvl <= clvl + 1 end
   if category == CAT_CHAMPION then
-    if tier >= 1 then return mlvl <= clvl end         -- Tame+: champion eased to mlvl<=clvl
-    return clvl >= mlvl * 2                           -- Tame: champion clvl>=mlvl*2
+    if tier >= 1 then return mlvl <= clvl end -- Tame+: champion eased to mlvl<=clvl
+    return clvl >= mlvl * 2                   -- Tame: champion clvl>=mlvl*2
   end
-  return clvl >= mlvl * 2                             -- Boss (Tame & Tame+): clvl>=mlvl*2
+  return clvl >= mlvl * 2                     -- Boss (Tame & Tame+): clvl>=mlvl*2
 end
 
 -- Classify a TAME SCROLL by its seed (deploy side); mirrors categoryFromTarget from the encoded seed/name.
@@ -1065,9 +1238,10 @@ function scrollPassesTierGate(p, seed, buff)
   return mlvlGateAllows(tameTier(clvl), category, clvl, mlvl)
 end
 
-LEASH_DISTANCE  = 12  -- emergency snap distance
-ENGAGE_RADIUS   = 9   -- max chase/target radius from player
-MAX_ALLIES      = MAX_DEPLOYED_PER_HUNTER   -- deploy-gate cap on simultaneously deployed non-minion allies; must match the per-Hunter slot/type reservations at the top of the file
+LEASH_DISTANCE = 12                       -- emergency snap distance
+ENGAGE_RADIUS  = 9                        -- max chase/target radius from player
+MAX_ALLIES     =
+MAX_DEPLOYED_PER_HUNTER                   -- deploy-gate cap on simultaneously deployed non-minion allies; must match the per-Hunter slot/type reservations at the top of the file
 
 -- True when p is the local player AND the local player is a Hunter (gates all local-only event hooks).
 function isMyPlayer(p)
@@ -1079,8 +1253,8 @@ end
 
 -- Queue our spells. IDs are assigned by the engine after every mod registers (deterministic, by name). Names namespaced "hunter:".
 events.SpellDataLoaded.add(function()
-  spells.registerSpell("hunter:tame",         "txtdata\\spells\\tame.tsv",         "Golem")
-  spells.registerSpell("hunter:sharepotion",  "txtdata\\spells\\sharepotion.tsv",  "HealOther")
+  spells.registerSpell("hunter:tame", "txtdata\\spells\\tame.tsv", "Golem")
+  spells.registerSpell("hunter:sharepotion", "txtdata\\spells\\sharepotion.tsv", "HealOther")
   spells.registerSpell("hunter:forgetpotion", "txtdata\\spells\\forgetpotion.tsv", "Null")
 end)
 
@@ -1107,6 +1281,7 @@ end)
 events.OnCreatePlrItems.add(function(p)
   if p == nil then return end
   if p.className ~= HUNTER_CLASS then return end
+  resetPersistedCharacterState() -- a NEW character starts from a clean slate (it fires no OnLoadPlayerData, so nothing else would)
   myOhId = generateOhId(p.name)  -- permanent per-character OHID, stamped once at creation
   local monsterData = {
     typeId             = STARTER_TYPE_ID,
@@ -1122,33 +1297,53 @@ end)
 
 -- Stat-scaled animation frame tiers: Hunter uses Warrior sprites; melee skip scales off STR/VIT, ranged off DEX, cast off MAG.
 
-WEAPON_GRAPHIC_BOW = 4  -- PlayerWeaponGraphic::Bow
+-- PlayerWeaponGraphic ids (player.weaponGraphic — the weapon sheet the player's animations play).
+WEAPON_GRAPHIC_UNARMED        = 0
+WEAPON_GRAPHIC_UNARMED_SHIELD = 1
+WEAPON_GRAPHIC_BOW            = 4
+WEAPON_GRAPHIC_STAFF          = 8
 
 function getMeleeSkipBonus(str, vit)
-  if str >= 200 then return 0
-  elseif str >= 150 and vit >= 200 then return 0  -- Barbarian archetype gate
-  elseif str >= 175 then return -1
-  elseif str >= 125 then return -2
-  elseif str >= 75  then return -3
-  else return -4
+  if str >= 170 then
+    return 0                                     -- Warrior archetype: optimal
+  elseif str >= 150 and vit >= 150 then
+    return 0                                     -- Barbarian archetype gate
+  elseif str >= 150 then
+    return -1
+  elseif str >= 125 then
+    return -2
+  elseif str >= 75 then
+    return -3
+  else
+    return -4
   end
 end
 
 function getRangedSkipBonus(dex)
-  if dex >= 250 then return 4   -- Rogue archetype: optimal
-  elseif dex >= 175 then return 3
-  elseif dex >= 125 then return 2
-  elseif dex >= 75  then return 1
-  else return 0
+  if dex >= 200 then
+    return 4                  -- Rogue archetype: optimal
+  elseif dex >= 175 then
+    return 3
+  elseif dex >= 125 then
+    return 2
+  elseif dex >= 75 then
+    return 1
+  else
+    return 0
   end
 end
 
 function getCastSkipBonus(mag)
-  if mag >= 150 then return 8   -- Sorcerer-lite archetype: optimal
-  elseif mag >= 120 then return 6
-  elseif mag >= 80  then return 4
-  elseif mag >= 40  then return 2
-  else return 0
+  if mag >= 140 then
+    return 8                  -- Sorcerer-lite archetype: optimal
+  elseif mag >= 120 then
+    return 6
+  elseif mag >= 80 then
+    return 4
+  elseif mag >= 40 then
+    return 2
+  else
+    return 0
   end
 end
 
@@ -1156,7 +1351,23 @@ end
 events.OnGetAnimationSkipFrames.add(function(p, animType, currentSkip)
   if p.className ~= HUNTER_CLASS then return nil end
   if animType == "Attack" then
-    return currentSkip + getMeleeSkipBonus(p.strength, p.vitality)
+    local bonus = getMeleeSkipBonus(p.strength, p.vitality)
+    -- Monk-archetype staff/unarmed play the vanilla Monk's animation TOTALS on the warrior sheet:
+    -- staff 16→13 (+3), unarmed 16→12 (+4) — the exact monk animations.tsv frame counts. Additive
+    -- with the engine's Haste skip exactly like vanilla (monk staff of haste 13−4=9 ≡ 16−(4+3)=9).
+    -- Other melee weapons stay on the STR ladder (the monk identity is staff/unarmed; vanilla
+    -- Monk's axe, 23f, is already ≈ the ladder at monk-typical STR). max() so a high-STR Monk
+    -- keeps ladder speed if it ever exceeds the override. Weapon graphic = synced equipment state,
+    -- so every client computes the same skip (same determinism gate as the rest of this handler).
+    if hasMonkArchetype(p) then
+      local wg = p.weaponGraphic
+      if wg == WEAPON_GRAPHIC_STAFF then
+        bonus = math.max(bonus, 3)
+      elseif wg == WEAPON_GRAPHIC_UNARMED or wg == WEAPON_GRAPHIC_UNARMED_SHIELD then
+        bonus = math.max(bonus, 4)
+      end
+    end
+    return currentSkip + bonus
   elseif animType == "RangedAttack" then
     return currentSkip + getRangedSkipBonus(p.dexterity)
   elseif animType == "Cast" then
@@ -1246,25 +1457,59 @@ events.OnCanSelectSpellBookEntry.add(function(p, spellId)
   return false
 end)
 
--- Golden stats: once total base stats reach STAT_BUDGET, return each stat's current value as its max so the engine caps it (golden text) and blocks further allocation.
+-- Stat budget: per-stat cap = the TSV maxima (250 each — archetype headroom in every stat), plus a
+-- shared TOTAL budget so the four base stats can never sum past STAT_BUDGET (460, the vanilla
+-- Warrior/Sorcerer maxima total; Rogue's 455 quirk is deliberately not emulated).
+--
+--   max(attr) = clamp(attr + (STAT_BUDGET - total), 0, HUNTER_STAT_CAP)
+--
+-- Why this exact shape (replaces the old "freeze at current once total >= budget" model, which
+-- corrupted GetMaximumAttributeValue consumers — see the 2026-07-08 stat-validation bug):
+--  * Pure function of this player's own base stats — the same answer in every state, on every call.
+--  * At total == STAT_BUDGET each stat's max IS its current value: golden display, allocation blocked.
+--  * Lossless through UnPackPlayer, which zeroes the struct then sets+clamps the four stats ONE AT A
+--    TIME: a not-yet-loaded stat reads 0, which only INFLATES headroom, and at each step
+--    headroom >= the sum of all not-yet-loaded stats, so a legal <=460 spread always loads intact
+--    (the freeze model zeroed late-loading stats whenever the early ones summed past 460).
+--  * An over-budget spread (pre-fix saves) self-heals to exactly 460 at load by dumping the excess
+--    from the later-loaded stats; one Potion of Forgetting then refunds the full budget — no points lost.
+--  * Floors at 0: UnPackPlayer feeds the result through std::min<uint8_t>, so a negative would wrap.
 STAT_BUDGET = 460
+HUNTER_STAT_CAP = 250 -- mirrors maxStr/maxMag/maxDex/maxVit in txtdata/classes/hunter/attributes.tsv
 
--- DELIBERATELY isMyPlayer (the one stat hook that must NOT be class-gated): this is an allocation-UI
--- freeze, not a derived stat. UnPackNetPlayer CLAMPS incoming base stats against GetMaximumAttributeValue
--- before applying them — if this fired for a REMOTE Hunter it would clamp a freshly-leveled joiner's
--- incoming stats against our stale local copy. Remote Hunters must resolve the static TSV maxima there.
+-- DELIBERATELY isMyPlayer (the one stat hook that must NOT be class-gated): UnPackNetPlayer VALIDATES a
+-- joining Hunter's incoming base stats against GetMaximumAttributeValue evaluated on the RECEIVER's copy
+-- of that player — which may hold stale stats from an earlier connection. Remote Hunters must resolve
+-- the static TSV maxima there or a legitimate respec since we last saw them would be rejected. The
+-- budget needs no cross-client enforcement: it only shapes allocation/refund on the owning client, and
+-- base stats travel the wire as raw synced values.
 events.OnGetMaxAttributeValue.add(function(p, attributeName)
   if not isMyPlayer(p) then return nil end
-  local total = p.strength + p.magic + p.dexterity + p.vitality
-  if total < STAT_BUDGET then return nil end
-  -- Budget exhausted: freeze each stat at its current value.
-  if attributeName == "Strength"   then return p.strength   end
-  if attributeName == "Magic"      then return p.magic      end
-  if attributeName == "Dexterity"  then return p.dexterity  end
-  if attributeName == "Vitality"   then return p.vitality   end
+  local cur
+  if attributeName == "Strength" then
+    cur = p.strength
+  elseif attributeName == "Magic" then
+    cur = p.magic
+  elseif attributeName == "Dexterity" then
+    cur = p.dexterity
+  elseif attributeName == "Vitality" then
+    cur = p.vitality
+  else
+    return nil
+  end
+  local headroom = STAT_BUDGET - (p.strength + p.magic + p.dexterity + p.vitality)
+  return math.max(0, math.min(HUNTER_STAT_CAP, cur + headroom))
 end)
 
 -- Adaptive Archetype System: Hunter's combat mechanics scale with base-stat investment; each archetype needs its FULL threshold (base stats only).
+--
+-- Threshold design (2026-07-08 retune, user-approved): every archetype's threshold VALUES sum to 300
+-- (Sorc-lite, single-stat, is 140). Inside the fixed 460 stat budget — which caps all four base stats
+-- SUMMED, each with a class-start floor (str20/mag15/dex30/vit20) — that makes every non-Barb DUAL
+-- reachable: Rogue+Sorc and Warrior+Sorc land at exactly 460 (min-max builds), Monk+Sorc 410,
+-- Rogue+Warrior 405, Warrior+Monk 390, Rogue+Monk 370, and even Rogue+Monk+Sorc fits at exactly 460.
+-- Barb's mag<=15 keeps it a committed solo identity (Sorc/Monk conflict by design; Warrior/Rogue
+-- duals miss the budget by 5-55).
 --
 -- EVERY archetype hook below gates on CLASS (p.className == HUNTER_CLASS), NEVER isMyPlayer. These hooks
 -- fire from CalcPlrInv-family recomputation that runs on EVERY client for EVERY player — including inside
@@ -1274,19 +1519,23 @@ end)
 -- an invalid packet" and the join is refused. Archetype checks read only synced state (class, stats,
 -- level), so a class gate is deterministic on every client. (Same lesson as the appearance hooks.)
 function hasBarbArchetype(p)
-  return p.strength >= 150 and p.vitality >= 200 and p.magic <= 15
+  return p.strength >= 150 and p.vitality >= 150 and p.magic <= 15
 end
+
 function hasWarriorArchetype(p)
-  return p.strength >= 200 and p.dexterity >= 150
+  return p.strength >= 170 and p.dexterity >= 130
 end
+
 function hasRogueArchetype(p)
-  return p.strength >= 100 and p.dexterity >= 250
+  return p.strength >= 100 and p.dexterity >= 200
 end
+
 function hasMonkArchetype(p)
-  return p.strength >= 100 and p.magic >= 50 and p.dexterity >= 200
+  return p.strength >= 100 and p.magic >= 50 and p.dexterity >= 150
 end
+
 function hasSorcLiteArchetype(p)
-  return p.magic >= 150
+  return p.magic >= 140
 end
 
 -- _pDamageMod: returns the highest damage-mod among all met archetypes, nil if none met.
@@ -1387,7 +1636,7 @@ events.OnGetArmorLevelBonus.add(function(p, armorType, isUnique)
     return isUnique and (level // 2) or 0
   elseif armorType == "Medium" then
     return isUnique and (level * 2) or (level // 2)
-  else  -- Light
+  else -- Light
     return level * 2
   end
 end)
@@ -1428,19 +1677,19 @@ end)
 
 -- Wirt item filter: with a full archetype, bias Wirt's item toward usable types (excluded only when ALL active archetypes agree).
 WIRT_EXCLUSIONS = {
-  Barbarian = { Bow=true, Staff=true },
-  Warrior   = { Bow=true, Staff=true },
-  Rogue     = { Sword=true, Staff=true, Axe=true, Mace=true, Shield=true },
-  Monk      = { Bow=true, MediumArmor=true, Shield=true, Mace=true },
+  Barbarian = { Bow = true, Staff = true },
+  Warrior   = { Bow = true, Staff = true },
+  Rogue     = { Sword = true, Staff = true, Axe = true, Mace = true, Shield = true },
+  Monk      = { Bow = true, MediumArmor = true, Shield = true, Mace = true },
 }
 
 events.OnShouldExcludeWirtItem.add(function(p, itemTypeName)
   if not isMyPlayer(p) then return nil end
   local active = {}
-  if hasBarbArchetype(p)    then table.insert(active, WIRT_EXCLUSIONS.Barbarian) end
-  if hasWarriorArchetype(p) then table.insert(active, WIRT_EXCLUSIONS.Warrior)   end
-  if hasRogueArchetype(p)   then table.insert(active, WIRT_EXCLUSIONS.Rogue)     end
-  if hasMonkArchetype(p)    then table.insert(active, WIRT_EXCLUSIONS.Monk)      end
+  if hasBarbArchetype(p) then table.insert(active, WIRT_EXCLUSIONS.Barbarian) end
+  if hasWarriorArchetype(p) then table.insert(active, WIRT_EXCLUSIONS.Warrior) end
+  if hasRogueArchetype(p) then table.insert(active, WIRT_EXCLUSIONS.Rogue) end
+  if hasMonkArchetype(p) then table.insert(active, WIRT_EXCLUSIONS.Monk) end
   if #active == 0 then return nil end
   for _, excl in ipairs(active) do
     if not excl[itemTypeName] then return nil end
@@ -1477,10 +1726,10 @@ end)
 events.OnOilyShrine.add(function(p)
   if not isMyPlayer(p) then return end
   local stats = {
-    { name = "Strength",  value = p.strength  },
+    { name = "Strength",  value = p.strength },
     { name = "Dexterity", value = p.dexterity },
-    { name = "Magic",     value = p.magic     },
-    { name = "Vitality",  value = p.vitality  },
+    { name = "Magic",     value = p.magic },
+    { name = "Vitality",  value = p.vitality },
   }
   -- Sort descending by value; skip any at individual cap (250 per attributes.tsv).
   table.sort(stats, function(a, b) return a.value > b.value end)
@@ -1504,7 +1753,7 @@ events.ItemDataLoaded.add(function()
       spell         = TAME_ID,
       usable        = true,
       dropRate      = 0,
-      cursorGraphic = 1,   -- ICURS_SCROLL_OF
+      cursorGraphic = 1, -- ICURS_SCROLL_OF
       skipSpeedbook = true,
       value         = 0,
     }
@@ -1520,7 +1769,7 @@ events.ItemDataLoaded.add(function()
       spell         = FORGET_POTION_ID,
       usable        = true,
       dropRate      = 0,
-      cursorGraphic = 16,  -- ICURS_ARENA_POTION
+      cursorGraphic = 16, -- ICURS_ARENA_POTION
       value         = 0,
     }
   }, FORGET_POTION_MAP)
@@ -1555,8 +1804,8 @@ function removeMinionsOfParent(parentId)
     local entry = deployedAllies[i]
     if entry.isMinion and entry.parentId == parentId then
       local mid = entry.monster.id
-      entry.monster:remove()  -- silently vanish: no death effects, loot, or XP
-      broadcastRemove(mid)    -- peers despawn their mirrored copy (a minion has no natural-death sync there)
+      entry.monster:remove() -- silently vanish: no death effects, loot, or XP
+      broadcastRemove(mid)   -- peers despawn their mirrored copy (a minion has no natural-death sync there)
       untrackDeployedAt(i)
     end
   end
@@ -1568,7 +1817,7 @@ function buildScrollParams(monsterData, existingSeed, origin)
   local dif  = monsterData.capturedDifficulty or 0
   local seed = existingSeed or allocSeed(monsterData.typeId, uIdx)
   -- Record/keep the scroll's origin: explicit on a fresh tame, otherwise whatever this seed already had.
-  origin = origin or scrollOrigin[seed]
+  origin     = origin or scrollOrigin[seed]
   if origin ~= nil then scrollOrigin[seed] = origin end
   -- Capture tamed-in gamemode + area level ONCE on the fresh tame; recall/refund keeps the stored values.
   if existingSeed == nil and scrollGamemode[seed] == nil then
@@ -1606,7 +1855,7 @@ end
 -- Allocate a seed, cache monster data, and drop the scroll on the floor (seed+dwBuff survive game restart).
 function dropTameScroll(monsterData, x, y, origin)
   local seed, scrollName, dwBuff, modData = buildScrollParams(monsterData, nil, origin)
-  tameScrollData[seed] = monsterData  -- session cache for fast lookup
+  tameScrollData[seed] = monsterData -- session cache for fast lookup
   placeScrollOnFloor(x, y, seed, scrollName, dwBuff, modData)
   return seed
 end
@@ -1614,9 +1863,9 @@ end
 -- Inventory sibling of dropTameScroll: shares buildScrollParams so a held scroll is identical to a floor-dropped one. Returns the seed, or nil if no room.
 function addTameScrollToInventory(owner, monsterData, origin)
   local seed, scrollName, dwBuff, modData = buildScrollParams(monsterData, nil, origin)
-  tameScrollData[seed] = monsterData  -- session cache for fast lookup
+  tameScrollData[seed] = monsterData -- session cache for fast lookup
   if not owner:addScrollByMapping(TAME_SCROLL_MAP, seed, scrollName, dwBuff, modData) then return nil end
-  broadcastScrollData(seed)  -- announce this held scroll's identity to peers (no level => no delta write; no-op in SP)
+  broadcastScrollData(seed)          -- announce this held scroll's identity to peers (no level => no delta write; no-op in SP)
   return seed
 end
 
@@ -1649,15 +1898,15 @@ function recallAllyToInventory(ally, entry, owner)
   local data = allyToMonsterData(ally, entry)
   -- Reuse entry.seed so allyKillCounts[seed] is still valid after redeploy.
   local seed, scrollName, dwBuff, modData = buildScrollParams(data, entry.seed)
-  tameScrollData[seed] = data  -- session cache
+  tameScrollData[seed] = data -- session cache
   local mid = ally.id
   ally:remove()
-  broadcastRemove(mid)  -- peers despawn their mirrored copy of this recalled ally (no natural-death sync)
+  broadcastRemove(mid) -- peers despawn their mirrored copy of this recalled ally (no natural-death sync)
   if owner:addScrollByMapping(TAME_SCROLL_MAP, seed, scrollName, dwBuff, modData) then
     local scrollItem = owner:findScrollBySeed(seed)
     if scrollItem then
       -- Gold tier for unique champions/bosses, Diablo, AND Bonded scrolls.
-      if data.uniqueTypeIdx ~= nil or seedIsDiablo(seed) or isBonded(seed, data.level) then scrollItem.magical = 2 end  -- ITEM_QUALITY_UNIQUE → gold text + outline
+      if data.uniqueTypeIdx ~= nil or seedIsDiablo(seed) or isBonded(seed, data.level) then scrollItem.magical = 2 end -- ITEM_QUALITY_UNIQUE → gold text + outline
     end
     return true
   end
@@ -1667,7 +1916,7 @@ end
 -- Reconstruct monster data from a scroll item's seed and dwBuff (normal + unique scrolls).
 function recoverScrollData(scrollSeed, scrollItem)
   local savedHp, maxHp, level, difficulty = decodeDwBuff(scrollItem.buff)
-  if savedHp == 0 and maxHp == 0 then return nil end  -- no valid HP data; scroll unrecoverable
+  if savedHp == 0 and maxHp == 0 then return nil end -- no valid HP data; scroll unrecoverable
   if maxHp == 0 then maxHp = savedHp end
   if savedHp == 0 then savedHp = maxHp end
 
@@ -1715,8 +1964,11 @@ end
 
 -- Fallback only: copy the scroll back so the engine's ConsumeScroll (after the deploy hook) removes the original while the copy survives. For unpredictable spawn failures only.
 function refundTameScroll(caster, data, scrollSeed)
+  -- The scroll returns to the world, so its recovery backup must go: on the floor-fallback branch the
+  -- seed is NOT in inventory, and a lingering "lost" entry would stock a DUPLICATE at Pepin.
+  recoveryRegistry[scrollSeed] = nil
   local _, refundName, refundBuff, refundMod = buildScrollParams(data, scrollSeed)
-  tameScrollData[scrollSeed] = data  -- ensure session cache for the refunded scroll
+  tameScrollData[scrollSeed] = data -- ensure session cache for the refunded scroll
   if not caster:addScrollByMapping(TAME_SCROLL_MAP, scrollSeed, refundName, refundBuff, refundMod) then
     local pos = caster.position
     placeScrollOnFloor(pos.x, pos.y, scrollSeed, refundName, refundBuff, refundMod)
@@ -1733,16 +1985,19 @@ local NET = {
   REMOVE     = "RM",
   SCROLLDATA = "SD",
   CAPTURE    = "CR",
-  ROSTER     = "RS",
+  ENEMY      = "EN",
+  APOCBOOMS  = "AB",
+  ACTION     = "AT",
 }
 
--- Self-healing sync layer: one-shot messages (SP/RM/CR/DF) can be lost to timing windows the engine
--- gives no receipt for, so the owner periodically RE-ASSERTS its state and peers reconcile against it
--- instead of trusting every one-shot forever. Paced on system.gameTick() (synced lockstep clock).
-ROSTER_INTERVAL_TICKS = 50   -- ~2.5s at 20 ticks/s: how often each Hunter broadcasts its RS roster
-DEPLOY_TIMEOUT_TICKS  = 100  -- ~5s: how long a DR waits for its SP/DF echo before self-refunding
-lastRosterTick        = 0    -- last tick we broadcast our RS roster
-lastRosterResyncTick  = 0    -- last tick we RQ'd after an RS showed us missing someone's ally (rate limit)
+-- Sync model (vanilla parity, NO periodic re-asserts/heartbeat): pets follow the engine's PLAYER
+-- model for combat — the owning client decides every discrete action and stat change and broadcasts
+-- it as an immediate one-shot the tick it happens (SP/RM/CO/EN/AT/AB; remote copies never self-fire
+-- and never resolve pet-involved damage) — and the engine's MONSTER model for movement (every client
+-- simulates the walk/chase AI; the engine's own CMD_SYNCDATA converges residual position drift).
+-- The pipe is reliable + in-order and RQ-on-level-entry rebuilds a joiner from scratch (the vanilla
+-- "delta at join" analog), so one-shots are trusted: nothing is left for a heartbeat to carry.
+DEPLOY_TIMEOUT_TICKS = 100 -- ~5s: how long a DR waits for its SP/DF echo before self-refunding
 -- Session log of wild monsters we capture-removed, per delta level: [level][monsterId] = {x, y}.
 -- Replayed as CRs to an RQ requester so a client whose delta missed the kill reaps the regenerated ghost.
 capturedNaturalMonsters = {}
@@ -1753,7 +2008,7 @@ local function broadcastSpawnAlly(monster, typeId, uniqueIdx, difficulty, owner,
   local pos = monster.position
   local payload = table.concat(
     { NET.SPAWNALLY, monster.id, typeId, uniqueIdx, difficulty, pos.x, pos.y, seed, owner, parentId or -1 }, "|")
-  luanet.send("hunter", payload, mask)  -- mask nil => all other clients (luanet.send handles default + SP no-op)
+  luanet.send("hunter", payload, mask) -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
 
 -- Tell peers to despawn the monster at `monsterId` (an ally/minion we silently removed); myDeltaLevel travels so an off-level peer can invalidate its stale delta record for the slot. No-op in SP.
@@ -1772,7 +2027,7 @@ end
 function broadcastScrollData(seed, level, mask)
   if not system.isMultiplayer() then return end
   local payload = table.concat({ NET.SCROLLDATA, level or -1, seed, blobForSeed(seed) }, "|")
-  luanet.send("hunter", payload, mask)  -- mask nil => all other clients (luanet.send handles default + SP no-op)
+  luanet.send("hunter", payload, mask) -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
 
 -- Broadcast one owned ally's final combat values + caster profile (the CO message). `mask` answers one requester (RQ); default = all same-level clients.
@@ -1792,7 +2047,7 @@ local function broadcastCombatOverride(entry, mask)
     prof.baseMinDamage, prof.baseToHit, prof.baseArmorClass, prof.baseMaxHp, prof.kills, prof.gamemode,
     prof.areaLevel, prof.ohId, ohName,
   }, "|")
-  luanet.send("hunter", payload, mask)  -- mask nil => all other clients (luanet.send handles default + SP no-op)
+  luanet.send("hunter", payload, mask) -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
 
 -- Broadcast CO for every deployed ally/minion (called after a recalc so peers stay current). Assigns the forward-declared local.
@@ -1801,6 +2056,16 @@ function broadcastAllCombatOverrides(mask)
   for _, entry in ipairs(deployedAllies) do
     broadcastCombatOverride(entry, mask)
   end
+end
+
+-- Broadcast one owned ally's committed ranged fire (the AT message) so same-level peers render the
+-- same missile. Single-writer: only the owner's client decides a fire (remote copies hold instead of
+-- self-firing — the choose-action handlers), so peers see exactly the owner's shots, never their own
+-- divergent ones. Sent from the missile-SPAWN chokepoint (OnGolemMissileDamage fires in AddMissile at
+-- the attack frame), not at choose time, so a windup interrupted by stun/death broadcasts nothing.
+function broadcastFireAction(monsterId, missileId, x, y)
+  if not system.isMultiplayer() then return end
+  luanet.send("hunter", table.concat({ NET.ACTION, monsterId, missileId, x, y }, "|"))
 end
 
 -- Shared final step of deploying an ally: golem-convert to `ownerId`, restore HP, track, back up for recovery, apply Bonded bonuses, recalc. doBroadcast = true for a local deploy (also SP-broadcasts), false for a requested one (SP already crossed).
@@ -1824,9 +2089,9 @@ function finishDeploy(monster, data, seed, ownerId, doBroadcast)
   snapshotAllyBase(entry)
   if isBonded(seed, monster.level) then
     rollBondedBonus(entry)
-    rollBondedTrn(entry)       -- ensure an already-Bonded ally has its recolour (no-op if rolled)
+    rollBondedTrn(entry)   -- ensure an already-Bonded ally has its recolour (no-op if rolled)
     applyBondedBonus(entry)
-    applyBondedGlow(entry)     -- re-light an already-Bonded ally on redeploy
+    applyBondedGlow(entry) -- re-light an already-Bonded ally on redeploy
   end
   recalcAllyBuffs()
   tameScrollData[seed] = nil
@@ -1845,8 +2110,8 @@ end
 function adoptOwnMinion(minion, parentId, captured)
   local entry = { monster = minion, seed = nil, isMinion = true, parentId = parentId, capturedDifficulty = captured }
   trackDeployedAlly(entry)
-  snapshotAllyBase(entry)   -- after makeGolem, so golemToHit is set
-  applyMinionBuff(entry)    -- minions don't draw from / divide the live pool and never recalc
+  snapshotAllyBase(entry) -- after makeGolem, so golemToHit is set
+  applyMinionBuff(entry)  -- minions don't draw from / divide the live pool and never recalc
   broadcastCombatOverride(entry)
   return entry
 end
@@ -1871,7 +2136,7 @@ luanet.register("hunter", function(senderId, payload)
 
   if kind == NET.SPAWNALLY then
     local id, species, uniq, diff, x, y, seed, owner, parent =
-      payload:match("^SP|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
+        payload:match("^SP|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
     if id == nil then return end
     -- Slot ids are PER-LEVEL: only act when the sender (owner) shares our active level.
     local sender = player.get(senderId)
@@ -1881,7 +2146,7 @@ luanet.register("hunter", function(senderId, payload)
     local parentId = tonumber(parent)
     if parentId ~= nil and parentId < 0 then parentId = nil end
     -- Resolve the monster: keep an existing local copy when we already hold this ally (our own, or a
-    -- remote one we already materialized and track — an RQ/roster resend must be idempotent, not
+    -- remote one we already materialized and track — an RQ resend must be idempotent, not
     -- clobber-reinitialize a live copy's position/HP); otherwise (re)create at the agreed slot.
     local me = player.self()
     local m
@@ -1903,7 +2168,7 @@ luanet.register("hunter", function(senderId, payload)
         finishDeploy(m, pending.data, tonumber(seed), me.id, false)
         pendingDeploys[tonumber(seed)] = nil
       else
-        m:makeGolem(ownerId)  -- no pending data (e.g. an RQ resend after we already finished): just own it
+        m:makeGolem(ownerId) -- no pending data (e.g. an RQ resend after we already finished): just own it
       end
     elseif me ~= nil and ownerId == me.id and parentId ~= nil then
       -- OUR minion, spawned on our behalf by the level owner: own it + do the owner-side bookkeeping (idempotent against an RQ/SP resend).
@@ -1912,12 +2177,16 @@ luanet.register("hunter", function(senderId, payload)
     else
       -- Another player's ally/minion: golem-flag it for the REMOTE owner (so faction/friendly-fire/hostility resolve here) and record it in remoteAllies so the shared AI runs locally.
       m:makeGolem(ownerId)
-      local prev = remoteAllies[mid]  -- an idempotent resend keeps the cached CO profile (no infobox blank until the next CO)
-      remoteAllies[mid] = { ownerId = ownerId, parentId = parentId, capturedDifficulty = tonumber(diff),
+      local prev = remoteAllies
+      [mid]                          -- an idempotent resend keeps the cached CO profile (no infobox blank until the next CO)
+      remoteAllies[mid] = {
+        ownerId = ownerId,
+        parentId = parentId,
+        capturedDifficulty = tonumber(diff),
         uniqueIdx = tonumber(uniq),  -- -1 for a normal ally; >= 0 picks the "no Lvl N" unique name form
-        profile = (prev ~= nil and prev.ownerId == ownerId) and prev.profile or nil }
+        profile = (prev ~= nil and prev.ownerId == ownerId) and prev.profile or nil
+      }
     end
-
   elseif kind == NET.REQSYNC then
     -- A client just entered a level: (re)send each of our deployed allies to it (the requester's SP handler validates the shared level).
     local me = player.self()
@@ -1926,11 +2195,11 @@ luanet.register("hunter", function(senderId, payload)
     for _, entry in ipairs(deployedAllies) do
       local mon = entry.monster
       if mon ~= nil and not entry.isMinion and entry.seed ~= nil then
-        local uniq = seedGetUniqueType(entry.seed)  -- -1 if not unique
+        local uniq = seedGetUniqueType(entry.seed) -- -1 if not unique
         broadcastSpawnAlly(mon, mon.typeId, uniq, entry.capturedDifficulty or 0, me.id, entry.seed, mask)
-        broadcastCombatOverride(entry, mask)  -- follow the spawn with its combat values + caster profile
+        broadcastCombatOverride(entry, mask)       -- follow the spawn with its combat values + caster profile
       elseif mon ~= nil and entry.isMinion then
-        -- Minions resend too (seed 0, parentId links them) — the requester materializes them like a live minion spawn, and the roster reconciliation depends on every listed id being resendable.
+        -- Minions resend too (seed 0, parentId links them) — the requester materializes them like a live minion spawn (a joiner must see the full deployed set, minions included).
         broadcastSpawnAlly(mon, mon.typeId, -1, entry.capturedDifficulty or 0, me.id, 0, mask, entry.parentId)
         broadcastCombatOverride(entry, mask)
       end
@@ -1948,11 +2217,11 @@ luanet.register("hunter", function(senderId, payload)
       local lvlCaptures = capturedNaturalMonsters[myDeltaLevel]
       if lvlCaptures ~= nil then
         for cmid, cpos in pairs(lvlCaptures) do
-          luanet.send("hunter", table.concat({ NET.CAPTURE, cmid, myDeltaLevel, cpos.x, cpos.y, cpos.typeId or -1 }, "|"), mask)
+          -- typeId -1 on purpose: a replayed CR reaps the ghost but never carries Diablo kill credit (credit = presence at the LIVE tame only).
+          luanet.send("hunter", table.concat({ NET.CAPTURE, cmid, myDeltaLevel, cpos.x, cpos.y, -1 }, "|"), mask)
         end
       end
     end
-
   elseif kind == NET.SCROLLDATA then
     -- A peer announced a scroll's blob (SD|level|seed|<blob>): cache it + its Original Trainer for a later trade; if a FLOOR item (level>=0), mirror it into that level's delta for late joiners. Blob is the last field (verbatim).
     local levelStr, seedStr, blob = payload:match("^SD|(%-?%d+)|(%d+)|(.*)$")
@@ -1965,8 +2234,21 @@ luanet.register("hunter", function(senderId, payload)
     local _, _, _, _, _, ohId, ohName = decodeBlob(blob)
     if ohName ~= nil and ohName ~= "" then scrollOrigin[seed] = { name = ohName, id = ohId } end
     local level = tonumber(levelStr)
-    if level ~= nil and level >= 0 then items.setItemDeltaModData(level, seed, blob) end
-
+    if level ~= nil and level >= 0 then
+      items.setItemDeltaModData(level, seed, blob)
+      -- The floor copy landed BEFORE this SD (the item wire and the pipe share one in-order stream),
+      -- so it was recreated and named WITHOUT the blob — a Bonded scroll reads "Tamed"/white on every
+      -- non-dropper until pickup. Now that the blob is cached, restamp the live floor copy's
+      -- name/tier. Hunter-only, mirroring OnCustomItemRecreated's visibility gate.
+      local me = player.self()
+      if me ~= nil and me.className == HUNTER_CLASS and TAME_ID ~= nil
+          and level == items.currentDeltaLevel() then
+        local floorItem = items.findFloorItemBySeed(seed)
+        if floorItem ~= nil and floorItem:isScrollOf(TAME_ID) then
+          restampScrollPresentation(floorItem)
+        end
+      end
+    end
   elseif kind == NET.COMBATOVR then
     -- A remote ally's owner sent its final combat values + caster profile: apply the values to the live monster and cache the profile. Guarded on remoteAllies membership (never our own ally).
     local sender = player.get(senderId)
@@ -1976,14 +2258,14 @@ luanet.register("hunter", function(senderId, payload)
     local rest = payload
     for i = 1, 28 do
       local tok, tail = rest:match("^([^|]*)|(.*)$")
-      if tok == nil then return end  -- malformed: fewer than 28 delimiters
+      if tok == nil then return end -- malformed: fewer than 28 delimiters
       parts[i] = tok
       rest = tail
     end
-    parts[29] = rest  -- free-form ohName, kept intact even if it contains "|"
+    parts[29] = rest -- free-form ohName, kept intact even if it contains "|"
     local id = tonumber(parts[2])
     local rec = remoteAllies[id]
-    if rec == nil then return end  -- not (yet) a tracked remote ally; the next CO/RQ will catch it
+    if rec == nil then return end -- not (yet) a tracked remote ally; the next CO/RQ will catch it
     local m = monsters.fromId(id)
     if m == nil then return end
     m:setMaxHitPoints(tonumber(parts[3]))
@@ -1993,20 +2275,20 @@ luanet.register("hunter", function(senderId, payload)
     m:setToHit(tonumber(parts[7]))
     m:setArmorClass(tonumber(parts[8]))
     m:setResistance(tonumber(parts[9]))
-    local prevProfile = rec.profile  -- to detect a live Bonded promotion (nil on first CO = no replay)
+    local prevProfile = rec.profile -- to detect a live Bonded promotion (nil on first CO = no replay)
     local newBonded = tonumber(parts[11]) == 1
     rec.profile = {
-      isMinion      = tonumber(parts[10]) == 1,
-      bonded        = newBonded,
-      bondedImm     = tonumber(parts[12]),
-      baseMaxDamage = tonumber(parts[13]),
-      sharePct      = tonumber(parts[14]) / 1000,
-      magicCurrent  = tonumber(parts[15]),
-      resFire       = tonumber(parts[16]),
-      resLight      = tonumber(parts[17]),
-      resMagic      = tonumber(parts[18]),
-      trnVariant    = tonumber(parts[19]),
-      nearBonded    = tonumber(parts[20]) == 1,
+      isMinion       = tonumber(parts[10]) == 1,
+      bonded         = newBonded,
+      bondedImm      = tonumber(parts[12]),
+      baseMaxDamage  = tonumber(parts[13]),
+      sharePct       = tonumber(parts[14]) / 1000,
+      magicCurrent   = tonumber(parts[15]),
+      resFire        = tonumber(parts[16]),
+      resLight       = tonumber(parts[17]),
+      resMagic       = tonumber(parts[18]),
+      trnVariant     = tonumber(parts[19]),
+      nearBonded     = tonumber(parts[20]) == 1,
       baseMinDamage  = tonumber(parts[21]),
       baseToHit      = tonumber(parts[22]),
       baseArmorClass = tonumber(parts[23]),
@@ -2023,7 +2305,6 @@ luanet.register("hunter", function(senderId, payload)
     if prevProfile ~= nil and not prevProfile.bonded and newBonded then
       m:castFlashSelf()
     end
-
   elseif kind == NET.REMOVE then
     -- The sender removed one of its allies/minions; despawn our local copy. Self-validating: only acts on a monster golem-flagged to THIS sender (never our own ally or the vanilla Golem).
     local idStr, lvlStr = payload:match("^RM|(%-?%d+)|(%-?%d+)$")
@@ -2037,25 +2318,27 @@ luanet.register("hunter", function(senderId, payload)
       return
     end
     if not (m.isGolem and m.ownerPlayerId == senderId) then return end
-    if m.health <= 0 then return end  -- death-RM about a copy our own sim already killed: our OnMonsterDeath invalidated the delta; leave the dying monster alone. (The binding is `health`, NOT hitPoints — a nil-compare here killed every RM for a live copy; see bugs.md.)
+    if m.health <= 0 then return end -- death-RM about a copy our own sim already killed: our OnMonsterDeath invalidated the delta; leave the dying monster alone. (The binding is `health`, NOT hitPoints — a nil-compare here killed every RM for a live copy; see bugs.md.)
     m:remove()
     remoteAllies[id] = nil
-
   elseif kind == NET.CAPTURE then
     -- The sender tamed a wild monster (removed only on their client); reap it here too AND record the kill in that level's delta so it never regenerates. Never touch a golem-flagged monster (allies use RM).
     local id, level, x, y, typeId = payload:match("^CR|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
     if id == nil then return end
     local mid = tonumber(id)
-    -- A Diablo capture is a quest kill for everyone in the game: grant the same local difficulty
-    -- credit the taming client got from checkQuestKill (vanilla grants it to every client at the
-    -- ending; idempotent max, so a replayed CR can't over-credit). Quest STATE arrives engine-side
-    -- via NetSendCmdQuest; this is the pDiabloKillLevel half.
-    if tonumber(typeId) == DIABLO_TYPE_ID then
+    local sender = player.get(senderId)
+    local senderHere = sender ~= nil and sender:isOnActiveLevel()
+    -- A Diablo capture is a quest kill ONLY for players standing on his level at the tame (user
+    -- decision 2026-07-09, mirroring vanilla MP: PrepDoEnding credits only clients processing the
+    -- level when he dies). The live CR arrives while the tamer stands there, so "sender shares our
+    -- active level" = we were present. A REPLAYED CR carries typeId -1 (a replay is after the fact;
+    -- presence at replay time earns nothing). Idempotent max. Quest STATE still arrives engine-side
+    -- via NetSendCmdQuest (game-wide, exactly as a vanilla DiabloDeath broadcasts it).
+    if tonumber(typeId) == DIABLO_TYPE_ID and senderHere then
       local me = player.self()
       if me ~= nil then me:creditDiabloKill() end
     end
-    local sender = player.get(senderId)
-    if sender ~= nil and sender:isOnActiveLevel() then
+    if senderHere then
       -- Same level: remove the live monster. removeAsKilled also records the delta_kill in our delta.
       -- hp > 0 guard: a REPLAYED CR (RQ answer) must only reap a live regenerated ghost, never touch a
       -- copy that is already dead/corpse-marked here (the kill applied fine).
@@ -2065,14 +2348,13 @@ luanet.register("hunter", function(senderId, payload)
       -- Off the captor's level: no live monster here, so just record the kill in that level's delta.
       monsters.recordDeltaKill(tonumber(level), mid, tonumber(x), tonumber(y))
     end
-
   elseif kind == NET.DEPLOYREQ then
     -- A non-owner asked us to spawn their ally (mirrors CMD_REQUESTSPAWNGOLEM: only the level owner spawns, keeping slot allocation single-authority).
     local me = player.self()
     -- Not ours to answer (the real level owner will); if NOBODY owns the level right now, the requester's pending-deploy timeout refunds the scroll.
     if me == nil or not me:isLevelOwnedByLocalClient() then return end
     local typeId, uniq, diff, x, y, seed, maxHp, savedHp =
-      payload:match("^DR|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
+        payload:match("^DR|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
     if typeId == nil then return end
     -- We ARE the level owner: the requester's scroll is already consumed, so every rejection from here
     -- MUST answer DF (a silent return voids the scroll until the timeout catches it).
@@ -2081,7 +2363,7 @@ luanet.register("hunter", function(senderId, payload)
     end
     local sender = player.get(senderId)
     if sender == nil or not sender:isOnActiveLevel() then
-      deployFail()  -- e.g. our view of the requester's level lags its arrival
+      deployFail() -- e.g. our view of the requester's level lags its arrival
       return
     end
     local uniqIdx = tonumber(uniq)
@@ -2115,14 +2397,13 @@ luanet.register("hunter", function(senderId, payload)
     -- Owner is HP-authoritative: apply the requester's persisted HP, which then syncs to all clients.
     m:setMaxHitPoints(tonumber(maxHp))
     m:setHitPoints(tonumber(savedHp))
-    m:makeGolem(senderId)                       -- owned by the requester, not us
+    m:makeGolem(senderId) -- owned by the requester, not us
     -- Someone else's ally; runs its AI locally too. Record the same identity fields the SP receiver
     -- stores (difficulty/unique drive the local infobox + minion scaling until the CO arrives).
     remoteAllies[m.id] = { ownerId = senderId, capturedDifficulty = d, uniqueIdx = uniqIdx }
     -- Broadcast to all other same-level clients (incl. the requester, who materialises it + completes its deferred setup in the SP handler).
     -- typeId from the LIVE monster: the DR wire carries -1 for a unique (a recovered unique scroll has no typeId), but SP always needs the real species.
     broadcastSpawnAlly(m, m.typeId, uniqIdx, d, senderId, tonumber(seed))
-
   elseif kind == NET.DEPLOYFAIL then
     -- The level owner could not place an ally we requested — refund the scroll the engine already consumed.
     local seedStr = payload:match("^DF|(%-?%d+)$")
@@ -2133,44 +2414,54 @@ luanet.register("hunter", function(senderId, payload)
     pendingDeploys[seed] = nil
     local me = player.self()
     if me ~= nil then refundTameScroll(me, pending.data, seed) end
-
-  elseif kind == NET.ROSTER then
-    -- A Hunter re-asserted the ally/minion slot ids it currently owns (self-healing reconciliation):
-    -- drop any live copy of ITS allies we still track that it no longer lists (a lost RM), and RQ a
-    -- resend if it lists ids we never materialized (a lost SP) OR ids we track with no CO profile yet
-    -- (a lost CO). The RQ answer resends SP+CO pairs and the SP receiver is idempotent for already-live
-    -- copies. Slot ids are per-level, so same-level senders only.
+  elseif kind == NET.ACTION then
+    -- The owner's client committed one of its allies' ranged fires (single-writer): recreate the same
+    -- missile here. fireMissileAt spawns without touching the copy's mode, so it is safe mid-walk.
+    -- Damage authority is unchanged — vs monsters our OnMonsterMissileHit declines on non-authority
+    -- clients; vs players the missile MUST exist here (player damage resolves on the victim's own
+    -- client). Same guards as RM/CO/AB: sender on our level, monster golem-flagged to THAT sender.
+    local idStr, midStr, xStr, yStr = payload:match("^AT|(%-?%d+)|(%-?%d+)|(%-?%d+)|(%-?%d+)$")
+    if idStr == nil then return end
     local sender = player.get(senderId)
     if sender == nil or not sender:isOnActiveLevel() then return end
-    local listStr = payload:match("^RS|(.*)$")
-    if listStr == nil then return end
-    local owned = {}
-    for idStr in listStr:gmatch("%-?%d+") do owned[tonumber(idStr)] = true end
-    for id, rec in pairs(remoteAllies) do
-      if rec.ownerId == senderId and not owned[id] then
-        local m = monsters.fromId(id)
-        if m ~= nil and m.isGolem and m.ownerPlayerId == senderId then m:remove() end
-        remoteAllies[id] = nil
-      end
-    end
-    local missing = false
-    for id in pairs(owned) do
-      local rec = remoteAllies[id]
-      if rec == nil then
-        if not isDeployedAlly(id) then missing = true end
-      elseif rec.profile == nil then
-        -- SP applied but its paired CO never did (e.g. a receiver error ate it): the copy is live with
-        -- default stats and no profile. The RQ answer resends the SP+CO pair; the SP side is idempotent.
-        -- A CO merely still in flight self-clears before the next heartbeat, and the RQ is rate-limited.
-        missing = true
-      end
-    end
-    if missing then
-      local now = system.gameTick()
-      if now - lastRosterResyncTick >= ROSTER_INTERVAL_TICKS then
-        lastRosterResyncTick = now
-        luanet.send("hunter", NET.REQSYNC, 1 << senderId)
-      end
+    local id = tonumber(idStr)
+    if remoteAllies[id] == nil then return end
+    local m = monsters.fromId(id)
+    if m == nil or not m.isGolem or m.ownerPlayerId ~= senderId then return end
+    if m.health <= 0 then return end
+    m:fireMissileAt(tonumber(midStr), tonumber(xStr), tonumber(yStr))
+  elseif kind == NET.ENEMY then
+    -- The owner broadcast one of its allies' current enemy (engine wire encoding; -1 = none). A
+    -- golem's MONSTER target latches engine-side (GolumAi re-seeks only when it has none), so a single
+    -- transiently-divergent pick would stick on a peer forever — converge on the owner's view instead.
+    -- Same guards as RM/CO: sender on our level, acting only on a monster golem-flagged to THAT sender.
+    local idStr, encStr = payload:match("^EN|(%-?%d+)|(%-?%d+)$")
+    if idStr == nil then return end
+    local sender = player.get(senderId)
+    if sender == nil or not sender:isOnActiveLevel() then return end
+    local id = tonumber(idStr)
+    if remoteAllies[id] == nil then return end
+    local m = monsters.fromId(id)
+    if m == nil or not m.isGolem or m.ownerPlayerId ~= senderId then return end
+    if m.health <= 0 then return end
+    local enc = tonumber(encStr)
+    m:setEncodedEnemy(enc >= 0 and enc or nil)
+  elseif kind == NET.APOCBOOMS then
+    -- The owner's client fanned a multi-target Apocalypse (spreadDiabloApocalypse): recreate the same
+    -- extra booms here so every client shows one boom set. Damage stays single-resolver: vs monsters
+    -- our OnMonsterMissileHit declines on non-authority clients (the owner's roll arrives via the
+    -- engine's CMD_MONSTDAMAGE broadcast); vs players the boom MUST exist here, because player damage
+    -- resolves on the victim's own client (vanilla PlayerMHit semantics).
+    local idStr, list = payload:match("^AB|(%-?%d+)|(.*)$")
+    if idStr == nil then return end
+    local sender = player.get(senderId)
+    if sender == nil or not sender:isOnActiveLevel() then return end
+    local id = tonumber(idStr)
+    if remoteAllies[id] == nil then return end
+    local m = monsters.fromId(id)
+    if m == nil or not m.isGolem or m.ownerPlayerId ~= senderId then return end
+    for x, y in list:gmatch("(%-?%d+),(%-?%d+)") do
+      m:fireMissileAt(monsters.MissileID.DiabloApocalypseBoom, tonumber(x), tonumber(y))
     end
   end
 end)
@@ -2179,7 +2470,7 @@ end)
 
 -- On entering a level, ask same-level ally owners to (re)send their deployed allies (so a late joiner materialises them). Clears stale per-level remote-ally tracking first. Fires for everyone in MP; no-op in SP.
 events.OnLevelEnter.add(function()
-  myDeltaLevel = items.currentDeltaLevel()  -- valid here (plrlevel = this level); consumed by broadcastRemove
+  myDeltaLevel = items.currentDeltaLevel() -- valid here (plrlevel = this level); consumed by broadcastRemove
   remoteAllies = {}
   -- A deploy request in flight across a level change is stale (slot ids are per-level) — but its scroll
   -- was already consumed, so REFUND rather than drop (a late SP/DF for it is harmlessly ignored:
@@ -2208,7 +2499,7 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
     local scrollItem = caster:findScrollBySeed(scrollSeed)
     if data == nil then
       -- Session data lost (game restart). Recover from seed+dwBuff encoding.
-      if scrollItem == nil then return end  -- scroll not in inventory; nothing to refund
+      if scrollItem == nil then return end -- scroll not in inventory; nothing to refund
       data = recoverScrollData(scrollSeed, scrollItem)
       if data == nil then
         -- dwBuff is zeroed or corrupt — can't determine what to spawn.
@@ -2227,7 +2518,7 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
       return
     end
     if (data.uniqueTypeIdx ~= nil and isUniqueTypeDeployed(data.uniqueTypeIdx))
-       or (seedIsDiablo(scrollSeed) and isDiabloDeployed()) then
+        or (seedIsDiablo(scrollSeed) and isDiabloDeployed()) then
       refundTameScroll(caster, data, scrollSeed)
       caster:say(player.HeroSpeech.ICantDoThat)
       return
@@ -2242,6 +2533,12 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
     if system.isMultiplayer() and not self:isLevelOwnedByLocalClient() then
       -- tick stamps the request: if no SP/DF echo ever arrives (no live level owner, lost message), the GameTick timeout self-refunds the consumed scroll.
       pendingDeploys[scrollSeed] = { data = data, tick = system.gameTick() }
+      -- Back the consumed scroll up the MOMENT it leaves inventory, not at echo completion: a
+      -- quit/exit inside the SP/DF round trip saves the post-consumption inventory while the
+      -- runtime-only pendingDeploys dies with the session — the persisted registry is the only
+      -- thing that keeps the scroll recoverable (free at Pepin) next session. A completed deploy
+      -- overwrites this same entry (finishDeploy); every refund path deletes it (refundTameScroll).
+      putRecovery(scrollSeed, recoveryDwBuffFromData(data), "lost")
       luanet.send("hunter", table.concat(
         { NET.DEPLOYREQ, data.typeId or -1, data.uniqueTypeIdx or -1, capturedDifficulty, spawnX, spawnY,
           scrollSeed, data.maxHp, data.savedHp }, "|"))
@@ -2293,11 +2590,22 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
           end
         end
         untrackDeployedAt(i)
-        recalcAllyBuffs()  -- the deployed count dropped; survivors re-absorb the freed buff share
+        recalcAllyBuffs() -- the deployed count dropped; survivors re-absorb the freed buff share
         return
       end
     end
-    return  -- allied monster not tracked by us (e.g. another player's ally), do nothing
+    return -- defensive: tracked id missing from the list (should not happen)
+  end
+
+  -- Tame never CAPTURES a player-minion. Our own ally is the retame above; any OTHER golem —
+  -- another Hunter's deployed ally or a vanilla Golem — is not a wild monster and must not enter
+  -- the capture path: it would remove the local copy while the CR receiver's golem guard rightly
+  -- protects every peer's copy (split existence), and mint a duplicate scroll from a live pet
+  -- (a redeployed pet is wounded, so it sails under the capture-HP gate). Observed as the Diablo
+  -- duplication bug (bugs.md 2026-07-09).
+  if target.isGolem then
+    caster:say(player.HeroSpeech.ICantDoThat)
+    return
   end
 
   -- A monster at 0 HP (dead / mid death-anim) must never be captured: its synced death would race the conversion into a ghost + a scroll minted from a corpse. The HP-percent gate reads it as 0% (easiest tame), so veto explicitly here.
@@ -2327,22 +2635,22 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
     capturedDifficulty = monsters.currentDifficulty(),
   }
   local pos = target.position
-  local capturedId = target.id  -- capture before remove() so peers can despawn the same wild monster
+  local capturedId = target.id -- capture before remove() so peers can despawn the same wild monster
 
   -- Taming a quest monster clears its quest exactly as if killed (state + death speech; Diablo → quest done + difficulty kill credit WITHOUT the game-ending sequence); no-op otherwise. Called before remove() while type/uniqueType are intact.
   target:checkQuestKill()
 
   -- removeAsKilled (not remove): a wild monster is level-natural, so it must be recorded as killed in the MP delta, else a later loader regenerates it as a live ghost.
-  local capturedLevel = items.currentDeltaLevel()  -- captor's level, for off-level peers' delta records
+  local capturedLevel = items.currentDeltaLevel()                                     -- captor's level, for off-level peers' delta records
   target:removeAsKilled()
-  broadcastCaptureRemove(capturedId, capturedLevel, pos.x, pos.y, monsterData.typeId)  -- peers reap the wild monster (live or via delta)
+  broadcastCaptureRemove(capturedId, capturedLevel, pos.x, pos.y, monsterData.typeId) -- peers reap the wild monster (live or via delta)
   -- Log the capture for this level (session-lifetime): the RQ answer replays it as a CR so a client whose delta missed the kill reaps the regenerated ghost live.
   local lvlCaptures = capturedNaturalMonsters[capturedLevel]
   if lvlCaptures == nil then
     lvlCaptures = {}
     capturedNaturalMonsters[capturedLevel] = lvlCaptures
   end
-  lvlCaptures[capturedId] = { x = pos.x, y = pos.y, typeId = monsterData.typeId }
+  lvlCaptures[capturedId] = { x = pos.x, y = pos.y }
 
   -- Stamp the taming Hunter as the monster's permanent Original Trainer (name + OHID).
   dropTameScroll(monsterData, pos.x, pos.y, { name = caster.name, id = getMyOhId() })
@@ -2373,19 +2681,25 @@ function applySharePotion(caster, target)
   end)
 
   local level    = caster.characterLevel
-  local freecast = math.random(100) <= level
-  local overheal = math.random(100) <= level
+  local freecast = math.random(100) <= level + 10 -- clvl% : potion not consumed
+  local overheal = math.random(100) <= level + 10 -- (clvl+10)% : heal to 150% maxHP
+
+  -- The heal is an owner-side HP write peers never simulate — broadcast the CO (absolute HP) the
+  -- moment it happens, like every other owner-side mutation (never wait for anything periodic).
+  local function healTo(hp)
+    target:setHitPoints(hp)
+    local entry = getDeployedAllyEntry(target.id)
+    if entry ~= nil then broadcastCombatOverride(entry) end
+    audio.playSfx(audio.SfxID.ItemPotion)
+  end
 
   if potionType == "full" then
     if not freecast then caster:removeItem(potionIDidx, 1) end
-    target:setHitPoints(overheal and math.floor(maxHp * 1.5) or maxHp)
-    audio.playSfx(audio.SfxID.ItemPotion)
+    healTo(overheal and math.floor(maxHp * 1.5) or maxHp)
     return true
   elseif potionType == "partial" then
     if not freecast then caster:removeItem(potionIDidx, 1) end
-    local healedHp = overheal and math.floor(maxHp * 1.5) or math.min(currentHp + math.floor(maxHp * 0.3), maxHp)
-    target:setHitPoints(healedHp)
-    audio.playSfx(audio.SfxID.ItemPotion)
+    healTo(overheal and math.floor(maxHp * 1.5) or math.min(currentHp + math.floor(maxHp * 0.3), maxHp))
     return true
   else
     caster:say(player.HeroSpeech.ICantDoThat)
@@ -2398,7 +2712,7 @@ events.OnSpellActionFrame.add(function(caster, spellId, spellType, target, scrol
   if spellId ~= SHARE_POTION_ID then return end
   local self = player.self()
   if self == nil or caster.id ~= self.id then return end
-  if spellType ~= 0 then return end  -- skill casts only
+  if spellType ~= 0 then return end -- skill casts only
   caster:enterHealOtherMode()
 end)
 
@@ -2503,7 +2817,7 @@ function restampScrollPresentation(item)
     local monsterName = (uIdx >= 0) and monsters.getUniqueName(uIdx) or monsters.getNameByTypeId(DIABLO_TYPE_ID)
     if monsterName == nil then return end
     scrollName = prefix .. " " .. monsterName
-    item.magical = 2  -- ITEM_QUALITY_UNIQUE → gold text + outline
+    item.magical = 2 -- ITEM_QUALITY_UNIQUE → gold text + outline
   else
     local typeId = seedToTypeId(item.seed)
     if typeId == nil then return end
@@ -2511,7 +2825,7 @@ function restampScrollPresentation(item)
     local monsterName = monsters.getNameByTypeId(typeId)
     if monsterName == nil then return end
     scrollName = prefix .. " Lvl " .. level .. " " .. monsterName
-    if bonded then item.magical = 2 end  -- Bonded normal scrolls render at gold tier too
+    if bonded then item.magical = 2 end -- Bonded normal scrolls render at gold tier too
   end
   item.name  = scrollName
   item.iName = scrollName
@@ -2529,8 +2843,8 @@ end)
 -- Speedbook: inject one entry per unique Tame Scroll name held in inventory (deduped by display name; count = how many of that name).
 events.OnGetCustomSpeedbookScrollEntries.add(function(p)
   if not isMyPlayer(p) then return nil end
-  local seen  = {}   -- name → { seed, count }
-  local order = {}   -- insertion-order list of names
+  local seen  = {} -- name → { seed, count }
+  local order = {} -- insertion-order list of names
   p:iterateInventory(function(item)
     if not item:isScrollOf(TAME_ID) then return end
     -- Skip scrolls outside the current tier criteria (they carry iSkipSpeedbook, so filter at injection).
@@ -2626,8 +2940,20 @@ events.OnCanCastSkill.add(function(p, spellId, target)
   if not isMyPlayer(p) then return nil end
   if spellId ~= TAME_ID then return nil end
   if target == nil then return nil end
-  -- Never gate-refuse a cast aimed at a golem/minion (own ally = recall, others = no-op). Decided from isGolem only to AVOID a refusal, so the Golem barometer is unaffected.
-  if target.isGolem then return nil end
+  -- A golem/minion target: our OWN deployed ally/minion is a valid cast (recall / no-op), so allow.
+  -- Any OTHER golem is never capturable — refuse upfront (the action-frame isGolem veto is the
+  -- authoritative backstop; it stops the capture path that split existence + minted a duplicate
+  -- scroll from a live pet — bugs.md 2026-07-09): another Hunter's ally is a pet, not a wild
+  -- monster; the vanilla Golem stays vanilla (never captured/converted — the barometer); and a
+  -- Berserk'd monster is PERMANENTLY untameable by design — AddBerserk sets MFLAG_BERSERK|MFLAG_GOLEM
+  -- for life (never cleared), mutates its damage stats, and CheckMissileCol lets any monster missile
+  -- hit a MFLAG_BERSERK target regardless of faction, so a tamed ex-berserk would be a permanently
+  -- friendly-fire-hittable pet (see hunter_class_design.md "Untameable targets").
+  if target.isGolem then
+    if isDeployedAlly(target.id) then return nil end
+    p:say(player.HeroSpeech.ICantDoThat)
+    return false
+  end
 
   local clvl     = p.characterLevel
   local mlvl     = target.level
@@ -2638,7 +2964,7 @@ events.OnCanCastSkill.add(function(p, spellId, target)
     p:say(player.HeroSpeech.ICantDoThat)
     return false
   end
-  return nil  -- in-criteria: allow (HP threshold is enforced in-cast).
+  return nil -- in-criteria: allow (HP threshold is enforced in-cast).
 end)
 
 -- Exempt Tame scrolls from Auto Refill Belt (all share TAME_ID, so refill would redirect a belt cast to the wrong scroll). false keeps the selected belt slot.
@@ -2662,8 +2988,8 @@ events.OnGetSpeedbookSpellName.add(function(p, spellId, defaultName)
   if spellId ~= TAME_ID then return nil end
   local tier = tameTier(p.characterLevel)
   if tier == 3 then return "Tame+++" end
-  if tier == 2 then return "Tame++"  end
-  if tier == 1 then return "Tame+"   end
+  if tier == 2 then return "Tame++" end
+  if tier == 1 then return "Tame+" end
   return nil
 end)
 
@@ -2701,7 +3027,7 @@ end)
 function relinkSavedAllies()
   if pendingAllyRoster == nil then return end
   local roster = pendingAllyRoster
-  pendingAllyRoster = nil  -- consume once
+  pendingAllyRoster = nil -- consume once
   if system.isMultiplayer() then return end
 
   local me = player.self()
@@ -2713,11 +3039,11 @@ function relinkSavedAllies()
         monster            = m,
         seed               = rec.seed,
         capturedDifficulty = rec.capturedDifficulty,
-        isMinion           = rec.isMinion or nil,  -- nil for allies, matching the deploy convention
+        isMinion           = rec.isMinion or nil, -- nil for allies, matching the deploy convention
         parentId           = rec.parentId,
         base               = rec.base,
       }
-      trackDeployedAlly(entry)  -- sets entry.id from the live monster
+      trackDeployedAlly(entry) -- sets entry.id from the live monster
       -- Re-assert Bonded state (rolls are no-ops since OnLoadPlayerData restored them; re-applies immunity + aura light).
       if not entry.isMinion and isBonded(entry.seed, m.level) then
         rollBondedBonus(entry)
@@ -2745,24 +3071,23 @@ function announceRecoveryOnEntry()
   end
 end
 
--- Rebuild each held Tame Scroll's modData blob from its seed's save-persisted tables (the blob isn't in the hero save, so a save->reload empties it), making a reloaded scroll trade/drop losslessly again. Local Hunter only.
-function healHeldScrollModData()
+-- The PRIMARY load-time blob rebuild (not a repair): held-item modData is deliberately never
+-- hero-saved (ItemPack frozen for non-Hunter save stability), so EVERY save→reload empties it.
+-- Rebuild each held Tame Scroll's blob from the seed-keyed tables persisted via luamoddata, making a
+-- reloaded scroll trade/drop losslessly again. Local Hunter only; runs once per game at GameStart.
+function rebuildHeldScrollModData()
   if TAME_ID == nil then return end
   local me = player.self()
   if me == nil or me.className ~= HUNTER_CLASS then return end
   me:iterateInventory(function(it)
     if it:isScrollOf(TAME_ID) then
-      -- A starter scroll's Original-Trainer name persists empty (no player name at creation); fill it from the local name now. Only our own un-named creation is ever empty, so claiming it locally is safe.
+      -- Origin-record gaps are only ever OUR OWN creation (every foreign acquisition writes
+      -- scrollOrigin at pickup re-key; the record is luamoddata-persisted), so claim the local
+      -- Hunter: an absent record entirely, or a name left empty by creation-time minting (the
+      -- starter scroll is minted before the player name is readable).
       local o = scrollOrigin[it.seed]
       if o == nil then
-        -- Origin record absent entirely (lost across a reload): restore the true trainer from the scroll's own blob if it survived; else claim locally — only our own creation is ever record-less AND blob-less (a traded scroll always carried its trainer in the blob/SD).
-        local _, _, _, _, _, ohId, ohName = decodeBlob(it.modData)
-        if ohName ~= nil and ohName ~= "" then
-          o = { name = ohName, id = ohId }
-        else
-          o = { name = me.name, id = getMyOhId() }
-        end
-        scrollOrigin[it.seed] = o
+        scrollOrigin[it.seed] = { name = me.name, id = getMyOhId() }
       elseif o.name == nil or o.name == "" then
         o.name = me.name
       end
@@ -2781,12 +3106,23 @@ events.GameStart.add(function()
   pendingResurrectBeam = {}
   lastBuffFingerprint = nil
   capturedNaturalMonsters = {}
-  lastRosterTick = 0        -- gameTick restarts per game; stale stamps would stall the heartbeat
-  lastRosterResyncTick = 0
   relinkSavedAllies()
   announceRecoveryOnEntry()
-  healHeldScrollModData()  -- restore full modData on held scrolls truncated by the last save→reload
+  rebuildHeldScrollModData() -- the primary load-time rebuild: held modData is never hero-saved
+  restoreStatPoints()        -- overwrite the engine's wrapped uint8 _pStatPts with the saved true value
 end)
+
+-- Restore the true unspent stat points saved by OnSavePlayerData: the engine hero file carries
+-- _pStatPts as one byte, so a >255 Forgetting refund wraps at load. Consume-once (a new character
+-- never fires OnLoadPlayerData, so the stash must not leak across a same-launch character swap).
+function restoreStatPoints()
+  local pts = pendingStatPts
+  pendingStatPts = nil
+  if pts == nil then return end
+  local me = player.self()
+  if me == nil or me.className ~= HUNTER_CLASS then return end
+  me.statPoints = pts
+end
 
 -- OnMonsterDeath: remove an ally from tracking when it dies in combat.
 events.OnMonsterDeath.add(function(monster)
@@ -2816,10 +3152,10 @@ events.OnMonsterDeath.add(function(monster)
     local rec = recoveryRegistry[entry.seed]
     if rec ~= nil then
       local _, maxHp, level, dif = decodeDwBuff(rec.dwBuff)
-      rec.dwBuff = encodeDwBuff(maxHp, maxHp, level, dif)  -- recovered at full HP, not its dying HP
-      rec.state  = "injured"
+      rec.dwBuff                 = encodeDwBuff(maxHp, maxHp, level, dif) -- recovered at full HP, not its dying HP
+      rec.state                  = "injured"
       -- Use the full scroll name ("Tamed/Bonded [Lvl N] [Name]") so the message matches the item.
-      local _, scrollName = buildScrollParams(allyToMonsterData(monster, entry), entry.seed)
+      local _, scrollName        = buildScrollParams(allyToMonsterData(monster, entry), entry.seed)
       message(scrollName .. " has been defeated and can be revived at Pepin.")
     end
   end
@@ -2827,7 +3163,7 @@ events.OnMonsterDeath.add(function(monster)
   removeDeployedById(monster.id)
   -- Only a non-minion ally death changes the buff share; skip the recalc on unrelated deaths.
   if entry ~= nil and not entry.isMinion then
-    recalcAllyBuffs()  -- survivors re-absorb the freed buff share
+    recalcAllyBuffs() -- survivors re-absorb the freed buff share
   end
 end)
 
@@ -2875,26 +3211,22 @@ end)
 creditAllyKill = function(ally, victim)
   local entry = getDeployedAllyEntry(ally.id)
   if entry == nil then return end
-  if entry.isMinion then return end  -- minions have no seed and don't accumulate kills
-  local mlvl   = ally.level
-  local before = allyKillCounts[entry.seed] or 0
-  local after  = before + 1
+  if entry.isMinion then return end -- minions have no seed and don't accumulate kills
+  local mlvl                 = ally.level
+  local before               = allyKillCounts[entry.seed] or 0
+  local after                = before + 1
   allyKillCounts[entry.seed] = after
-  local needed = mlvl * BONDED_KILLS_PER_LEVEL
+  local needed               = mlvl * BONDED_KILLS_PER_LEVEL
   -- Detect the exact kill that crosses the Bonded threshold and promote to Bonded.
   if mlvl > 0 and before < needed and after >= needed then
-    promoteToBonded(entry)  -- already re-applies the buff (incl. the new KTH), so we're done
-    broadcastCombatOverride(entry)  -- Bonded changed its stats/immunity/profile (incl. trnVariant); sync to peers
+    promoteToBonded(entry)         -- already re-applies the buff (incl. the new KTH), so we're done
+    broadcastCombatOverride(entry) -- Bonded changed its stats/immunity/profile (incl. trnVariant); sync to peers
     return
   end
-  -- Re-sync CO to peers on kills that change something they render: a KILL_TOHIT_PER increment (also re-derive the buff locally) or entering the single-kill pre-Bonded window.
-  local resync = false
-  if after % KILL_TOHIT_PER == 0 then
-    applyAllyBuff(entry)  -- new ToHit
-    resync = true
-  end
-  if mlvl > 0 and after == needed - 1 then resync = true end
-  if resync then broadcastCombatOverride(entry) end
+  -- A KILL_TOHIT_PER milestone re-derives the buff locally (new ToHit); EVERY kill broadcasts CO —
+  -- peers render the kill count (infobox/nearBonded) and only ever learn it from an event message.
+  if after % KILL_TOHIT_PER == 0 then applyAllyBuff(entry) end
+  broadcastCombatOverride(entry)
 end
 
 -- Melee kills route here too (the engine fires OnGolemKilledMonster for any golem attacker; creditAllyKill filters to our own).
@@ -2902,16 +3234,16 @@ events.OnGolemKilledMonster.add(creditAllyKill)
 
 -- OnGolemMinionMissileSpawn: a golem-fired spawn missile (a tamed Hork Demon's Hork Spawn) landed. Suppress the vanilla spawn on every client (non-level-natural species); the LEVEL OWNER creates + attributes + replicates the correct species at the landing tile.
 events.OnGolemMinionMissileSpawn.add(function(ally, species, x, y)
-  if not isTamedAlly(ally.id) then return nil end  -- not one of ours → leave the engine's default spawn
+  if not isTamedAlly(ally.id) then return nil end -- not one of ours → leave the engine's default spawn
   -- Spawn authority + the minion cap are enforced HERE, owner-only and authoritatively, NOT in the Hork's deterministic fire roll (the count is network-timed, so keeping it out of the roll keeps the missile in lockstep).
   local me = player.self()
   if me ~= nil and me:isLevelOwnedByLocalClient()
-     and countMinionsOfParent(ally.id) < HORK_MAX_MINIONS then
+      and countMinionsOfParent(ally.id) < HORK_MAX_MINIONS then
     local captured = allyCapturedDifficulty(ally)
     local minion = monsters.spawnWithDifficulty(species, captured, x, y)
     if minion ~= nil then registerSpawnedMinion(minion, ally, captured) end
   end
-  return false  -- suppress the vanilla SpawnMonster on every client
+  return false -- suppress the vanilla SpawnMonster on every client
 end)
 
 -- OnGetMonsterInfo: replace the base info block for any friendly-viewable tamed pet (own or a peaceful player's) with live HP + kills + resistance/immunity lines (revealed upfront, no kill threshold).
@@ -2949,15 +3281,15 @@ events.OnGetMonsterInfo.add(function(monster)
   else
     if hasResist then
       local r = "Resists:"
-      if has(RES.ResistMagic)     then r = r .. " Magic"     end
-      if has(RES.ResistFire)      then r = r .. " Fire"      end
+      if has(RES.ResistMagic) then r = r .. " Magic" end
+      if has(RES.ResistFire) then r = r .. " Fire" end
       if has(RES.ResistLightning) then r = r .. " Lightning" end
       table.insert(lines, r)
     end
     if hasImmune then
       local i = "Immune:"
-      if has(RES.ImmuneMagic)     then i = i .. " Magic"     end
-      if has(RES.ImmuneFire)      then i = i .. " Fire"      end
+      if has(RES.ImmuneMagic) then i = i .. " Magic" end
+      if has(RES.ImmuneFire) then i = i .. " Fire" end
       if has(RES.ImmuneLightning) then i = i .. " Lightning" end
       table.insert(lines, i)
     end
@@ -2972,26 +3304,32 @@ events.OnMonsterCanShowResistances.add(function(monster)
 end)
 
 -- Floating stat box for a hovered tamed pet (own or a peaceful player's): fully self-drawn each frame (GameDrawComplete), each stat shown as `base / buffed` with the buffed value blue when it differs. OH/ID = the scroll's permanent Original Trainer.
-FBOX_LINE_H = 13
-FBOX_WHITE  = render.UiFlags.ColorWhite     | render.UiFlags.Outlined
-FBOX_BLUE   = render.UiFlags.ColorBlue      | render.UiFlags.Outlined
-FBOX_GOLD   = render.UiFlags.ColorWhitegold | render.UiFlags.Outlined
-FBOX_DIFF_NAMES = { [0] = "Normal", [1] = "Nightmare", [2] = "Hell" }
-FBOX_MODE_NAMES = { [0] = "Diablo", [1] = "Hellfire" }
+FBOX_LINE_H      = 13
+FBOX_WHITE       = render.UiFlags.ColorWhite     | render.UiFlags.Outlined
+FBOX_BLUE        = render.UiFlags.ColorBlue      | render.UiFlags.Outlined
+FBOX_GOLD        = render.UiFlags.ColorWhitegold | render.UiFlags.Outlined
+FBOX_DIFF_NAMES  = { [0] = "Normal", [1] = "Nightmare", [2] = "Hell" }
+FBOX_MODE_NAMES  = { [0] = "Diablo", [1] = "Hellfire" }
 -- Dungeon-level → area-name ranges { upperBound, name, displayOffset } for the "Found:" field; shown number = dlvl minus the zone's displayOffset (matching the automap: Nest/Crypt restart at 1).
-FBOX_AREA_ZONES = {
-  { 4, "Church", 0 }, { 8, "Catacombs", 0 }, { 12, "Caves", 0 },
-  { 16, "Hell", 0 }, { 20, "Nest", 16 }, { 24, "Crypt", 20 },
+FBOX_AREA_ZONES  = {
+  { 4,  "Church", 0 }, { 8, "Catacombs", 0 }, { 12, "Caves", 0 },
+  { 16, "Hell",   0 }, { 20, "Nest", 16 }, { 24, "Crypt", 20 },
 }
-FBOX_NUM_LEVELS = 25  -- engine NUMLEVELS (diablo.h); the setlevel encode offset
+FBOX_NUM_LEVELS  = 25 -- engine NUMLEVELS (diablo.h); the setlevel encode offset
 -- Quest sub-level names, indexed by setlvlnum (engine QuestLevelNames in Source/levels/setmaps.cpp).
 FBOX_QUEST_NAMES = {
-  [1] = "Skeleton King's Lair", [2] = "Chamber of Bone", [3] = "Maze", [4] = "Poisoned Water Supply",
-  [5] = "Archbishop Lazarus' Lair", [6] = "Church Arena", [7] = "Hell Arena", [8] = "Circle of Life Arena",
+  [1] = "Skeleton King's Lair",
+  [2] = "Chamber of Bone",
+  [3] = "Maze",
+  [4] = "Poisoned Water Supply",
+  [5] = "Archbishop Lazarus' Lair",
+  [6] = "Church Arena",
+  [7] = "Hell Arena",
+  [8] = "Circle of Life Arena",
 }
 function areaLevelName(lvl)
   if lvl == nil or lvl <= 0 then return "Unknown" end
-  if lvl > 24 then return FBOX_QUEST_NAMES[lvl - FBOX_NUM_LEVELS] or "Quest Area" end  -- name only, no "Lvl N"
+  if lvl > 24 then return FBOX_QUEST_NAMES[lvl - FBOX_NUM_LEVELS] or "Quest Area" end -- name only, no "Lvl N"
   for _, z in ipairs(FBOX_AREA_ZONES) do
     if lvl <= z[1] then return z[2] .. " Lvl " .. (lvl - z[3]) end
   end
@@ -3006,8 +3344,11 @@ function petFloatingBase(monster)
     -- OH = the scroll's recorded Original Trainer (its true tamer even if WE got it via trade); minions fall back to the local Hunter.
     local origin = originForSeed(entry.seed) or {}
     return {
-      min = b.minDamage or 0, max = b.maxDamage or 0, toHit = b.toHit or 0,
-      ac = b.armorClass or 0, hp = b.maxHp or 0,
+      min = b.minDamage or 0,
+      max = b.maxDamage or 0,
+      toHit = b.toHit or 0,
+      ac = b.armorClass or 0,
+      hp = b.maxHp or 0,
       difficulty = entry.capturedDifficulty or 0,
       gamemode = scrollGamemode[entry.seed] or 0,
       areaLevel = scrollAreaLevel[entry.seed] or 0,
@@ -3019,12 +3360,15 @@ function petFloatingBase(monster)
   if rec ~= nil and rec.profile ~= nil then
     local p = rec.profile
     return {
-      min = p.baseMinDamage or 0, max = p.baseMaxDamage or 0, toHit = p.baseToHit or 0,
-      ac = p.baseArmorClass or 0, hp = p.baseMaxHp or 0,
+      min = p.baseMinDamage or 0,
+      max = p.baseMaxDamage or 0,
+      toHit = p.baseToHit or 0,
+      ac = p.baseArmorClass or 0,
+      hp = p.baseMaxHp or 0,
       difficulty = rec.capturedDifficulty or 0,
       gamemode = p.gamemode or 0,   -- the owner broadcasts the pet's tamed-in gamemode over CO
       areaLevel = p.areaLevel or 0, -- the owner broadcasts the pet's tamed-in dungeon level over CO
-      ohName = p.ohName or "?",   -- the owner broadcasts the pet's true origin (OH name + id) over CO
+      ohName = p.ohName or "?",     -- the owner broadcasts the pet's true origin (OH name + id) over CO
       ohId = p.ohId or 0,
     }
   end
@@ -3060,15 +3404,15 @@ events.GameDrawComplete.add(function()
 
   -- Rows are {text, colorFlags} segments (buffed values live off the monster): base/buffed stat rows, then the gold provenance block (Found / Type / OH / ID / Version).
   local rows = {
-    fboxStatRow("Min Dmg:", d.min,   monster.minDamage),
-    fboxStatRow("Max Dmg:", d.max,   monster.maxDamage),
-    fboxStatRow("ToHit:",   d.toHit, monster.toHit),
-    fboxStatRow("AC:",      d.ac,    monster.armorClass),
-    fboxStatRow("HP:",      d.hp,    monster.maxHealth),
+    fboxStatRow("Min Dmg:", d.min, monster.minDamage),
+    fboxStatRow("Max Dmg:", d.max, monster.maxDamage),
+    fboxStatRow("ToHit:", d.toHit, monster.toHit),
+    fboxStatRow("AC:", d.ac, monster.armorClass),
+    fboxStatRow("HP:", d.hp, monster.maxHealth),
     { { "Found: " .. areaLevelName(d.areaLevel) .. " / "
-        .. (FBOX_DIFF_NAMES[d.difficulty] or "Normal"), FBOX_GOLD } },
+    .. (FBOX_DIFF_NAMES[d.difficulty] or "Normal"), FBOX_GOLD } },
     { { "Type: " .. monster.monsterClass, FBOX_GOLD } },
-    { { "OH: " .. d.ohName, FBOX_GOLD }, { "   ID: " .. formatOhId(d.ohId), FBOX_GOLD } },
+    { { "OH: " .. d.ohName, FBOX_GOLD },                                      { "   ID: " .. formatOhId(d.ohId), FBOX_GOLD } },
     { { "Version: " .. (FBOX_MODE_NAMES[d.gamemode] or "Diablo"), FBOX_GOLD } },
   }
 
@@ -3114,17 +3458,17 @@ events.OnGolemCanTargetMonster.add(function(ally, candidate)
   if not candidate.isLit or math.max(pdx, pdy) > ENGAGE_RADIUS then return false end
   -- Survived the cheap gates: now pay for line of sight (else the ally targets through walls and paths away from the player).
   if not ally:hasLineOfSightTo(candidate) then return false end
-  return nil  -- active, lit, within the engage radius, clear LOS: allow
+  return nil -- active, lit, within the engage radius, clear LOS: allow
 end)
 
 -- OnGolemCanTargetGolem: pet-vs-pet combat between mutually-hostile owners (different players, not both friendly). Symmetric, so a defender's pets fight back automatically. Generic for any class's golems.
 events.OnGolemCanTargetGolem.add(function(ally, candidate)
   local a = player.get(ally.ownerPlayerId)
   local b = player.get(candidate.ownerPlayerId)
-  if a == nil or b == nil then return nil end   -- unknown owner -> vanilla (no infighting)
-  if a.id == b.id then return nil end           -- same owner -> never infight
-  if arePeaceful(a, b) then return nil end       -- both friendly -> no fight
-  return true                                    -- at least one hostile -> permit combat
+  if a == nil or b == nil then return nil end -- unknown owner -> vanilla (no infighting)
+  if a.id == b.id then return nil end         -- same owner -> never infight
+  if arePeaceful(a, b) then return nil end    -- both friendly -> no fight
+  return true                                 -- at least one hostile -> permit combat
 end)
 
 -- OnGolemCanTargetPlayer: let tamed allies acquire PLAYERS hostile to their owner (the player-target counterpart of OnGolemCanTargetGolem). TAMED ALLIES ONLY — the vanilla Golem must never target players (base-mechanics barometer), and unlike pet-vs-pet there is no engine action for a golem-with-player-target (the melee/chase block is monster-only; our OnGolemChooseAction handlers drive player combat), so granting a vanilla Golem a player target would leave it staring, target-locked, doing nothing. All inputs are synced (ownerPlayerId, hostility flags, positions); on non-owner clients isTamedAlly is false -> default(false), which is fine because a remote pet's AI is suppressed and its enemy arrives via net sync.
@@ -3132,8 +3476,8 @@ events.OnGolemCanTargetPlayer.add(function(ally, candidate)
   if not isTamedAlly(ally.id) then return nil end
   local owner = allyOwner(ally)
   if owner == nil then return nil end
-  if candidate.id == owner.id then return nil end       -- never the owner
-  if arePeaceful(owner, candidate) then return nil end  -- friendly -> vanilla (no player targeting)
+  if candidate.id == owner.id then return nil end      -- never the owner
+  if arePeaceful(owner, candidate) then return nil end -- friendly -> vanilla (no player targeting)
   local cp = candidate.position
   local ap = ally.position
   -- Self-defence: a hostile player immediately adjacent is always fair game (cheap; no LOS needed).
@@ -3148,7 +3492,7 @@ end)
 -- OnGolemCanChaseTarget: all allies stay within ENGAGE_RADIUS of the owner when chasing.
 events.OnGolemCanChaseTarget.add(function(ally, target)
   if not isTamedAlly(ally.id) then return nil end
-  local owner = allyOwner(ally)  -- the ally's owner (own or remote), resolved from ownerPlayerId
+  local owner = allyOwner(ally) -- the ally's owner (own or remote), resolved from ownerPlayerId
   if owner == nil then return nil end
   -- Block if the ally itself is outside the lit area — let idle pull it back.
   if not ally.isLit then return false end
@@ -3174,16 +3518,16 @@ function friendlyAllyNearPath(sx, sy, tx, ty)
   end
   local me = player.self()
   for id, rec in pairs(remoteAllies) do
-    local m = monsters.fromId(id)  -- same slot-alias guards as reapOrphanedRemoteAllies
+    local m = monsters.fromId(id) -- same slot-alias guards as reapOrphanedRemoteAllies
     if m ~= nil and m.isGolem and m.ownerPlayerId == rec.ownerId
-       and arePeaceful(me, player.get(rec.ownerId)) then
+        and arePeaceful(me, player.get(rec.ownerId)) then
       positions[#positions + 1] = m.position
     end
   end
   if #positions == 0 then return false end
   local dx, dy = tx - sx, ty - sy
   local steps = math.max(math.abs(dx), math.abs(dy))
-  if steps == 0 then return false end  -- target is the origin tile: nothing to sweep
+  if steps == 0 then return false end -- target is the origin tile: nothing to sweep
   for i = 1, steps do
     local x = sx + math.floor(dx * i / steps + 0.5)
     local y = sy + math.floor(dy * i / steps + 0.5)
@@ -3233,7 +3577,7 @@ end
 
 events.OnGolemIdle.add(function(ally, hasTarget, enemyPos)
   if not isTamedAlly(ally.id) then return nil end
-  local owner = allyOwner(ally)  -- own or remote owner, from ownerPlayerId
+  local owner = allyOwner(ally) -- own or remote owner, from ownerPlayerId
   if owner == nil then return false end
 
   -- Pursue an enemy target that is close to the owner.
@@ -3250,7 +3594,7 @@ events.OnGolemIdle.add(function(ally, hasTarget, enemyPos)
 
   -- Owner is not moving.
   if ally:distanceTo(owner) <= ENGAGE_RADIUS then
-    return false  -- already close enough; stand still
+    return false -- already close enough; stand still
   end
 
   -- Outside engage zone: walk to a wander spot near the owner. The offset is a PURE FUNCTION of (synced tick-bucket, ally slot id) — NOT an aiRandom value cached at first-idle, which differed per client and fought the position sync (the twitch/zap). Holds for IDLE_REPICK_TICKS.
@@ -3263,15 +3607,18 @@ events.OnGolemIdle.add(function(ally, hasTarget, enemyPos)
 end)
 
 -- OnGolemChooseAction: give ranged allies a ranged attack at appropriate distance. Fires before GolumAi's melee/chase block (Lua first refusal); true consumes the tick. Non-ranged/vanilla Golem return nil.
-RANGED_MIN_DIST = 3  -- don't fire if the enemy is 1–2 tiles away (let melee handle it)
-RANGED_MAX_DIST = 8  -- max range for ranged attack
+RANGED_MIN_DIST = 3 -- don't fire if the enemy is 1–2 tiles away (let melee handle it)
+RANGED_MAX_DIST = 8 -- max range for ranged attack
 
 -- Avoidance casters (AiRangedAvoidance): a tamed one backs away from a closing enemy toward the owner, keeping it within leash range.
 AVOIDANCE_RANGED = {
-  [monsters.AIID.Magma] = true, [monsters.AIID.Storm] = true, [monsters.AIID.Acid] = true,
-  [monsters.AIID.Diablo] = true, [monsters.AIID.BoneDemon] = true,
+  [monsters.AIID.Magma] = true,
+  [monsters.AIID.Storm] = true,
+  [monsters.AIID.Acid] = true,
+  [monsters.AIID.Diablo] = true,
+  [monsters.AIID.BoneDemon] = true,
 }
-KITE_MIN_DIST = 3  -- avoidance allies retreat if the enemy is closer than this
+KITE_MIN_DIST = 3 -- avoidance allies retreat if the enemy is closer than this
 
 -- The C++ call-out forwards the ally's target (Monster or Player, or nil), not a precomputed distance, so derive Chebyshev distance here. Works for either target kind (both expose .position).
 function golemTargetDistance(ally, enemy)
@@ -3302,7 +3649,7 @@ SPECIAL_RANGED_AI = {
 events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
   if not isTamedAlly(ally.id) then return nil end
   if not ally.hasRangedAttack then return nil end
-  local target = enemy or enemyPlayer  -- Monster or hostile Player; the ranged attack fires at enemyPosition either way
+  local target = enemy or enemyPlayer -- Monster or hostile Player; the ranged attack fires at enemyPosition either way
   if target == nil then return nil end
   local dist = golemTargetDistance(ally, target)
 
@@ -3312,16 +3659,29 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
     if owner ~= nil then
       local odx = math.abs(ally.position.x - owner.position.x)
       local ody = math.abs(ally.position.y - owner.position.y)
-      if math.max(odx, ody) >= 2 then  -- not already hugging the owner
+      if math.max(odx, ody) >= 2 then -- not already hugging the owner
         ally:walkToward(owner.position.x, owner.position.y)
         return true
       end
     end
   end
 
-  if dist < RANGED_MIN_DIST then return nil end                          -- adjacent: fall through to melee (engine block for monsters, the player-target handler below for players)
+  if dist < RANGED_MIN_DIST then return nil end                            -- adjacent: fall through to melee (engine block for monsters, the player-target handler below for players)
   if not golemHasLosToTarget(ally, enemy, enemyPlayer) then return nil end -- no line of sight: fall through to chase
-  if dist > RANGED_MAX_DIST then return nil end                          -- too far: fall through to chase
+  if dist > RANGED_MAX_DIST then return nil end                            -- too far: fall through to chase
+  -- Single-writer fire: only the OWNER's client decides this fire. A remote-owned copy keeps every
+  -- movement/kiting/stance decision above (shared positioning) but HOLDS here instead of firing — the
+  -- owner's AT broadcast renders the shot on this client. Per-client fire decisions read divergent
+  -- inputs (positions mid-walk, LOS, target latch), which produced missiles existing on some clients
+  -- only while the owner's authoritative damage still landed (death by invisible missiles).
+  if deployedAlliesById[ally.id] == nil then return true end
+  -- Stash the choose-time target tile: the AT broadcast fires from the missile-SPAWN chokepoint
+  -- (OnGolemMissileDamage), which doesn't know the target — and an interrupted windup then sends nothing.
+  local scratch = allyScratch(ally.id)
+  if scratch ~= nil then
+    local tp = target.position
+    scratch.pendingFireX, scratch.pendingFireY = tp.x, tp.y
+  end
   -- Fire the monster's authentic missile (not a generic arrow); its elemental damage is resistance-scaled in OnGolemMissileDamage. Avoidance casters + Mega/Diablo/BoneDemon use the special-ranged animation.
   local mid = ally:naturalRangedMissileId()
   -- Diablo's natural missile is the DiabloApocalypse CARRIER, which ignores the firing monster's
@@ -3337,7 +3697,7 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
   if ally.originalAiId == monsters.AIID.Diablo then
     mid = monsters.MissileID.DiabloApocalypseBoom
     -- Record the primary target so the spread skips it (the engine's own boom already lands there).
-    -- Symmetric on every client: this handler runs everywhere the ally is simulated.
+    -- Owner-only, like everything past the hold above — the spread fan-out is owner-only too.
     local scratch = allyScratch(ally.id)
     if scratch ~= nil then
       scratch.apocPrimaryMonsterId = enemy ~= nil and enemy.id or nil
@@ -3356,79 +3716,107 @@ end)
 -- player on the level. The tamed version mirrors that shape faction-aware — when the primary boom
 -- spawns (the OnGolemMissileDamage chokepoint fires in AddMissile at the attack frame), fan an extra
 -- boom onto every OTHER valid hostile in the pet's ranged envelope:
---   * monsters: awake (isActive — never wakes unengaged packs), living, NON-golem (pets are never
---     boomed — pet-vs-pet missiles don't resolve, and the vanilla Golem keeps its vanilla protection);
+--   * monsters: awake (isActive — never wakes unengaged packs), living, and either WILD (non-golem)
+--     or a mutually-HOSTILE owner's pet — the placement mirror of OnGolemMissileCanHitGolem, so a
+--     boom is only ever placed where the damage layer will resolve it (own/peaceful pets and a
+--     peaceful player's vanilla Golem stay untouched);
 --   * players: hostile only (never the owner, peaceful players skipped at placement per the
 --     targeting-layer rule; the damage layer's OnGolemMissileCanHitPlayer still re-checks).
 -- LOS required per target, mirroring the carrier's LineClearMissile. The primary target (recorded at
 -- choose time in the ally scratch) is skipped — the engine's own boom already lands there.
--- Deterministic on every client: ally AI runs everywhere, the scan walks monster slots / player ids in
--- fixed order over synced state, and each boom's damage rolls the synced per-monster RNG stream.
-APOC_SPREAD_RADIUS = RANGED_MAX_DIST  -- the pet ranged envelope, not vanilla's level-wide reach
-apocSpreadActive = false              -- reentrancy guard: spread booms re-enter OnGolemMissileDamage
+-- OWNER-AUTHORITATIVE (the fix for the spread-desync bug): only the owner runs this fan-out, then
+-- replicates the boom tiles to same-level peers over AB. A per-client fan-out read per-client state
+-- (roster/scratch timing, positions, LOS) and produced divergent boom sets; MP is not lockstep, so
+-- "deterministic on every client" was never enforceable here. Damage stays single-resolver
+-- (OnMonsterMissileHit authority for monsters; the victim's own client for players, which is exactly
+-- why the booms must exist on every client).
+APOC_SPREAD_RADIUS  = RANGED_MAX_DIST -- the pet ranged envelope, not vanilla's level-wide reach
+APOC_SPREAD_PER_MSG = 24              -- boom tiles per AB message (chunked under the pipe's 255-byte payload cap)
+apocSpreadActive    = false           -- reentrancy guard: spread booms re-enter OnGolemMissileDamage
 
 function spreadDiabloApocalypse(golem)
-  local scratch = allyScratch(golem.id)
-  local skipMid = scratch ~= nil and scratch.apocPrimaryMonsterId or nil
-  local skipPid = scratch ~= nil and scratch.apocPrimaryPlayerId or nil
-  local gp   = golem.position
-  local boom = monsters.MissileID.DiabloApocalypseBoom
+  local scratch    = allyScratch(golem.id)
+  local skipMid    = scratch ~= nil and scratch.apocPrimaryMonsterId or nil
+  local skipPid    = scratch ~= nil and scratch.apocPrimaryPlayerId or nil
+  local gp         = golem.position
+  local boom       = monsters.MissileID.DiabloApocalypseBoom
+  local owner      = allyOwner(golem)
+  local tiles      = {} -- "x,y" per boom, replicated to peers over AB
   apocSpreadActive = true
   -- Monsters: slot order 0..251 (the engine's hard live-monster ceiling; fromId is nil for empty slots).
   for id = 0, 251 do
     if id ~= skipMid then
       local m = monsters.fromId(id)
-      if m ~= nil and not m.isGolem and not m.hasNoLife and m.isActive then
-        local mp = m.position
-        if math.max(math.abs(mp.x - gp.x), math.abs(mp.y - gp.y)) <= APOC_SPREAD_RADIUS
-           and golem:hasLineOfSightTo(m) then
-          golem:fireMissileAt(boom, mp.x, mp.y)
+      if m ~= nil and not m.hasNoLife and m.isActive then
+        local valid
+        if not m.isGolem then
+          valid = true -- wild monster
+        else
+          -- Hostile pet-vs-pet: mirror OnGolemMissileCanHitGolem (mutually-hostile owners only).
+          local b = player.get(m.ownerPlayerId)
+          valid = owner ~= nil and b ~= nil and b.id ~= owner.id and not arePeaceful(owner, b)
+        end
+        if valid then
+          local mp = m.position
+          if math.max(math.abs(mp.x - gp.x), math.abs(mp.y - gp.y)) <= APOC_SPREAD_RADIUS
+              and golem:hasLineOfSightTo(m) then
+            golem:fireMissileAt(boom, mp.x, mp.y)
+            tiles[#tiles + 1] = mp.x .. "," .. mp.y
+          end
         end
       end
     end
   end
-  local owner = allyOwner(golem)
   for pid = 0, 3 do
     local p = player.get(pid)
     if p ~= nil and pid ~= skipPid and p:isOnActiveLevel()
-       and owner ~= nil and p.id ~= owner.id and not arePeaceful(owner, p) then
+        and owner ~= nil and p.id ~= owner.id and not arePeaceful(owner, p) then
       local pp = p.position
       if math.max(math.abs(pp.x - gp.x), math.abs(pp.y - gp.y)) <= APOC_SPREAD_RADIUS
-         and golem:hasLineOfSightToPlayer(p) then
+          and golem:hasLineOfSightToPlayer(p) then
         golem:fireMissileAt(boom, pp.x, pp.y)
+        tiles[#tiles + 1] = pp.x .. "," .. pp.y
       end
     end
   end
   apocSpreadActive = false
+  -- Replicate the fan-out to same-level peers (the AB receiver recreates each boom; chunked so one
+  -- message never exceeds the pipe's payload cap).
+  if system.isMultiplayer() and #tiles > 0 then
+    for i = 1, #tiles, APOC_SPREAD_PER_MSG do
+      luanet.send("hunter", table.concat({ NET.APOCBOOMS, golem.id,
+        table.concat(tiles, ";", i, math.min(i + APOC_SPREAD_PER_MSG - 1, #tiles)) }, "|"))
+    end
+  end
 end
 
 -- Hybrid AI: restore original AI special behaviours for tamed monsters. Fires AFTER the ranged handler; a non-nil return overrides it.
-AIID = monsters.AIID
+AIID                    = monsters.AIID
 
 -- Charge threshold: Rhino/Gloom(Bat) need distance >= 5; Snake uses 2-3 tiles.
-CHARGE_MIN_DIST = { [monsters.AIID.Rhino] = 5, [monsters.AIID.Bat] = 5, [monsters.AIID.Snake] = 2 }
+CHARGE_MIN_DIST         = { [monsters.AIID.Rhino] = 5, [monsters.AIID.Bat] = 5, [monsters.AIID.Snake] = 2 }
 
-SKELKING_SPAWN_MIN_DIST = 3   -- only spawn when the enemy is at least this far (matches LeoricAi)
-SKELKING_SPAWN_CHANCE   = 8   -- percent chance per eligible tick to spawn a minion
-SKELETON_TYPE_ID        = 8   -- MT_WSKELAX (basic skeleton) — the species a tamed king raises
+SKELKING_SPAWN_MIN_DIST = 3 -- only spawn when the enemy is at least this far (matches LeoricAi)
+SKELKING_SPAWN_CHANCE   = 8 -- percent chance per eligible tick to spawn a minion
+SKELETON_TYPE_ID        = 8 -- MT_WSKELAX (basic skeleton) — the species a tamed king raises
 
-HORK_SPAWN_MIN_DIST = 3   -- Hork Demon fires Hork Spawn at range (matches HorkDemonAi)
-HORK_SPAWN_CHANCE   = 8   -- percent chance per eligible tick to fire Hork Spawn
+HORK_SPAWN_MIN_DIST     = 3 -- Hork Demon fires Hork Spawn at range (matches HorkDemonAi)
+HORK_SPAWN_CHANCE       = 8 -- percent chance per eligible tick to fire Hork Spawn
 
 events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
   if not isTamedAlly(ally.id) then return nil end
   local aiId = ally.originalAiId
-  local target = enemy or enemyPlayer  -- special behaviours apply to hostile-player targets too
+  local target = enemy or enemyPlayer -- special behaviours apply to hostile-player targets too
   local hasTarget = target ~= nil
   local dist = golemTargetDistance(ally, target)
 
   -- Skeleton King: periodically raise skeleton minions at range, up to a per-king cap. The spawn ROLL is a PURE FUNCTION OF SYNCED STATE (positions, synced menemy, synced aiRandom) so the raise pose plays in lockstep; the CAP is NOT in the roll (network-timed minion count would diverge the AI) — creation + cap are owner-authoritative below.
   if aiId == AIID.SkeletonKing then
     if hasTarget and dist >= SKELKING_SPAWN_MIN_DIST
-       and monsters.aiRandom(100) < SKELKING_SPAWN_CHANCE then
+        and monsters.aiRandom(100) < SKELKING_SPAWN_CHANCE then
       local me = player.self()
       if me ~= nil and me:isLevelOwnedByLocalClient()
-         and countMinionsOfParent(ally.id) < SKELKING_MAX_MINIONS then
+          and countMinionsOfParent(ally.id) < SKELKING_MAX_MINIONS then
         -- Spawn one tile toward the enemy; spawnWithDifficulty crawls to the nearest free tile.
         local ap, ep = ally.position, target.position
         local sx = ap.x + (ep.x > ap.x and 1 or (ep.x < ap.x and -1 or 0))
@@ -3437,16 +3825,25 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
         local minion = monsters.spawnWithDifficulty(SKELETON_TYPE_ID, captured, sx, sy)
         if minion ~= nil then registerSpawnedMinion(minion, ally, captured) end
       end
-      ally:startSpecialStand()  -- raise pose on every client; the skeleton arrives over the net on peers
+      ally:startSpecialStand() -- raise pose on every client; the skeleton arrives over the net on peers
       return true
     end
     return nil
   end
 
-  -- Hork Demon: fire Hork Spawn at range. Same lockstep rule as the Skeleton King — the FIRE roll is a pure function of synced state with NO cap; the cap is enforced authoritatively at the missile's landing in OnGolemMinionMissileSpawn.
+  -- Hork Demon: fire Hork Spawn at range. The roll draws on every client (keeps the per-monster RNG
+  -- stream aligned), but the FIRE is single-writer like the generic ranged handler: a remote copy
+  -- holds and renders the owner's AT instead. The minion cap stays enforced authoritatively at the
+  -- missile's landing in OnGolemMinionMissileSpawn (the level owner creates + replicates).
   if aiId == AIID.HorkDemon then
     if hasTarget and dist >= HORK_SPAWN_MIN_DIST
-       and monsters.aiRandom(100) < HORK_SPAWN_CHANCE then
+        and monsters.aiRandom(100) < HORK_SPAWN_CHANCE then
+      if deployedAlliesById[ally.id] == nil then return true end -- remote copy: hold for the owner's AT
+      local scratch = allyScratch(ally.id)
+      if scratch ~= nil then
+        local tp = target.position
+        scratch.pendingFireX, scratch.pendingFireY = tp.x, tp.y
+      end
       ally:startSpecialRangedAttack(monsters.MissileID.HorkSpawn)
       return true
     end
@@ -3486,9 +3883,15 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
       if corpsePos then
         local pos = ally.position
         if corpsePos.x == pos.x and corpsePos.y == pos.y then
-          -- Standing on the corpse: eat it and heal a chunk of HP
-          local healAmt = math.max(1, math.floor(ally.maxHealth / 8))
-          ally:setHitPoints(math.min(ally.health + healAmt, ally.maxHealth))
+          -- Standing on the corpse: eat it. The eat ANIM plays wherever the copy reaches a corpse,
+          -- but the HP write is single-writer (owner only, gated on per-client corpse/position state
+          -- peers legitimately diverge on) — the immediate CO carries the absolute HP to peers.
+          if deployedAlliesById[ally.id] ~= nil then
+            local healAmt = math.max(1, math.floor(ally.maxHealth / 8))
+            ally:setHitPoints(math.min(ally.health + healAmt, ally.maxHealth))
+            local entry = getDeployedAllyEntry(ally.id)
+            if entry ~= nil then broadcastCombatOverride(entry) end
+          end
           ally:startEating()
           return true
         else
@@ -3505,8 +3908,8 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
 end)
 
 -- Stealth AI: Sneak-type allies keep their cloak — fade out when safe, materialise to strike when an enemy closes in (the gold ally outline still renders while cloaked). Fires after the ranged/hybrid handlers.
-SNEAK_FADE_IN_DIST = 3   -- emerge to strike when an enemy is at least this close
-SNEAK_FADE_OUT_DIST = 4  -- re-cloak when the enemy is at least this far (or gone)
+SNEAK_FADE_IN_DIST = 3  -- emerge to strike when an enemy is at least this close
+SNEAK_FADE_OUT_DIST = 4 -- re-cloak when the enemy is at least this far (or gone)
 
 events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
   if not isTamedAlly(ally.id) then return nil end
@@ -3529,7 +3932,7 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
     ally:startFadeout()
     return true
   end
-  return nil  -- enemy adjacent: melee (engine block for monsters, the player-target handler below for players)
+  return nil -- enemy adjacent: melee (engine block for monsters, the player-target handler below for players)
 end)
 
 -- OnGolemChooseAction (player targets): GolumAi's engine melee/chase block only handles MONSTER targets, so drive melee against a hostile player here — swing when adjacent, otherwise return nil and let OnGolemIdle's pursue branch close the distance (enemyPosition tracks the player each tick, and the same owner-anchored ENGAGE_RADIUS leash applies). Registered after the ranged/hybrid/sneak handlers so their behaviours take priority.
@@ -3537,7 +3940,7 @@ events.OnGolemChooseAction.add(function(ally, enemy, enemyPlayer)
   if enemyPlayer == nil then return nil end
   if not isTamedAlly(ally.id) then return nil end
   if golemTargetDistance(ally, enemyPlayer) <= 1 then
-    ally:startAttack()  -- hit resolution dispatches on MFLAG_TARGETS_MONSTER, so this swings at the player
+    ally:startAttack() -- hit resolution dispatches on MFLAG_TARGETS_MONSTER, so this swings at the player
     return true
   end
   return nil
@@ -3569,9 +3972,9 @@ events.StoreOpened.add(function(townerName)
   -- Restore post-restart scrolls (tameScrollData empty; read from dwBuff). Works for normal + unique scrolls.
   owner:iterateInventory(function(item)
     if not item:isScrollOf(TAME_ID) then return end
-    if tameScrollData[item.seed] ~= nil then return end  -- already handled above
+    if tameScrollData[item.seed] ~= nil then return end -- already handled above
     local savedHp, maxHp, level, difficulty = decodeDwBuff(item.buff)
-    if maxHp == 0 then return end  -- no valid data encoded
+    if maxHp == 0 then return end                       -- no valid data encoded
     if savedHp < maxHp then
       -- Re-encode with full HP, preserving difficulty.
       item.buff = encodeDwBuff(maxHp, maxHp, level, difficulty)
@@ -3597,7 +4000,8 @@ events.StoreOpened.add(function(townerName)
       local _, scrollName, dwBuff, modData = buildScrollParams(data, seed)
       local price = (rec.state == "injured") and ((data.level or 0) * RECOVERY_INJURED_COST_PER_LEVEL) or 0
       -- Gold/unique tier must be stamped on the STOCK item: a vendor purchase copies stock fields verbatim and fires no quality fixups. 2 = ITEM_QUALITY_UNIQUE.
-      local magical = (seedGetUniqueType(seed) >= 0 or seedIsDiablo(seed) or isBonded(seed, data.level or 0)) and 2 or nil
+      local magical = (seedGetUniqueType(seed) >= 0 or seedIsDiablo(seed) or isBonded(seed, data.level or 0)) and 2 or
+      nil
       items.addToHealerStock(TAME_SCROLL_MAP, price, seed, scrollName, dwBuff, modData, magical)
     end
   end
@@ -3605,7 +4009,7 @@ end)
 
 -- Per-tick ally upkeep rides GameTick (the engine's game-logic step — fires once per synced
 -- simulation tick, incl. catch-up ticks a render frame can skip); GameDrawComplete keeps only
--- render-side cadence (the flash blink). Simulation bookkeeping on the tick, drawing on the frame.
+-- actual drawing (the floating stat box). Simulation bookkeeping on the tick, drawing on the frame.
 
 -- Despawn any observed remote ally whose owner has left the game (player.get returns nil for a disconnected player). The engine's golem reaper only reaps MT_GOLEM, so our arbitrary-species allies would otherwise ghost. Owner-match guard keeps it barometer-safe.
 function reapOrphanedRemoteAllies()
@@ -3628,30 +4032,36 @@ function reapOrphanedRemoteAllies()
   end
 end
 
-events.GameDrawComplete.add(function()
-  -- Advance the pre-Bonded flash cadence (flashOn is read by OnGetMonsterTRN to blink a near-Bonded ally). Render-side blink, frame-paced on purpose.
-  flashFrameCounter = flashFrameCounter + 1
-  flashOn = (flashFrameCounter % FLASH_PERIOD_FRAMES) < FLASH_ON_FRAMES
-end)
-
 events.GameTick.add(function()
-  local owner = player.self()  -- owns the allies leashed below
+  local owner = player.self() -- owns the allies leashed below
   local now = system.gameTick()
+
+  -- Pre-Bonded flash cadence off the synced tick clock (flashOn is read by OnGetMonsterTRN to blink a near-Bonded ally); every client computes the same phase, so peers blink in unison.
+  flashOn = (now % FLASH_PERIOD_TICKS) < FLASH_ON_TICKS
 
   -- Periodically clear remote allies whose owner has left the game OR the level (before the own-ally early-return; a peer can observe without owning). No-op in SP. Every 10 ticks (~0.5s) on the synced clock.
   if system.isMultiplayer() and now % 10 == 0 then reapOrphanedRemoteAllies() end
 
-  -- Self-healing sync layer (MP only), paced on the synced lockstep clock:
+  -- Owner one-shot broadcasts (MP only) — change-triggered, never periodic (see the NET sync model):
   if system.isMultiplayer() then
     local me = player.self()
-    -- Roster heartbeat: re-assert which ally/minion slot ids we own so same-level peers reconcile
-    -- (drop stale copies from a lost RM, RQ ones missing from a lost SP). An EMPTY roster is
-    -- meaningful too — it is what clears our stale copies after we recalled everything.
-    if me ~= nil and me.className == HUNTER_CLASS and now - lastRosterTick >= ROSTER_INTERVAL_TICKS then
-      lastRosterTick = now
-      local ids = {}
-      for _, entry in ipairs(deployedAllies) do ids[#ids + 1] = entry.id end
-      luanet.send("hunter", NET.ROSTER .. "|" .. table.concat(ids, ","))
+    -- Pet-target convergence (EN): a golem's MONSTER target latches engine-side (GolumAi re-seeks
+    -- only when it has none), so one transiently-divergent pick sticks on a peer forever — observed
+    -- as hostile pet-vs-pet attacking DIFFERENT targets per client until a recall/redeploy despawned
+    -- the latched targets and forced a joint re-seek. The owner's view is authoritative: broadcast an
+    -- ally's wire-encoded enemy the tick it changes. (The engine's own CMD_SYNCDATA enemy sync skips
+    -- its application whenever the copies' positions already agree, so EN carries this, not the engine.)
+    if me ~= nil and me.className == HUNTER_CLASS then
+      for _, entry in ipairs(deployedAllies) do
+        local m = entry.monster
+        if m ~= nil and m.isGolem then
+          local enc = m:encodedEnemy() or -1
+          if enc ~= entry.lastSentEnemy then
+            entry.lastSentEnemy = enc
+            luanet.send("hunter", table.concat({ NET.ENEMY, entry.id, enc }, "|"))
+          end
+        end
+      end
     end
     -- Deploy-request timeout: the engine consumed the scroll at cast; if no SP/DF echo ever came back
     -- (no live level owner, lost message), give the scroll back.
@@ -3673,7 +4083,7 @@ events.GameTick.add(function()
       if m ~= nil and m.isGolem and m.ownerPlayerId == rec.ownerId then
         local remoteOwner = player.get(rec.ownerId)
         if remoteOwner ~= nil and remoteOwner:isOnActiveLevel()
-           and m:distanceTo(remoteOwner) > LEASH_DISTANCE then
+            and m:distanceTo(remoteOwner) > LEASH_DISTANCE then
           m:snapToPlayer(remoteOwner)
         end
       end
@@ -3695,7 +4105,7 @@ events.GameTick.add(function()
   -- Recalc cadence: poll a cheap stat fingerprint once per tick and recalc the buff only when it changes (CLVL-up / gear swap).
   if owner ~= nil and owner.className == HUNTER_CLASS then
     local fp = owner.characterLevel .. ":" .. owner.maxHealth .. ":" .. owner.minDamage
-      .. ":" .. owner.maxDamage .. ":" .. owner.toHit .. ":" .. owner.armorClass
+        .. ":" .. owner.maxDamage .. ":" .. owner.toHit .. ":" .. owner.armorClass
     if fp ~= lastBuffFingerprint then
       lastBuffFingerprint = fp
       recalcAllyBuffs()
@@ -3704,6 +4114,27 @@ events.GameTick.add(function()
 end)
 
 -- Mod-data save: flat sections of seed-keyed tables separated by 0 markers (0 is never a valid seed/flag/variant).
+-- Reset ALL per-character durable state: everything OnSavePlayerData persists, plus the identity and
+-- caches that shadow it. The Lua runtime outlives characters within one app session and a NEW
+-- character never fires OnLoadPlayerData — without this reset the previous character's tables (Pepin
+-- recovery, kills, origins, counter) roll over into the next character and get PERSISTED into its
+-- first save. Called at character creation and at the top of the load parser (load REPLACES, never
+-- merges). GameStart must NOT call this — it clears only per-game transient state.
+function resetPersistedCharacterState()
+  allyKillCounts    = {}
+  bondedImmunity    = {}
+  bondedTrn         = {}
+  recoveryRegistry  = {}
+  scrollOrigin      = {}
+  scrollGamemode    = {}
+  scrollAreaLevel   = {}
+  tameScrollData    = {}
+  pendingAllyRoster = nil
+  pendingStatPts    = nil
+  scrollCounter     = 1
+  myOhId            = nil
+end
+
 events.OnSavePlayerData.add(function()
   -- Only a Hunter persists mod data; any other class returns nothing, keeping the save byte-identical to a non-modded one.
   local me = player.self()
@@ -3713,27 +4144,27 @@ events.OnSavePlayerData.add(function()
     t[#t + 1] = seed
     t[#t + 1] = kills
   end
-  t[#t + 1] = 0  -- section marker
-  for seed, flag in pairs(bondedImmunity) do  -- Bonded defensive bonuses
+  t[#t + 1] = 0                              -- section marker
+  for seed, flag in pairs(bondedImmunity) do -- Bonded defensive bonuses
     t[#t + 1] = seed
     t[#t + 1] = flag
   end
-  t[#t + 1] = 0  -- section marker
-  for seed, variant in pairs(bondedTrn) do  -- Bonded recolour TRN variants
+  t[#t + 1] = 0                            -- section marker
+  for seed, variant in pairs(bondedTrn) do -- Bonded recolour TRN variants
     t[#t + 1] = seed
     t[#t + 1] = variant
   end
-  t[#t + 1] = 0  -- section marker
-  for seed, rec in pairs(recoveryRegistry) do  -- recovery backups: (seed, dwBuff, state) triples
+  t[#t + 1] = 0                               -- section marker
+  for seed, rec in pairs(recoveryRegistry) do -- recovery backups: (seed, dwBuff, state) triples
     t[#t + 1] = seed
     t[#t + 1] = rec.dwBuff
     -- state code: 0 = "lost", 1 = "injured", 2 = "lostfull"
     t[#t + 1] = (rec.state == "injured") and 1 or (rec.state == "lostfull") and 2 or 0
   end
   -- Section 5: deployed-ally roster (SINGLE-PLAYER ONLY) — the live golem<->seed link for a mid-dungeon Load Game re-link. Each record: slot id + seed/capturedDifficulty/isMinion/parentId + un-buffed base stats. Skipped in MP (slot ids aren't cross-client; MP persists via the net delta).
-  t[#t + 1] = 0  -- recovery-section terminator
+  t[#t + 1] = 0   -- recovery-section terminator
   if system.isMultiplayer() then
-    t[#t + 1] = 0  -- roster count 0: MP persists no ally roster
+    t[#t + 1] = 0 -- roster count 0: MP persists no ally roster
   else
     t[#t + 1] = #deployedAllies
     for _, entry in ipairs(deployedAllies) do
@@ -3780,12 +4211,18 @@ events.OnSavePlayerData.add(function()
     t[#t + 1] = seed
     t[#t + 1] = scrollAreaLevel[seed]
   end
+  -- Trailing: true unspent stat points. The engine hero file carries _pStatPts as a single BYTE, and a
+  -- Potion-of-Forgetting refund can exceed 255 (a full respec refunds STAT_BUDGET - 85 = 375), which
+  -- wraps on the next load (445 -> 189, the observed join-time point loss). The GameStart restore
+  -- writes this value back over the engine's wrapped byte.
+  t[#t + 1] = me.statPoints
   return t
 end)
 
 events.OnLoadPlayerData.add(function(data)
-  -- Clear last character's OHID so a save missing the field can't leak it to the one loading now.
-  myOhId = nil
+  -- Load REPLACES, never merges: start from a clean slate so a previous character's state (still in
+  -- the runtime from this app session) can never blend into the one loading now.
+  resetPersistedCharacterState()
   local n = #data
   local i = 1
   -- Section 1: kill counts, until the 0 marker.
@@ -3830,14 +4267,14 @@ events.OnLoadPlayerData.add(function(data)
     i = i + 1
     local roster = {}
     for _ = 1, count do
-      if i + 9 > n then break end  -- truncated record; stop
+      if i + 9 > n then break end -- truncated record; stop
       roster[#roster + 1] = {
         id                 = data[i],
         seed               = (data[i + 1] ~= 0) and data[i + 1] or nil,
         capturedDifficulty = data[i + 2],
         isMinion           = data[i + 3] == 1,
         parentId           = (data[i + 4] ~= 0) and data[i + 4] or nil,
-        base = {
+        base               = {
           minDamage  = data[i + 5],
           maxDamage  = data[i + 6],
           toHit      = data[i + 7],
@@ -3866,11 +4303,11 @@ events.OnLoadPlayerData.add(function(data)
     i = i + 1
     for _ = 1, count do
       if i + 1 > n then break end
-      local seed = data[i]
-      local id   = data[i + 1]
-      i = i + 2
+      local seed         = data[i]
+      local id           = data[i + 1]
+      i                  = i + 2
       local name
-      name, i = unpackStringFromWords(data, i)
+      name, i            = unpackStringFromWords(data, i)
       scrollOrigin[seed] = { name = name, id = id }
     end
   end
@@ -3894,6 +4331,13 @@ events.OnLoadPlayerData.add(function(data)
       scrollAreaLevel[data[i]] = data[i + 1]
       i = i + 2
     end
+  end
+  -- Trailing: true unspent stat points (see OnSavePlayerData). Stashed for the GameStart restore,
+  -- which overwrites the engine's wrapped uint8; consumed once, like pendingAllyRoster.
+  pendingStatPts = nil
+  if i <= n and data[i] ~= nil then
+    pendingStatPts = data[i]
+    i = i + 1
   end
 end)
 
@@ -3928,9 +4372,9 @@ events.OnGetMonsterDisplayName.add(function(monster)
 end)
 
 -- Outline colors. Rendered from the local client's perspective (the observer is always MyPlayer).
-ALLY_OUTLINE_COLOR         = 194  -- PAL16_YELLOW + 2; our own allies/minions
-ALLY_OUTLINE_COLOR_HOVERED = 255  -- PAL16_GRAY + 15; brightest white, own ally hovered
-OTHER_HUNTER_OUTLINE_COLOR = 183  -- PAL16_BLUE + 7; another Hunter's allies (friendly view only)
+ALLY_OUTLINE_COLOR         = 194 -- PAL16_YELLOW + 2; our own allies/minions
+ALLY_OUTLINE_COLOR_HOVERED = 255 -- PAL16_GRAY + 15; brightest white, own ally hovered
+OTHER_HUNTER_OUTLINE_COLOR = 183 -- PAL16_BLUE + 7; another Hunter's allies (friendly view only)
 
 events.OnGetMonsterOutlineColor.add(function(monster)
   -- A monster at 0 HP never shows a selection outline (prevents the brief ally-outline flash on the death frame).
@@ -3982,17 +4426,6 @@ events.OnLevelEnter.add(function()
   if p.className ~= HUNTER_CLASS then return end
   p:iterateInventory(function(item)
     if not item:isScrollOf(TAME_ID) then return end
-    -- Defensive: keep scrollCounter ahead of every held scroll WE minted (matching charTag) so a
-    -- fresh seed can't collide with one in inventory. Foreign-tag scrolls can't collide (different
-    -- upper field) and are skipped, so they no longer inflate our counter.
-    local upper = math.floor(item.seed / 4096)
-    if math.floor(upper / 4096) == getMyOhId() % 128 then
-      local c = upper % 4096
-      if c >= scrollCounter then scrollCounter = c + 1 end
-    end
-    if scrollIsGoldTier(item) then
-      item.magical = 2  -- ITEM_QUALITY_UNIQUE → gold text + outline (unique champions/bosses + Bonded scrolls)
-    end
     -- Announce each carried scroll's identity blob so peers (incl. a late joiner) have it cached for a trade. No-op in SP.
     broadcastScrollData(item.seed)
   end)
@@ -4066,25 +4499,25 @@ events.OnItemPickedUp.add(function(p, floorItem)
   local origin = (ohName ~= nil and ohName ~= "") and { name = ohName, id = ohId } or scrollOrigin[oldSeed]
 
   invItem.seed = newSeed
-  if kills  > 0    then allyKillCounts[newSeed] = kills  end
+  if kills > 0 then allyKillCounts[newSeed] = kills end
   if immVal ~= nil then bondedImmunity[newSeed] = immVal end
-  if trnVar > 0    then bondedTrn[newSeed]      = trnVar end
-  if origin ~= nil then scrollOrigin[newSeed]   = origin end
-  if gamemode == 1 then scrollGamemode[newSeed] = 1      end  -- carry the tamed-in gamemode (Diablo = default 0)
-  if areaLvl  > 0    then scrollAreaLevel[newSeed] = areaLvl end  -- carry the tamed-in area level
-  tameScrollData[newSeed] = nil  -- rebuilt from seed+dwBuff on cast
-  invItem.modData = blobForSeed(newSeed)  -- re-key the held blob to the fresh seed (a live-trade item arrived empty)
+  if trnVar > 0 then bondedTrn[newSeed] = trnVar end
+  if origin ~= nil then scrollOrigin[newSeed] = origin end
+  if gamemode == 1 then scrollGamemode[newSeed] = 1 end          -- carry the tamed-in gamemode (Diablo = default 0)
+  if areaLvl > 0 then scrollAreaLevel[newSeed] = areaLvl end     -- carry the tamed-in area level
+  tameScrollData[newSeed] = nil                                  -- rebuilt from seed+dwBuff on cast
+  invItem.modData = blobForSeed(newSeed)                         -- re-key the held blob to the fresh seed (a live-trade item arrived empty)
 
   -- Drop the old seed's tables only if no OTHER held scroll still uses it (so a transient collision never deletes a different scroll's data).
   if p:findScrollBySeed(oldSeed) == nil then
-    allyKillCounts[oldSeed] = nil
-    bondedImmunity[oldSeed] = nil
-    bondedTrn[oldSeed]      = nil
-    scrollOrigin[oldSeed]   = nil
-    scrollGamemode[oldSeed] = nil
+    allyKillCounts[oldSeed]  = nil
+    bondedImmunity[oldSeed]  = nil
+    bondedTrn[oldSeed]       = nil
+    scrollOrigin[oldSeed]    = nil
+    scrollGamemode[oldSeed]  = nil
     scrollAreaLevel[oldSeed] = nil
-    tameScrollData[oldSeed] = nil
-    receivedBlobs[oldSeed]  = nil
+    tameScrollData[oldSeed]  = nil
+    receivedBlobs[oldSeed]   = nil
   end
   -- The floor item is gone; drop its blob from the level delta to keep the per-level store bounded.
   items.setItemDeltaModData(items.currentDeltaLevel(), oldSeed, "")
@@ -4124,9 +4557,9 @@ events.OnPrepareUniqueInfoBox.add(function(item)
   if maxHp == 0 then maxHp = savedHp end
   if savedHp == 0 then savedHp = maxHp end
   local diffNames = { [0] = "Normal", [1] = "Nightmare", [2] = "Hell" }
-  local diff   = diffNames[difficulty] or "Normal"
-  local kills  = allyKillCounts[item.seed] or 0
-  local prefix = bonded and "Bonded " or "Tamed "
+  local diff      = diffNames[difficulty] or "Normal"
+  local kills     = allyKillCounts[item.seed] or 0
+  local prefix    = bonded and "Bonded " or "Tamed "
 
   local monsterName, tier
   if uIdx >= 0 then
@@ -4134,10 +4567,10 @@ events.OnPrepareUniqueInfoBox.add(function(item)
     tier = BOSS_NAMES[monsterName] and "Boss" or "Champion"
   elseif diablo then
     monsterName = monsters.getNameByTypeId(DIABLO_TYPE_ID) or "Unknown"
-    tier = "Boss"  -- Diablo is always a Boss, independent of Bonded state
+    tier = "Boss" -- Diablo is always a Boss, independent of Bonded state
   else
     monsterName = monsters.getNameByTypeId(seedToTypeId(item.seed)) or "Unknown"
-    tier = "Bonded"  -- a Bonded normal monster has no champion/boss tier of its own
+    tier = "Bonded" -- a Bonded normal monster has no champion/boss tier of its own
   end
 
   items.setCustomUniqueBox(prefix .. monsterName, {

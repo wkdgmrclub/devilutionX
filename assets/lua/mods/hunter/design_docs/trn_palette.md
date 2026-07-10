@@ -99,7 +99,8 @@ which are also unlit.
 Five variants keyed to the rolled Bonded bonus (`BONDED_TRN_TABLE`, `bondedTrn[seed]` selects one). Each
 is a `{colourA, colourB, false}` scatter (two bright tones + original showing through, ~2/3 coverage):
 1 Fire immunity → bright red + bright yellow (230, 205); 2 Lightning → bright blue + white (186, 254);
-3 Magic → white + bright red (254, 230); 4 +200 AC → near-black grey + bright grey (240, 253);
+3 Magic → brightest white + light grey (255, 252 — an all-bright white speckle; stays distinct from the
+AC variant, whose identity is its near-black component); 4 +200 AC → near-black grey + bright grey (240, 253);
 5 Gilded Metal → gold + white-gold (203, 255), a rare Hell-only upgrade (Hell-tamed allies have a 15%
 chance to wear it instead of their bonus colour). To re-tune a look, edit its pattern (colours = bright
 palette entries >= 128; density = ratio of colours to `false`). No build/palette tools required.

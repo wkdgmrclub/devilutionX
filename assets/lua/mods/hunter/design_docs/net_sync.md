@@ -127,7 +127,7 @@ Two layers keep this impossible:
 ### Leash (snapToPlayer) in MP
 
 `snapToPlayer` is a **client-local** position write (no net command, no delta). The leash therefore
-runs **symmetrically on every client** (`GameDrawComplete`): own allies leash to `player.self()`;
+runs **symmetrically on every client** (`GameTick`): own allies leash to `player.self()`;
 remote-owned allies (from `remoteAllies`) leash to *their* owner via `player.get(rec.ownerId)`, gated
 by `isOnActiveLevel()` (skips owner mid-transition) and the same slot-alias guards as the orphan reap.
 This is the engine's own MP monster model — each client simulates, `CMD_SYNCDATA` proximity sync
@@ -153,14 +153,16 @@ ids are per-level. Spawn bindings are **local-only** (no `NetSendCmdSpawnMonster
 
 | Tag | Direction | Effect |
 |---|---|---|
-| `SP\|id\|species\|uniq\|diff\|x\|y\|seed\|owner` | owner → same-level peers | `netSpawnAt` (resolve species to the receiver's own `LevelMonsterTypes`) + `makeGolem(owner)` + record in `remoteAllies`. Idempotent: an already-tracked live copy (`remoteAllies` hit + `isGolem`/owner match) is kept, not clobber-reinitialised, so `RQ`/roster resends never reset position/HP; the cached `CO` profile survives an owner-matched resend. |
-| `RQ` | joiner → all | on `OnLevelEnter` (and on a roster mismatch, rate-limited), same-level ally owners re-send their `deployedAllies` — **allies AND minions** (minions with seed 0 + `parentId`) — each followed by its `CO`, plus the level's capture-removal replay (`CR`s from `capturedNaturalMonsters`, masked) so a requester whose delta missed a kill reaps the regenerated wild monster live. |
+| `SP\|id\|species\|uniq\|diff\|x\|y\|seed\|owner` | owner → same-level peers | `netSpawnAt` (resolve species to the receiver's own `LevelMonsterTypes`) + `makeGolem(owner)` + record in `remoteAllies`. Idempotent: an already-tracked live copy (`remoteAllies` hit + `isGolem`/owner match) is kept, not clobber-reinitialised, so an `RQ` resend never resets position/HP; the cached `CO` profile survives an owner-matched resend. |
+| `RQ` | joiner → all | on `OnLevelEnter`, same-level ally owners re-send their `deployedAllies` — **allies AND minions** (minions with seed 0 + `parentId`) — each followed by its `CO`, plus the level's capture-removal replay (`CR`s from `capturedNaturalMonsters`, masked) so a requester whose delta missed a kill reaps the regenerated wild monster live. The vanilla "delta at level entry" analog: it rebuilds a joiner from scratch, so one-shots need no periodic re-assert behind it. |
 | `DR` / `DF` | non-owner → level owner / back | non-owner deploy **request** / failure. The level owner is the single spawn authority (only it can allocate a slot). The owner mirrors the REQUESTER's deploy gates authoritatively (unique-instance + cap, both per-Hunter, counted over `remoteAllies` filtered to the requester) and answers **`DF` for every rejection** (the requester's scroll is already consumed — a silent drop voids it). Requester side: `pendingDeploys` entries are tick-stamped; no `SP`/`DF` echo within `DEPLOY_TIMEOUT_TICKS` → self-refund (covers "no live level owner"), and a level change refunds in-flight requests instead of dropping them. |
-| `CO\|…` | owner → same-level | broadcasts an ally's final combat numbers + caster profile (28 fields) so every client computes damage / Bonded effects / infobox identically. **No client re-derives.** (DM1) |
+| `CO\|…` | owner → same-level | broadcasts an ally's final combat numbers + caster profile (28 fields) so every client computes damage / Bonded effects / infobox identically. **No client re-derives**, and **every owner-side mutation sends one at the moment it happens** — deploy, buff recalc, Bonded change, EVERY kill, Share Potion heal, Scavenger corpse-eat — never on a timer. (DM1) |
 | `RM\|id\|level` | owner → all | remove (recall / retame / level-exit / minion-cleanup / **death**): same-level peers despawn their live copy (guards: `isGolem && ownerPlayerId == senderId`, plus `hitPoints <= 0` → no-op for a death-RM); off-level peers invalidate their delta record for `level` via `monsters.removeDeltaSpawnedMonster` (see "Delta hygiene"). (N3) |
-| `CR\|id\|level\|x\|y\|typeId` | captor → all | wild-monster capture-removal (tame conversion): same-level peers `removeAsKilled` the live wild monster (never a golem; `hp > 0` guard so a replayed CR only reaps a regenerated ghost); off-level peers record the kill in that level's delta. `typeId` = the captured species, for species-specific quest credit — a **Diablo** capture makes every receiver grant itself the local difficulty kill credit (`player:creditDiabloKill()`, idempotent max), the `pDiabloKillLevel` half of what the ending would have granted (quest STATE arrives engine-side via `NetSendCmdQuest` from the captor). Replayed to an `RQ` requester from `capturedNaturalMonsters`. |
+| `CR\|id\|level\|x\|y\|typeId` | captor → all | wild-monster capture-removal (tame conversion): same-level peers `removeAsKilled` the live wild monster (never a golem; `hp > 0` guard so a replayed CR only reaps a regenerated ghost); off-level peers record the kill in that level's delta. `typeId` = the captured species, for species-specific quest credit — on a **Diablo** capture a receiver grants itself the local difficulty kill credit (`player:creditDiabloKill()`, idempotent max) only when the captor shares its active level (credit = presence at the tame, vanilla MP's on-level `PrepDoEnding` model; quest STATE arrives engine-side via `NetSendCmdQuest` from the captor). Replayed to an `RQ` requester from `capturedNaturalMonsters` with `typeId -1` (a replay reaps, never credits). |
 | `SD` | owner → present peers | item-blob (Plane-2 progression) keyed by seed, for a trade where the dropper is present. See `item_moddata.md`. |
-| `RS\|id,id,…` | every Hunter → all, every `ROSTER_INTERVAL_TICKS` (~2.5s, paced on `system.gameTick()`) | **roster heartbeat — the self-healing layer over the one-shot messages.** The owner re-asserts the ally/minion slot ids it currently owns (an EMPTY roster is meaningful — it clears everything after a full recall). Same-level receivers reconcile: a tracked `remoteAllies` copy of the sender's NOT in the list is removed (a lost `RM` no longer leaves a standing copy while the owner stays on-level); a listed id not tracked — or tracked with no `CO` profile yet — triggers a rate-limited `RQ` back (a lost `SP` **or** a lost `CO` self-heals; the `RQ` answer resends the `SP`+`CO` pair). Off-level senders are ignored (slot ids are per-level; the owner-off-level reap + `RM` delta hygiene cover that side). |
+| `EN\|id\|enemy` | owner → same-level, on change | **pet-target convergence.** A golem's MONSTER target latches engine-side (`GolumAi` re-seeks only when it has none), so one transiently-divergent pick (positions mid-walk, message timing) sticks on a peer forever — observed as hostile pet-vs-pet attacking different targets per client. The owner broadcasts each ally's enemy in the engine's wire encoding (`encode_enemy`; `-1` = none) the tick it changes; receivers apply via `monster:setEncodedEnemy` (the same application the engine's own monster sync performs, validated the same way). The engine's `CMD_SYNCDATA` can't carry this: `SyncMonster` skips its enemy application whenever the copies' positions already agree. |
+| `AT\|id\|missileId\|x\|y` | owner → same-level, per committed fire | **single-writer ranged fire.** Only the owner's client decides an ally's ranged/special fire (remote copies keep all movement/kite/stance logic but HOLD at the fire step); the owner broadcasts the committed missile + target tile from the missile-SPAWN chokepoint (`OnGolemMissileDamage` in `AddMissile` — an interrupted windup sends nothing; the choose-time stash is consumed on the first spawn so multi-part missiles replicate as one fire), and peers recreate it via `fireMissileAt` (mode-safe mid-walk). Per-client fire decisions read divergent inputs (positions, LOS, target latch) and produced missiles existing on some clients only, while the owner's authoritative damage still landed — death by invisible missiles. Damage authority unchanged: `OnMonsterMissileHit` declines on non-authority clients; player hits resolve on the victim's client (why the missile must exist everywhere). Spread booms ride `AB`, not `AT`. |
+| `AB\|id\|x,y;…` | owner → same-level, per Apocalypse fan-out | **replicated multi-target Apocalypse.** Only the owner computes the spread boom set (`spreadDiabloApocalypse` — a per-client fan-out read per-client state and diverged); peers recreate the same booms via `fireMissileAt`. Damage stays single-resolver: monster hits resolve owner-side (`OnMonsterMissileHit` authority; the roll replicates via the engine's `CMD_MONSTDAMAGE`), player hits resolve on the victim's own client — which is exactly why the booms must exist on every client. Chunked (`APOC_SPREAD_PER_MSG`) under the pipe's 255-byte payload cap. |
 
 Deploy gates are **per Hunter** (user-confirmed design): `MAX_ALLIES` deployed non-minion allies each, and
 one instance of a unique each regardless of Tamed/Bonded status or difficulty — two Hunters MAY field their
@@ -173,10 +175,28 @@ Receivers track remote allies in the **Plane-1 runtime `remoteAllies[monsterId]`
 mirror; never saved; cleared on level change / `GameStart`); they do **not** enter `deployedAllies`
 (Plane-2 stays owner-local). A remote observer reads ownership from `ownerPlayerId + isGolem`.
 
-> **Why deterministic AI, not suppression:** an interim `OnGolemCanRunAI→false` peer-suppression froze
-> allies on peers (engine sync carries position, not mode). The fix runs ally AI on *every* client like
-> a vanilla golem, kept identical by the synced per-monster RNG (`monsters.aiRandom`) + owner-anchored
-> hooks. Minion spawns (Skeleton King / Hork) are done by the **level owner** and replicated via `SP`.
+> **The two-model split (vanilla parity, no heartbeat):** vanilla syncs *monsters* by deterministic
+> simulation + engine `CMD_SYNCDATA` convergence, and *players* by owner-client authority + immediate
+> commands. Pets use BOTH, each where vanilla uses it:
+> - **Movement = monster model.** Ally walk/chase/kite AI runs on *every* client like a vanilla golem
+>   (an interim `OnGolemCanRunAI→false` full-suppression froze allies on peers — engine sync carries
+>   position, not mode), kept aligned by the synced per-monster RNG (`monsters.aiRandom`) and healed
+>   by the engine's own rotating position sync (`sync_all_monsters` covers extended slots).
+> - **Combat = player model, single-writer.** Discrete decisions and every damage/HP/stat write have
+>   exactly ONE author, broadcast the tick they happen: ranged fires → owner + `AT`; melee → the
+>   authority elected in `OnGolemMeleeHitChance` (attacker-owner for a pet attacker, else the victim
+>   pet's owner; everyone else returns hit-chance 0 — the d100 still draws, keeping RNG streams
+>   aligned) whose `ApplyMonsterDamage` replicates via the engine's own `CMD_MONSTDAMAGE`/
+>   `CMD_MONSTDEATH`; missiles → `OnMonsterMissileHit` authority; owner-side HP/stat mutations → an
+>   immediate `CO`. Multi-writer resolution is impossible-by-construction, not converged after the
+>   fact — the `CMD_MONSTDAMAGE` receiver SUBTRACTS, so N clients resolving one pet hit applied it
+>   ~N times (the vanilla Golem still does this; the barometer keeps exact base behaviour).
+> - Minion spawns (Skeleton King / Hork) are done by the **level owner** and replicated via `SP`.
+>
+> There is deliberately **no periodic re-assert/heartbeat layer**: the pipe is reliable + in-order,
+> `RQ`-on-entry rebuilds a joiner, the orphan reap + delta hygiene cover departures, and single-writer
+> combat leaves no drift class to heal. Accepted residual (same class as vanilla's own desync edges):
+> a one-shot eaten by a receiver-side level-scoping race while both clients stay on-level has no healer.
 
 ---
 

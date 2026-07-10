@@ -570,6 +570,25 @@ local events = {
   OnGolemMissileDamage = CreateQueryEvent(),
   __doc_OnGolemMissileDamage = "Query: return integer to override a golem/player-minion missile's damage. Args: golem, missileId (int), dam (int). MFLAG_GOLEM sources only; fires per missile incl. each spell segment. Return nil to keep dam.",
 
+  ---Query event fired when a monster's melee or charge attack resolves against another MONSTER and
+  ---either side is a player-minion (MFLAG_GOLEM); wild-vs-wild melee never fires it. Args: attacker,
+  ---target, hitChance (int — the percent the engine is about to roll d100 against; it already carries
+  ---the attack type's to-hit value, and forced-hit charge attacks pass 500). Return an integer to
+  ---override the hit chance; return nil to keep the engine's value. NOTE: monster melee resolves in
+  ---the deterministic simulation on EVERY client — a handler must compute its result from synced
+  ---engine state only, or clients will resolve the same swing differently.
+  OnGolemMeleeHitChance = CreateQueryEvent(),
+  __doc_OnGolemMeleeHitChance = "Query (MFLAG_GOLEM on either side): a monster melee/charge hit is resolving against another monster. Args: attacker, target, hitChance (int percent; forced-hit charges pass 500). Return an integer to override the hit chance; nil to keep. Fires on every client (deterministic sim) — use synced state only.",
+
+  ---Query event fired when a golem / player-minion (MFLAG_GOLEM) sourced missile resolves against a
+  ---PLAYER, after the engine computes its hit chance (the PlayerMHit arrow or spell formula, min-hit
+  ---floor applied); wild-monster missiles never fire it. Args: golem (the source monster), player
+  ---(the victim), missileId (int), dist (int), hitChance (int — the percent the engine is about to
+  ---roll d100 against). Return an integer to override the hit chance; return nil to keep the
+  ---engine's value. The player's block roll and resistances still apply after the hit roll.
+  OnGolemMissileHitChance = CreateQueryEvent(),
+  __doc_OnGolemMissileHitChance = "Query (MFLAG_GOLEM sources only): a player-minion's missile is resolving against a PLAYER. Args: golem, player, missileId (int), dist (int), hitChance (int percent, engine-computed). Return an integer to override the hit chance; nil to keep. Block/resistance steps still follow.",
+
   ---Query event fired for a missile's resolution against a monster (the MonsterTrapHit path, e.g. a
   ---player-minion's cast hitting an enemy monster) when either the source OR the target is a player-minion
   ---(MFLAG_GOLEM); wild-vs-wild missiles never fire it. A handler may fully own the resolution.
@@ -600,6 +619,15 @@ local events = {
   OnPlayerMissileCanHitGolem = CreateQueryEvent(),
   __doc_OnPlayerMissileCanHitGolem = "Query (MFLAG_GOLEM targets only): return false to veto a player missile's hit on a golem/player-minion (missile passes through, e.g. friendly-fire rules). Args: player, golem. Return nil or true for vanilla resolution (default: true).",
 
+  ---Query event fired when a golem / player-minion (MFLAG_GOLEM) sourced missile reaches ANOTHER
+  ---player-minion — a pairing vanilla never resolves (minion-vs-minion missiles pass through), so
+  ---this can only ever widen the resolution, never narrow vanilla behaviour.
+  ---Args: golem (the source monster), target (the player-minion in the missile's path).
+  ---Return true to let the hit resolve (it then routes through OnMonsterMissileHit like any
+  ---minion-involved hit). Return nil or false for the vanilla pass-through (default: false).
+  OnGolemMissileCanHitGolem = CreateQueryEvent(),
+  __doc_OnGolemMissileCanHitGolem = "Query (fires only when BOTH the missile's source and the monster in its path are MFLAG_GOLEM player-minions, which vanilla never resolves): return true to let the hit resolve (e.g. pets of mutually-hostile players). Args: golem (source), target. Return nil or false for the vanilla pass-through (default: false).",
+
   ---Query event fired from the Apocalypse victim scan when it evaluates a golem / player-minion
   ---(MFLAG_GOLEM) — vanilla always excludes player-minions from Apocalypse, so this can only ever
   ---widen the scan, never narrow vanilla behaviour.
@@ -608,6 +636,15 @@ local events = {
   ---Return nil or false for the vanilla exclusion (default: false).
   OnApocalypseCanTargetGolem = CreateQueryEvent(),
   __doc_OnApocalypseCanTargetGolem = "Query (fires only for MFLAG_GOLEM monsters, which vanilla Apocalypse always skips): return true to let a player's Apocalypse target this golem/player-minion (e.g. a hostile player's pet). Args: player, golem. Return nil or false for the vanilla exclusion (default: false).",
+
+  ---Query event fired from the Guardian target search when it evaluates a golem / player-minion
+  ---(MFLAG_GOLEM) — vanilla always excludes player-minions from Guardian fire, so this can only
+  ---ever widen the search, never narrow vanilla behaviour.
+  ---Args: player (the caster), golem (the player-minion being evaluated).
+  ---Return true to let the Guardian fire at this minion (e.g. a hostile player's pet).
+  ---Return nil or false for the vanilla exclusion (default: false).
+  OnGuardianCanTargetGolem = CreateQueryEvent(),
+  __doc_OnGuardianCanTargetGolem = "Query (fires only for MFLAG_GOLEM monsters, which vanilla Guardian always skips): return true to let a player's Guardian fire at this golem/player-minion (e.g. a hostile player's pet). Args: player, golem. Return nil or false for the vanilla exclusion (default: false).",
 
   ---Query event fired (MFLAG_GOLEM sources only) when a player-minion's hit could be fatal to a
   ---player, to resolve how the death is classified. Vanilla always treats a monster-sourced kill as

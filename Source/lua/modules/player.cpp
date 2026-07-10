@@ -154,6 +154,10 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "vitality", "integer",
 	    "Base vitality stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseVit); });
+	LuaSetDocProperty(playerType, "statPoints", "integer",
+	    "Unspent stat points (_pStatPts). Writable: the hero file stores this as a single byte, so a mod granting more than 255 points must persist the true value itself (e.g. via OnSavePlayerData) and write it back on load.",
+	    [](const Player &player) { return player._pStatPts; },
+	    [](Player &player, int value) { player._pStatPts = std::max(value, 0); });
 	// Effective combat stats as shown on the character sheet (readonly). These read the player's
 	// already-accumulated combat accessors/fields (GetArmor/GetMeleeToHit/GetRangedToHit and the
 	// CalcPlrInv-cached _pI* damage fields) and combine them exactly as charpanel.cpp does for
@@ -189,6 +193,9 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "isHoldingShield", "boolean",
 	    "Whether a shield is currently equipped in either hand (readonly)",
 	    [](const Player &player) -> bool { return player.isHoldingItem(ItemType::Shield); });
+	LuaSetDocReadonlyProperty(playerType, "weaponGraphic", "integer",
+	    "The PlayerWeaponGraphic id of the currently equipped weapon combo (Unarmed=0, UnarmedShield=1, Sword=2, SwordShield=3, Bow=4, Axe=5, Mace=6, MaceShield=7, Staff=8) — the low nibble of _pgfxnum, i.e. the weapon sheet the player's animations play (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pgfxnum & 0xF); });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer, modData?: string) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) -> bool {

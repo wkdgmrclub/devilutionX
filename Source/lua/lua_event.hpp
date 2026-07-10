@@ -132,13 +132,27 @@ bool OnGolemMissileCanHitPlayer(const Monster *golem, const Player *player, bool
 // The mirror direction: fired for a player-sourced missile resolving against a player-minion
 // (MFLAG_GOLEM) target. Same veto semantics; default true = vanilla resolution.
 bool OnPlayerMissileCanHitGolem(const Player *player, const Monster *golem, bool defaultValue);
+// Fired when a player-minion (MFLAG_GOLEM) sourced missile reaches another player-minion, which
+// vanilla never resolves. Return true to let the hit resolve; default false = vanilla exclusion.
+bool OnGolemMissileCanHitGolem(const Monster *golem, const Monster *target, bool defaultValue);
 // Fired from the Apocalypse victim scan when it evaluates a player-minion, which vanilla always
 // excludes. Return true to let the scan target it; default false = vanilla exclusion.
 bool OnApocalypseCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue);
+// Fired from the Guardian target search when it evaluates a player-minion, which vanilla always
+// excludes. Return true to let the Guardian fire at it; default false = vanilla exclusion.
+bool OnGuardianCanTargetGolem(const Player *player, const Monster *golem, bool defaultValue);
 // Fired (MFLAG_GOLEM sources only) to classify a player-minion's fatal hit on a player. Return true to
 // treat it as a player kill (ear/PvP death path); default false = vanilla monster/trap kill (item drop).
 bool OnGolemKillIsPlayerKill(const Monster *golem, const Player *player, bool defaultValue);
 int OnGolemMissileDamage(const Monster *golem, int missileId, int dam);
+// Fired when a monster's melee/charge attack resolves against another monster and either side is a
+// player-minion (MFLAG_GOLEM). Return the hit chance (the percent rolled against d100); default = the
+// engine's passed-in value.
+int OnGolemMeleeHitChance(const Monster *attacker, const Monster *target, int hitChance);
+// Fired when a player-minion's (MFLAG_GOLEM) missile resolves against a player, after the engine
+// computes its hit chance (arrow or spell formula, min-hit floor applied). Return the hit chance to
+// roll instead; default = the engine's computed value. Block and resistance steps still follow.
+int OnGolemMissileHitChance(const Monster *golem, const Player *player, int missileId, int dist, int hitChance);
 // Fired for a missile's resolution against a monster when either the source or the target is a
 // player-minion (MFLAG_GOLEM); source may be null (e.g. a trap). Lets a mod fully own the hit
 // resolution: return <0 to decline (the engine runs its default trap-hit resolution against the passed

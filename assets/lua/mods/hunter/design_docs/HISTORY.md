@@ -974,3 +974,100 @@ periodically re-asserted owner state is truth** — peers reconcile instead of t
   (restore from the scroll's own blob; else claim locally — only our own creation is record-less AND
   blob-less), fixing the starter pet's blank OH tag after reload.
 - **Files:** `init.lua` only (+ doc updates: `net_sync.md` §4, `bugs.md`).
+
+---
+
+## Phase 10 — Item-pipe consolidation (Lua + thin engine shrinkage, VERIFIED 2026-07-08)
+
+Fallout of the floor-trade audit (user principle: "explicit, not redundant, no guards for confusion"):
+the mod's item replication had hand-rolled engine machinery that was never broken.
+
+- **`items.spawnAt` announces `CMD_SPAWNITEM` itself** (`Source/lua/modules/items.cpp`, the vanilla
+  `SpawnRewardItem` pattern) — same-level peers spawn a live copy, every client (sender included, via
+  loopback `OnSpawnItem`) registers it in the level delta, engine dedup included.
+- **Deleted:** the `DI` pipe message + receiver + `broadcastDropScroll`; `items.registerDeltaDroppedItem`;
+  `LuaDeltaRegisterDroppedItem(At)` (`msg.cpp`/`msg.h`) — net engine-surface shrinkage of two functions.
+- **Deleted:** the SD monotonic guard + `blobKills` + freshest-wins pickup (no nameable trigger). Pickup
+  blob sourcing is explicit first-non-empty precedence: item's own blob → level delta → `receivedBlobs` →
+  own tables. (Principle: reconcile against loss you can name — the RS heartbeat; never guard against
+  confusion.)
+- **One drop primitive, `placeScrollOnFloor(x, y, seed, name, dwBuff, modData)`:** spawnAt (item
+  replicates itself) + level-delta blob write + SD announce. Used by `dropTameScroll`, the corrupt-scroll
+  refund, and `refundTameScroll`'s floor fallback (previously dropped with NO replication — rare-path hole).
+
+Follow-on: the same premise/native-overlap/guard/consumer audit method was queued for every custom
+MP/Lua subsystem — `bugs.md` §"Review backlog" (A1–A8).
+
+---
+
+## Phase 10 — Taming Diablo (VERIFIED 2026-07-09)
+
+Roadmap §3. Diablo is tameable at **Tame+++** (CLVL 45, ≤5% HP). Requirements (user, 2026-07-06):
+taming must not end the game (quest still completes); a tamed Diablo's death is a normal ally death
+(beam, no corpse, no quest clear/ending); his Apocalypse hits targets dynamically under the pet faction
+rules. Class-design summary in `hunter_class_design.md` ("Diablo status"); binding rationale in
+`cpp_changes/monsters.md`; hook + binding rows in `lua_api_reference.md`.
+
+- **Engine — thin hook `OnMonsterCanEndGame(monster) -> bool|nil`** (default true = vanilla) at the two
+  `MT_DIABLO`-gated sites in `Source/monster.cpp`: gates the `DiabloDeath` call at death start (quest
+  done + freeze + kill-all + camera-pan setup) and the camera-pan/`PrepDoEnding` branch at the death
+  tick. Vetoed → the generic last-frame death path runs, which already carries the ally death machinery
+  (resurrect beam + corpse suppression) — zero new death code. Mod handler returns `false` for
+  `monster.isGolem` (a vanilla Golem can never be MT_DIABLO, so `isGolem` there = someone's tamed
+  Diablo). A **wild** Diablo is never a golem → full vanilla ending, mod loaded or not.
+- **Quest completion on tame:** the capture-path `target:checkQuestKill()` binding
+  (`Source/lua/modules/monsters.cpp`) mirrors `DiabloDeath`'s quest side effects for MT_DIABLO
+  (`Q_DIABLO → QUEST_DONE` + `NetSendCmdQuest` + local `pDiabloKillLevel` raise) without the ending.
+- **Apocalypse — multi-target, faction-aware:** a tamed Diablo never fires the player-seeking
+  `DiabloApocalypse` carrier; `OnGolemChooseAction` overrides `naturalRangedMissileId()` for
+  `AIID.Diablo` to the single-tile **`DiabloApocalypseBoom`** at his actual target
+  (`startSpecialRangedAttack`; kiting + special-cast animation preserved). When the primary boom spawns
+  (`OnGolemMissileDamage` inside `AddMissile`), `spreadDiabloApocalypse` fans extra booms
+  (`monster:fireMissileAt`) onto every OTHER valid hostile in the ranged envelope
+  (`APOC_SPREAD_RADIUS` = 8, per-target LOS): awake/living hostiles incl. mutually-hostile pets, hostile
+  players only (never the owner; vanilla Golems + friendly pets never boomed). Boom is **Physical**,
+  rolled from live `min/max` → scales with the standard physical ally buff (closed the old open question).
+- **MP spread/targeting sync (fix 2026-07-09; root-cause record in `bugs.md` Fixed):** pet-vs-pet
+  missiles were engine-undeliverable at `CheckMissileCol`'s faction gate → new thin
+  **`OnGolemMissileCanHitGolem(source, target) -> bool`** gate (default false = byte-for-byte vanilla),
+  sibling-mirrored, admitted by the Lua handler under exactly the targeting rule (mutually-hostile
+  owners). Golem monster-targets LATCH per client → **`EN` owner-authoritative pet-target broadcast**
+  (on change + roster-beat re-assert; peers apply via the new `monster:encodedEnemy()` /
+  `monster:setEncodedEnemy()` bindings wrapping the engine's own `encode_enemy`/`decode_enemy` +
+  `IsEnemyValid`). The spread fanned out per-client from per-client state → owner-only fan-out +
+  **`AB` boom-tile replication** to same-level peers (monster damage single-resolver via the owner's
+  `CMD_MONSTDAMAGE`; player hits resolve victim-side, which REQUIRED the boom to exist on the victim's
+  client). `OnMonsterMissileHit` authority election hardened to read engine-synced state (not the
+  CO-profile cache). `EN`/`AB` rows in `net_sync.md` §4. Accepted (vanilla model, barometer-checked):
+  pet-vs-pet MELEE lands ~2x per swing — both clients sim + broadcast, identical for a vanilla Golem.
+- **Ally kill-all exemption (built 2026-07-07):** thin query hook
+  **`OnDiabloDeathCanKillMonster(monster) -> bool|nil`** (default true = vanilla) in `DiabloDeath`'s
+  kill-all loop; Lua exempts `deployedAllies`/`remoteAllies` (same set on every client; a vanilla Golem
+  is in neither → still dies).
+- **MP kill credit = presence at the tame (user decision 2026-07-09, superseding the earlier
+  credit-everyone rule):** quest completion + the difficulty bump go only to players standing on
+  Diablo's level when he is tamed — exactly vanilla MP's model (`PrepDoEnding` credits only clients
+  processing the level at his death). The taming client credits itself in `checkQuestKill`; a peer's
+  `CR` receiver calls `player:creditDiabloKill()` (idempotent max) only when the captor shares its
+  active level; the RQ→CR replay sends `typeId -1` (a replay is after the fact — presence at replay
+  time earns nothing, so a late joiner is never credited). Quest STATE still rides `NetSendCmdQuest`
+  game-wide, as a vanilla `DiabloDeath` broadcasts it.
+- **Scroll plumbing:** Diablo is the one quest monster that is NOT unique — his scroll rides the typeId
+  seed path. `DIABLO_TYPE_ID = 110` + `seedIsDiablo(seed)` key the special cases: `CAT_DIABLO` tier gate
+  (CLVL 45 via `mlvlGateAllows`), gold tier everywhere quality is stamped, one-Diablo-per-Hunter dedup
+  (`isDiabloDeployed()`), full UNIQUE presentation via `scrollPresentsAsUnique` (see `bugs.md` Fixed).
+- **Decisions / known limits (don't relitigate):** Hellfire lvl 24 `UberDiabloMonsterIndex` keys off
+  MT_NAKRUL — a deployed Diablo ally doesn't touch it. Diablo-gamemode scroll restriction in Hellfire is
+  the roadmap's enforcement layer (data foundation shipped — modData bit 22).
+
+---
+
+## Phase 10 — Balance/cosmetic tweaks (Lua only, 2026-07-09; user-directed, shipped without playtest gate)
+
+- **Magic Bonded TRN re-tuned to shades of white:** the white + bright-red scatter (254, 230) read as
+  plain red in practice (the red dominated). Variant 3 is now **brightest white + light grey (255, 252)**
+  — an all-bright white speckle. Stays distinct from the +200 AC variant (240, 253), whose identity is
+  its near-black component. `BONDED_TRN_TABLE` in `init.lua`; palette notes in `trn_palette.md`.
+- **Share Potion overheal proc raised to `(clvl + 10)%`** (was `clvl%`); freecast stays `clvl%`. Both
+  rolls remain independent per use. `applySharePotion` in `init.lua`; current-state rule in
+  `hunter_class_design.md` §Share Potion.

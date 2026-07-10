@@ -1,4 +1,4 @@
-# Phase 10 Roadmap — Pending Work
+﻿# Phase 10 Roadmap — Pending Work
 
 Only open / pending work is listed here, in the user's priority order. Completed Phase 10 items are
 documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
@@ -9,15 +9,18 @@ documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
 
 ---
 
-## ▶ Current State (updated 2026-07-06)
+## ▶ Current State (updated 2026-07-09)
 
 - **Engine cleanup (Branch A): COMPLETE & compliant.** (`HISTORY.md` → "Phase 10 — Engine cleanup".)
 - **Net sync (Branch B): COMPLETE & two-client playtested** — graduated to `HISTORY.md` ("Phase 10 — Net
-  Sync"). N1–N6 + DM1–6 all built/verified. Authoritative design refs stay in `net_sync.md` +
-  `net_sync.md` (mechanism + data model); per-session detail in memory `project_net_sync_progress`.
+  Sync"). N1–N6 + DM1–6 all built/verified. Authoritative design refs stay in `net_sync.md`
+  (mechanism + data model); per-session detail in memory `project_net_sync_progress`.
 - **Tamed-pet Infobox + Floating Infobox + OHID: COMPLETE & playtested** — graduated to `HISTORY.md`.
-- **Everything in the priority list through item 2 is shipped and playtested. ▶ Current work = item 3, Taming
-  Diablo (§3) — BUILT 2026-07-06, awaiting compile + playtest (`development_notes.md`).**
+- **Taming Diablo: COMPLETE & two-client playtested** (incl. the Apoc spread/targeting MP sync) —
+  graduated to `HISTORY.md`.
+- **The `bugs.md` review-backlog audits (A1–A8): ALL COMPLETE (2026-07-09).**
+- **Everything in the priority list through item 3 is shipped and playtested. ▶ Next = item 4,
+  Town-following cosmetic ally.**
 
 ---
 
@@ -38,36 +41,18 @@ untouchable); a **hostile** caster's Apoc may boom another player's tamed ally v
 build anything beyond this toggle-mirroring rule. (Diablo's `DiabloApocalypse` carrier does not route
 through these dispatches — `AddDiabloApocalypse` targets players directly; a **tamed** Diablo therefore
 never fires the carrier and uses the single-tile `DiabloApocalypseBoom` at his target instead, which
-resolves through the standard `CheckMissileCol` faction layer — see §3 / `development_notes.md`.)
+resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.md` "Taming Diablo".)
 
 1. ✅ **DONE + verified** — Pepin Recovery unique-scroll quality (`HISTORY.md`).
 2. ✅ **DONE + playtested** — Infobox / Floating Infobox + OHID for tamed pets (`HISTORY.md`).
-3. ◀ **CURRENT — Taming Diablo** — §3. **BUILT**, in verification (`development_notes.md`).
-4. **Town-following cosmetic ally** — §4.
+3. ✅ **DONE + playtested** — Taming Diablo (`HISTORY.md`).
+4. ◀ **NEXT — Town-following cosmetic ally** — §4.
 5. **Tame Tome** (more complex) — §5.
 6. **Monster Nickname** (more complex) — §6.
 
-Lower-priority / not in the 1–6 line (kept for when picked up): PvP tamed-monster-attacks-hostile-player +
-faction-aware hostile-pet targeting + pet spell-damage immunity (§Deferred Targeting); the Diablo/Hellfire
+Lower-priority / not in the 1–6 line (kept for when picked up): the Diablo/Hellfire
 scroll-compatibility *enforcement* layer (data foundation already shipped — §Diablo/Hellfire). Residual MP
 spot-checks in §Multiplayer Verification.
-
----
-
-## 3. Taming Diablo (CURRENT — BUILT 2026-07-06, awaiting compile + playtest)
-
-Diablo is tameable at **Tame+++** (CLVL 45, ≤5% HP). Full build write-up, decisions, and the playtest
-checklist live in **`development_notes.md`** (the live doc); the durable state is in
-`hunter_class_design.md` ("Diablo status"), the `OnMonsterCanEndGame` hook row + binding updates in
-`lua_api_reference.md`, and the `checkQuestKill` Diablo-coverage rationale in `cpp_changes/monsters.md`.
-Highlights: taming completes `Q_DIABLO` without the game-ending sequence and credits **every** player's
-`pDiabloKillLevel` (CR message + `player:creditDiabloKill()`); a tamed Diablo dies like any other ally
-(resurrect beam, no corpse, no quest clear/ending — `OnMonsterCanEndGame` veto, wild Diablo
-byte-for-byte vanilla); his pet attack keeps Apocalypse **multi-target** faction-aware — primary
-`DiabloApocalypseBoom` at his target + `spreadDiabloApocalypse` booms every other valid hostile in the
-envelope through the standard pet faction layer (the player-seeking `DiabloApocalypse` carrier is never
-fired by a pet), Physical damage riding the monster `min/max` → the standard physical ally buff (closes
-the old physical-scaling open question). Graduate to `HISTORY.md` once playtested.
 
 ---
 
@@ -107,29 +92,6 @@ A **Deckard Cain menu interaction** that lets a player set the **displayed name*
 
 ---
 
-## Deferred Targeting / Combat QoL (lower priority — not in the 1–6 line)
-
-Split off from the auto-targeting audit (the targeting exemption itself is shipped — see `HISTORY.md` "Auto-targeting Spell Exemption"):
-
-- **Tamed monsters don't attack HOSTILE PLAYERS (observed in PvP testing 2026-06-22) — NOT YET BUILT.** A
-  tamed ally fights another player's tamed monsters when the owners are mutually hostile (via `OnGolemCanTargetGolem`),
-  but never the hostile *player*. **Root cause (engine):** in `UpdateEnemy` (`Source/monster.cpp:692`) the whole
-  player-candidate loop is wrapped in `if (!isPlayerMinion)` — a player-minion is structurally excluded from
-  ever considering a player. **Scope (focused sub-project, net-sync-entangled):**
-  1. *Engine:* a new thin hook so a player-minion CAN consider a player when a mod permits — unwrap the loop and
-     gate each candidate with `if (isPlayerMinion && !lua::OnGolemCanTargetPlayer(&monster, &player, false)) continue;`
-     (default false = byte-for-byte vanilla).
-  2. *Lua:* return true only when the ally's owner is **hostile** to that player (mirror `arePeaceful`), never the
-     owner / a friendly player.
-  3. *Damage layer (verify, likely more work):* once a golem *targets* a player, confirm the melee/ranged attack
-     lands on a HOSTILE player and is still blocked vs friendly/own players (vanilla golems never hit players, so
-     this path is unexercised — faction checks in the monster-attacks-player / `CheckMissileCol` path need auditing).
-  4. *Net sync:* deterministic AI must agree on player-targeting on every client → cross-client hostility agreement.
-- **Faction-aware hostile-pet targeting.** `ProcessApocalypse` / `GuardianTryFireAt` / `AddBerserk` skip *all* player minions via `isPlayerMinion()` — faction-blind, so these won't target a **hostile** Hunter's pets either (observed with Guardian). A faction-aware hook that overrides the vanilla skip only when the two players are hostile, still protecting friendly/own pets and never the vanilla Golem. Ties into Net Sync.
-- **Pet spell-damage immunity (QoL).** The shipped exemption is *targeting* only — a spell that legitimately fires (a pure-AoE, or a bolt fired along a pet-free line a pet later walks into) can still damage a pet. Optional QoL: make own/friendly pets immune to the owner's spell damage. Separate from targeting; decide if wanted. (A Bonded ally's promotion Flash burst is the remaining owner-adjacency friendly-fire case; a tamed Diablo's Apocalypse boom is owner-safe via `OnGolemMissileCanHitPlayer`.) **Note:** minion friendly-fire specifically is now **deferred indefinitely** to the base-game Friendly Fire toggle (see priority list).
-
----
-
 ## Diablo/Hellfire scroll-compatibility / gamemode locking (DECIDED 2026-06-24 — enforcement layer not yet built)
 
 Tame Scrolls record the **gamemode they were tamed in** and are hard-restricted by gamemode when carried
@@ -150,7 +112,7 @@ NOT `dwBuff` bit 0, which is the engine's live `CF_HELLFIRE` flag (read by `Recr
 `IsDungeonItemValid`; flipping it corrupts item validation/recreation — confirmed in `Source/items.cpp`).
 `modData` is mod-owned + engine-ignored, so bit 22 is safe. It rides every existing path: seed-keyed
 `scrollGamemode[seed]` table (persisted in OnSave/OnLoadPlayerData as a trailing section; rebuilt onto held
-scrolls by `healHeldScrollModData`), carried on trade + re-keyed on pickup (`OnItemPickedUp`), and synced to
+scrolls by `rebuildHeldScrollModData`), carried on trade + re-keyed on pickup (`OnItemPickedUp`), and synced to
 remote observers on the CO message. Capture reads the new **`system.isHellfire()`** engine binding
 (read-only getter, sibling of `system.isMultiplayer()`, reads `gbIsHellfire`). So the locking work only needs
 the *enforcement* layer:

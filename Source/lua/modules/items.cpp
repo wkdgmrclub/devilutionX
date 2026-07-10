@@ -699,6 +699,16 @@ sol::table LuaItemModule(sol::state_view &lua)
 	LuaSetDocFn(table, "getItemDeltaModData", "(level: integer, seed: integer) -> string",
 	    "Read back a blob set by setItemDeltaModData for the given level + item seed (empty string if none).",
 	    LuaGetItemDeltaModData);
+	LuaSetDocFn(table, "findFloorItemBySeed", "(seed: integer) -> Item|nil",
+	    "Return the live floor Item on the current level whose _iSeed matches the given seed, or nil if none. The Item is passed by reference; modifications are live.",
+	    [](uint32_t seed) -> Item * {
+		    for (uint8_t i = 0; i < ActiveItemCount; i++) {
+			    Item &item = Items[ActiveItems[i]];
+			    if (!item.isEmpty() && item._iSeed == seed)
+				    return &item;
+		    }
+		    return nullptr;
+	    });
 	LuaSetDocFn(table, "currentDeltaLevel", "() -> integer",
 	    "The local player's current delta level id (the key floor items on this level use). Pass it to setItemDeltaModData so a blob lands on the right level; broadcast it to peers so they mirror it under the same level.",
 	    LuaCurrentDeltaLevel);

@@ -501,7 +501,10 @@ void CheckMissileCol(Missile &missile, DamageType damageType, int minDamage, int
 			            monster.isPlayerMinion() != Monsters[missile._misource].isPlayerMinion() //  the monsters are on opposing factions
 			            || (Monsters[missile._misource].flags & MFLAG_BERSERK) != 0              //  or the attacker is berserked
 			            || (monster.flags & MFLAG_BERSERK) != 0                                  //  or the target is berserked
-			            ))) {
+			            // Lua mod support: vanilla never resolves one player-minion's missile against another;
+			            // a mod may permit it (default false preserves vanilla)
+			            || (monster.isPlayerMinion() && Monsters[missile._misource].isPlayerMinion()
+			                && lua::OnGolemMissileCanHitGolem(&Monsters[missile._misource], &monster, false))))) {
 				// then the missile can potentially hit this target.
 				// Lua mod support — when a player-minion (MFLAG_GOLEM) is on either end of the missile, a mod
 				// may take over the whole hit resolution; it returns <0 when it declines
@@ -740,7 +743,8 @@ bool GuardianTryFireAt(Missile &missile, Point target)
 	if (mid < 0)
 		return false;
 	const Monster &monster = Monsters[mid];
-	if (monster.isPlayerMinion())
+	// Lua mod support: vanilla Guardian never targets a Golem. A mod may permit it
+	if (monster.isPlayerMinion() && !lua::OnGuardianCanTargetGolem(missile.sourcePlayer(), &monster, false))
 		return false;
 	if (monster.hasNoLife())
 		return false;
@@ -1128,6 +1132,10 @@ bool PlayerMHit(Player &player, Monster *monster, int dist, int mind, int maxd, 
 	if (currlevel == 16)
 		minhit = 30;
 	hper = std::max(hper, minhit);
+
+	// Lua mod support: a player-minion source may override the hit chance (default = the computed value)
+	if (monster != nullptr && (monster->flags & MFLAG_GOLEM) != 0)
+		hper = lua::OnGolemMissileHitChance(monster, &player, static_cast<int>(mtype), dist, hper);
 
 	int blk = 100;
 	if ((player._pmode == PM_STAND || player._pmode == PM_ATTACK) && player._pBlockFlag) {

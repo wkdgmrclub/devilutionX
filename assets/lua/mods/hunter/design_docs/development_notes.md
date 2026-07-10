@@ -7,181 +7,202 @@
 
 ---
 
-# Taming Diablo — status: core mechanics PLAYTESTED ✅ (2026-07-07) — graduation blocked on bugs.md
+## Single-writer pet combat + heartbeat retirement (BUILT 2026-07-09, awaiting playtest — init.lua only, NO recompile)
 
-Roadmap §3. Diablo is now tameable at **Tame+++** (CLVL 45, ≤5% HP). All four requirements + the
-multi-target Apocalypse + the everyone-gets-credit MP rule are implemented and **passed the user's
-playtest 2026-07-07**. Hook row + binding docs live in `lua_api_reference.md`; class-design summary in
-`hunter_class_design.md` ("Diablo status"); binding rationale in `cpp_changes/monsters.md`.
+**Playtest observation (user, 2026-07-09, two clients on one machine):** a Tamed Advocate killed a
+Tamed Scavenger and the Scavenger owner's client showed **no missiles at all** — the pet died to
+invisible damage. Separately, ~1s cross-client delays are visible on localhost, where transit is
+sub-tick — meaning some state rides the heartbeat as its *primary transport*, not as a healer.
 
-**Before graduating to `HISTORY.md` — the Diablo-fallout entries at the top of `bugs.md`:**
-1. **Apoc Boom HP corruption** ("enemy health goes UP per boom hit", "500 health bars") — observed in
-   two-client MP (the user's standard setup); no addition exists in the code path, so it is HP
-   corruption rendered as growth. The MP leads are primary (every-client boom simulation +
-   cross-broadcast `CMD_MONSTDAMAGE`; missile-time to-hit rolls off the synced RNG; boom re-resolves
-   every tick until `_miHitFlag`); the damage-scale audit is the fallback.
-2. **Diablo Tame Scroll presentation** — must present as a UNIQUE scroll ("Tamed/Bonded The Dark
-   Lord", no "Lvl 30"; hover popup regresses to "The Butcher's Cleaver" — the
-   `OnPrepareUniqueInfoBox` handler keys on the unique seed only).
-3. **Floor-trade Plane-2 staleness** — ROOT CAUSE FOUND + fixed 2026-07-08 (see the bugs.md entry):
-   `OnItemDropped` only fired from `TryDropItem`, which mouse drops never reach, so the drop-time
-   blob announce never happened. Fixed with two one-line call-outs (`diablo.cpp` mouse drop,
-   `inv.cpp` CloseStash) + pickup completions. Retest after recompile.
+**Root cause (verified in code):** the ranged-fire decision in the `OnGolemChooseAction` ranged
+handler runs independently on every client from per-client inputs (target latch, positions, LOS,
+kite-vs-owner-distance). MP is not lockstep (the Apocalypse-spread fix already conceded this —
+"deterministic on every client was never enforceable"), so the owner's copy fires while a peer's
+copy doesn't: no missile spawns there, but the damage still lands via the owner's authoritative
+resolution (`OnMonsterMissileHit` → `ApplyMonsterDamage` → engine `CMD_MONSTDAMAGE`). The heartbeat
+can never fix this class: the divergence is a *decision* that already happened, not drifted state.
 
-Also logged (non-blocking, separate entry): killed-by-tamed-monster deaths drop items via the
-killed-by-MONSTER path instead of killed-by-PLAYER. The kill-all ally exemption (below) still needs
-its recompile + retest.
+**Architecture (the fix's organizing principle):** vanilla has two sync models — **monsters**
+(deterministic sim + engine `CMD_SYNCDATA` convergence) and **players** (the owning client decides
+every discrete action and broadcasts it as an immediate command; nothing ever waits for a timer).
+Pets currently straddle both, and every observed desync lives in the straddle. This task moves pet
+**combat decisions and damage** fully onto the player model (single writer = the pet's owner,
+immediate event messages) while movement stays on the monster model the engine already converges
+(`sync_all_monsters` iterates ALL active monsters — extended slots included, verified — so ally
+position already rides the engine's own per-tick rotating sync).
 
-## Item-pipe consolidation (2026-07-08) — needs the same recompile, retest with bugs.md #3
+### Work items
 
-Fallout of the floor-trade audit (user: "explicit, not redundant, no guards for confusion"): the mod's
-item replication was found to hand-roll engine machinery that was never broken, on a wrong premise
-(see the CORRECTION on the resolved "scroll vanishes" bugs.md entry). Consolidated:
+1. **`AT` fire-action replication (the invisible-missile fix).** New pipe message
+   `AT|id|missileId|x|y` broadcast by the owner from the missile-SPAWN chokepoint
+   (`OnGolemMissileDamage` fires in `AddMissile` at the attack frame — an interrupted windup sends
+   nothing; the choose-time target stash is consumed on the first spawn so a multi-part missile like
+   Inferno replicates as ONE fire the peer's engine re-expands). Same shape as the existing `AB`
+   Apocalypse-boom replication — this generalizes it; spread booms keep riding `AB`
+   (`apocSpreadActive` guard). Receivers: same-level, `remoteAllies` lookup, live golem-flagged copy
+   → `fireMissileAt` the same missile at the owner's target tile (mode-safe mid-walk; no pose forced
+   — a mode change on a walking copy could corrupt tile occupancy). Damage authority is unchanged
+   (attacker-owner via `OnMonsterMissileHit`; victim's client for players — which is exactly why the
+   missile must exist on every client). Covers the generic ranged handler AND the Hork Spawn fire.
+2. **Suppress independent remote fire.** In the ranged `OnGolemChooseAction` handler, a REMOTE-owned
+   ally (`remoteAllies` hit, not in `deployedAlliesById`) keeps all movement/kiting/stance logic
+   (shared positioning stays converged) but never self-fires — where the owner's copy would fire, the
+   remote copy holds (return true, no action) and renders fire only on `AT` receipt. Same for the
+   Diablo primary boom (spread was already owner-only via `AB`).
+3. **Single-writer melee.** Same authority election as `OnMonsterMissileHit` (attacker-owner if the
+   attacker is a Hunter pet, else victim-owner if the victim is tracked; vanilla Golems fall through
+   to the engine default — barometer intact): non-authority clients return 0 from
+   `OnGolemMeleeHitChance` (the d100 still draws, so the synced RNG stream is undisturbed; a 0 chance
+   never hits → no local apply, no broadcast); the authority rolls the real chance and its
+   `ApplyMonsterDamage` already replicates via `CMD_MONSTDAMAGE`/`CMD_MONSTDEATH`.
+   **Balance-visible correction (flag for playtest):** today EVERY simulating client resolves a
+   pet-involved melee hit locally AND broadcasts it, and the `CMD_MONSTDAMAGE` receiver *subtracts*
+   (`msg.cpp OnMonstDamage`) — so pet/golem melee damage effectively multiplies by the number of
+   same-level clients (2 clients = ~2× damage; inherited vanilla-Golem behaviour). Single-writer
+   corrects pet melee to true 1×; MP pets will hit noticeably softer than in prior playtests. The
+   vanilla Golem keeps its vanilla multi-writer behaviour (hook default).
+4. **Event-driven CO completeness (kill the beat-transported changes).** Every owner-side mutation of
+   peer-visible state fires its CO at the moment of mutation, vanilla-command style: the Share Potion
+   heal (was `setHitPoints` with NO broadcast — the confirmed ~1s HP-bar lag), CO on EVERY ally kill
+   (infobox kill count stays live; replaces milestone-only resync), and the Scavenger corpse-eat heal
+   (HP write now owner-only + CO — it was gated on per-client corpse/position state peers legitimately
+   diverge on; the walk/eat anim stays shared). Share Potion targeting verified own-allies-only
+   (`OnCursorMonsterTarget` matches `deployedAllies`), so no second writer exists. Gargoyle
+   `startHeal` left engine-deterministic (its trigger reads HP, which single-writer damage keeps
+   converged; the per-frame heal is engine code identical on every client — vanilla class).
+5. **Retire the Lua heartbeat.** Remove the RS roster beat, the CO beat re-assert, the EN beat
+   re-assert, and the receiver-side roster-mismatch RQ. Keep: change-triggered EN (the engine's
+   `SyncMonster` skips its enemy application when positions already agree, so EN remains necessary),
+   RQ-on-level-entry (the vanilla "delta at join" analog), the orphan reap, and all delta hygiene.
+   After items 1–4 the beat has nothing left to carry: position = engine sync; existence = SP/RM on a
+   reliable in-order pipe + RQ at entry + orphan reap + the DeltaLoad gate; stats/HP = single-writer
+   damage + change-triggered CO; targets = change-triggered EN. Accepted residual (documented, not
+   engineered around): a message dropped by a receiver-side level-scoping race while both clients
+   stay on-level has no healer — same class as vanilla's own accepted desync edges.
 
-- **`items.spawnAt` now announces `CMD_SPAWNITEM` itself** (`Source/lua/modules/items.cpp`, the
-  vanilla `SpawnRewardItem` pattern) — same-level peers spawn a live copy, every client (sender
-  included, via loopback `OnSpawnItem`) registers it in the level delta, engine dedup included.
-- **Deleted:** the `DI` pipe message + receiver + `broadcastDropScroll`;
-  `items.registerDeltaDroppedItem`; `LuaDeltaRegisterDroppedItem` + `LuaDeltaRegisterDroppedItemAt`
-  (`msg.cpp`/`msg.h`) — net engine-surface shrinkage of two functions.
-- **Deleted:** the SD monotonic guard + `blobKills` + freshest-wins pickup. No nameable trigger
-  existed (single announcer per seed, live-built blobs, in-order same-sender delivery). Pickup blob
-  sourcing is now explicit first-non-empty precedence: item's own blob → level delta →
-  `receivedBlobs` → own tables. (Principle going forward: reconcile against loss you can name — the
-  RS heartbeat; never guard against confusion.)
-- **One drop primitive, `placeScrollOnFloor(x, y, seed, name, dwBuff, modData)`:** spawnAt (item
-  replicates itself) + level-delta blob write + SD announce. Used by `dropTameScroll`, the
-  corrupt-scroll refund, and `refundTameScroll`'s floor fallback — the last previously dropped with
-  NO replication at all (rare-path hole, never reported).
+**On verify:** rewrite `net_sync.md` §4 (RS/beat rows out, `AT` row in, single-writer melee under the
+damage-authority notes), update the accepted-risk memory (the CO-transit flip window is eliminated,
+not healed), dated entry → `HISTORY.md`. No C++ changes — every hook and binding needed already
+exists; recompile not required, `init.lua` copy only.
 
-**Retest (two-client MP, with the bugs.md #3 markers):** tame with peer same-level → scroll appears
-on both clients, either can pick up; tame with peer OFF-level → peer walks there later, scroll
-present with full data; drop-and-quit → rejoiner sees it; deploy-refund paths (cap/dup refusal with
-full inventory) drop a scroll the peer also sees.
+**Playtest watch items:**
+1. Advocate-vs-pet fight: missiles visible on BOTH clients, same tiles, no invisible deaths.
+2. Pet HP bars agree in real time on localhost (Share Potion heal included) — no ~1s snaps anywhere.
+3. Pet melee damage in MP reads ~half of prior sessions (the 1× correction, item 3) — expected.
+4. Nothing regresses on level entry/exit, recall, owner quit (the paths RS used to paper over).
 
-**Follow-on audits (separate tasks, not started):** the same premise/native-overlap/guard/consumer
-method is now queued for every custom MP/Lua subsystem — see **bugs.md §"Review backlog"** (A1–A8;
-includes the `receivedBlobs` + join-time SD flood pass as A4).
+---
 
-## Requirements (user, 2026-07-06)
+## Pet to-hit overhaul: attacker-aware missiles + pet-vs-pet toHit-vs-AC (BUILT 2026-07-09, awaiting playtest)
 
-1. **Taming Diablo must not end the game** — quest completion still happens like other bosses, but no
-   player freeze, no camera pan, no level-wide monster kill, no ending cinematic.
-2. **A tamed Diablo's death is a normal ally death** — death animation plays, resurrect beam on the
-   last frame, he disappears (no corpse).
-3. **His `DiabloApocalypse` must hit targets dynamically** like the other pets (friendly/hostile
-   faction rules).
-4. **A tamed Diablo's death must not trigger quest clear or the game ending.**
+**Problem:** ally missiles resolve through the engine's `MonsterTrapHit` (`hper = 90 − targetAC − dist`,
+clamp 5..95), which never consults the attacker — a ~260-toHit caster pet (Advocate) hits a high-AC
+target (Hell Blood Knight, ~245 AC) at the 5% floor, ~1 fireball in 15. The kill-bonus `golemToHit`
+only ever fed melee. And pet-vs-pet combat (melee AND missiles) ignored the defender's AC entirely
+(vanilla monster-vs-monster melee is `d100 < attacker.toHit`, nothing else).
 
-## What was built
+**Reference point:** monster-vs-PLAYER melee and ARROWS already do full toHit-vs-AC in vanilla
+(`MonsterAttackPlayer`, `PlayerMHit` arrow branch: `toHit + 2×ΔLvl + 30 − AC [− 2×dist]`). But the
+`PlayerMHit` SPELL branch is `40 + 2×ΔLvl − 2×dist` — toHit and armor never consulted — so a
+249-toHit caster pet vs a lvl-45 player sat at the ~10% min-hit floor (found in playtest 2026-07-09).
+The fixes copy the arrow-branch formula shape into BOTH gaps: monster-vs-monster (melee + missiles)
+and pet-spell-vs-player.
 
-**Engine — one new thin hook, `OnMonsterCanEndGame(monster) -> bool|nil`** (default true = vanilla),
-fired at the only two `MT_DIABLO`-gated sites in `Source/monster.cpp`:
-- *Death start* (`MonsterDeath`): gates the `DiabloDeath` call (quest done + freeze + kill-all +
-  camera-pan setup). Vetoed → the generic `PlayEffect` death-sound branch runs instead.
-- *Death tick* (`MonsterDeath(Monster&)`): gates the camera-pan / `PrepDoEnding` branch. Vetoed → the
-  death animation finishes through the generic last-frame path (corpse hook → tile clear → reap),
-  which vanilla Diablo never reaches. That path already carries the ally death machinery, so the
-  resurrect beam + corpse suppression (`OnMonsterDeath` → `pendingResurrectBeam`/`corpselessDeaths` →
-  `OnMonsterCanPlaceCorpse`) work for Diablo with **zero new death code**. → covers reqs 2 + 4.
+**Missiles (pure init.lua):** in the `OnMonsterMissileHit` handler, when the attacker is a tracked
+ally (`srcTracked` — vanilla Golem stays vanilla; attacker-side only), transiently set the victim's
+AC around `resolveMissileHit` (same set/restore pattern as the resistance transient) so the engine's
+own roll computes:
+- vs a **pet** target (`tgtTracked`): `toHit + 2×(srcLvl−tgtLvl) + 30 − targetAC − 2×dist` (duel
+  formula — Bonded +AC genuinely protects);
+- vs a **wild** target: `toHit − dist` (melee parity; AC ignored, mirroring vanilla monster melee).
+`source.toHit` reads `golemToHit`, so the kill bonus now applies to missiles.
 
-**Mod handler:** `OnMonsterCanEndGame` returns `false` for `monster.isGolem` (mirrors
-`OnMonsterCanCompleteQuest`). Barometer-safe: the hook only ever fires for MT_DIABLO and a vanilla
-Golem can never be MT_DIABLO, so `isGolem` there = "someone's tamed Diablo" (own or remote-observed).
-A **wild** Diablo is never a golem → nil → **full vanilla ending, mod loaded or not**.
+**Melee (new thin hook):** `OnGolemMeleeHitChance(attacker, target, hitChance) -> int` — fired in
+`MonsterAttackMonster` when either side is `MFLAG_GOLEM`, default = passed-in value (byte-for-byte
+vanilla). Handler (as rebuilt by the single-writer task above): elects one resolving authority per
+pet-involved swing; on the authority, a BOTH-sides-Hunter-pet duel returns
+`passedHitChance + 2×ΔLvl + 30 − targetAC` clamped 5..95 (built on the passed value so
+special/magma/storm to-hit variants survive; `hitChance ≥ 500` forced-hit charge respected).
 
-**Quest completion on tame (req 1):** the existing capture-path `target:checkQuestKill()` now covers
-Diablo — the binding (`Source/lua/modules/monsters.cpp`) mirrors the quest/progress side effects of
-`DiabloDeath` for MT_DIABLO (`Q_DIABLO → QUEST_DONE` + `NetSendCmdQuest` + local `pDiabloKillLevel`
-raise) without the game-ending sequence. No capture-handler change was needed beyond deleting the
-hard-block.
+**Pet spells vs players (new thin hook):** `OnGolemMissileHitChance(golem, player, missileId, dist,
+hitChance) -> int` — fired in `PlayerMHit` (MFLAG_GOLEM sources, after the vanilla hper + min-hit
+floor), default = passed-in value. Handler: arrow-class missiles (`Arrow`/`FireArrow`/
+`LightningArrow`) return nil — the engine already rolled toHit-vs-AC; spell missiles return
+`toHit + 2×mlvl + 30 − 2×dist − player.armorClass` clamped 5..95 (sheet AC = `GetArmor() + 2×plvl`,
+so this is the arrow formula rearranged). Engine block roll + resistances still follow. Resolves on
+the victim's own client (HP authority) — no lockstep constraint; `golemToHit` reaches it via CO.
 
-**Apocalypse (req 3) — no engine gate, and MULTI-target (user, 2026-07-06):** a tamed Diablo never
-fires the vanilla `DiabloApocalypse` **carrier** (whose `AddDiabloApocalypse` ignores the firing
-monster's target and booms EVERY active player — the friendly-fire landmine from the targeting
-audit). The `OnGolemChooseAction` ranged handler overrides `naturalRangedMissileId()` for
-`AIID.Diablo` to fire the single-tile **`DiabloApocalypseBoom`** at his actual target via the
-existing `startSpecialRangedAttack` path (Diablo was already in `AVOIDANCE_RANGED` +
-`SPECIAL_RANGED_AI`, so kiting + the special-cast animation just work). The boom resolves through
-`CheckMissileCol` like every other pet missile → the standard faction layer applies
-(`OnMonsterMissileHit` vs monsters, `OnGolemMissileCanHitPlayer` vs players: owner never hit, FF
-toggle respected). Wild Diablo keeps the carrier byte-for-byte. The boom's `MonsterOwned` graphic
-loads with the MT_DIABLO type, so it renders on any level a Diablo ally is deployed.
+**Recompile:** `monster.cpp`, `missiles.cpp`, `lua_event.cpp` (+hpp). Refresh assets: `events.lua`;
+copy `init.lua`.
 
-Because vanilla Apocalypse is inherently multi-target (the carrier booms every player on the level),
-the tamed version keeps that shape **faction-aware**: when the primary boom spawns (the
-`OnGolemMissileDamage` chokepoint fires inside `AddMissile` at the attack frame),
-`spreadDiabloApocalypse` fans an extra boom onto every OTHER valid hostile in the pet's ranged
-envelope (`APOC_SPREAD_RADIUS` = `RANGED_MAX_DIST` = 8, per-target LOS mirroring the carrier's
-`LineClearMissile`): awake/living/non-golem monsters (pets and vanilla Golems are never boomed) and
-hostile players only (never the owner; peaceful skipped at placement; the damage layer re-checks).
-Extra booms fire via the new generic `monster:fireMissileAt(missileId, x, y)` binding (no
-mode/animation change); the primary target — recorded in the ally scratch at choose time — is
-skipped, and the spread's own booms re-enter `OnGolemMissileDamage` behind the `apocSpreadActive`
-guard. Deterministic on every client: ally AI runs everywhere, fixed slot-order scan over synced
-state, damage rolls the synced per-monster RNG stream. (`Missiles` is a `std::list`, so firing
-missiles from inside the primary's `AddMissile` hook is reference-safe.)
+**Melee determinism audit (done 2026-07-09 — gap CLOSED, residual documented):**
+The melee hook fires in the lockstep sim on every client, so its inputs were audited end-to-end:
+- *Proven identical on all clients:* `level` (immutable spawn state), the d100 (synced per-monster
+  AI seed), `isGolem`/owner class (replayed conversion).
+- *Converging via CO:* `golemToHit` (kill bonus) and `armorClass` (Bonded +AC / buffs) — the owner
+  applies locally AND broadcasts CO at every mutation (kill milestone, promotion, recalc); peers
+  apply CO **to the engine monster** (absolute values incl. current HP); a wholly-lost CO already
+  healed via the RS `profile == nil` reconciliation.
+- *The CO-transit flip window:* a swing resolving inside a stat-change CO's transit could flip
+  per-client and drift the victim's HP. **Superseded by the single-writer melee in the active task
+  above:** exactly one client resolves any pet-involved swing, so a per-client flip can no longer
+  write HP anywhere (pet OR wild victim) — the drift class is eliminated at the source, and the
+  handler's duel formula now runs only on the elected authority (no lockstep constraint remains).
 
-**Damage (closes the roadmap's open physical-scaling question):** `startSpecialRangedAttack` rolls
-damage from the monster's live `min/max` — which is where the standard physical ally buff lives — and
-`DiabloApocalypseBoom` is **Physical**, so `OnGolemMissileDamage` passes it through unchanged. Net:
-a tamed Diablo's Apocalypse **scales with the physical melee buff** (option (b) of the old open
-question), no special-case damage code.
+**Playtest watch items:**
+1. Caster pet vs Hell Blood Knight ~85–90% (was ~5%).
+2. Pet-vs-pet duels: both melee and missiles should now visibly miss high-AC pets (~45% for
+   260-toHit vs 245-AC) and Bonded +AC should matter.
+2b. Pet spells vs hostile players: 249-toHit lvl-30 Advocate vs lvl-45 / 137-sheet-AC player ≈ the
+   95% cap at close range (was ~10% floor). NOTE on the engine's follow-up defenses (untouched by
+   the hook): blocking a missile requires `resper <= 0 || gbIsHellfire` (PlayerMHit) — so in Diablo
+   a victim with ANY resistance to the element can NEVER block it (damage is resist-reduced
+   instead); a zero-resist victim with shield up blocks per the boosted block roll. Don't misread
+   either resist-shrunk hits or zero-resist blocks as the old miss floor.
+3. ~~Heartbeat CO snap~~ — superseded by the active task above (the beat is being retired; pet HP
+   divergence is eliminated at the source via single-writer damage, not healed after the fact).
 
-**Scroll plumbing:** Diablo is the one quest monster that is **not unique**, so his scroll travels the
-normal typeId seed path. New `DIABLO_TYPE_ID = 110` (`MT_DIABLO`) + `seedIsDiablo(seed)` key every
-special case: `categoryFromScroll` → `CAT_DIABLO` (tier gate now flows through `mlvlGateAllows`, so
-below CLVL 45 the scroll is red / speedbook-hidden / cast-refused like any out-of-tier scroll);
-**gold tier** everywhere a scroll's quality is stamped (`scrollIsGoldTier`, recall, recreate, Pepin
-stock); **one Diablo deployed per Hunter** via `isDiabloDeployed()` (mirrors the unique dedup at both
-the upfront `OnCanCastScroll` check and the hotkey-cast fallback). Display name rides the normal
-"Tamed/Bonded Lvl N <engine name>" path. New Lua constant `monsters.MissileID.DiabloApocalypseBoom`.
+*On verify: hook row → `lua_api_reference.md`; dated entry → `HISTORY.md`.*
 
-## Decisions / known limits (don't relitigate)
+---
 
-- **MP kill credit goes to EVERYONE (user, 2026-07-06 — "don't limit Diablo's credit"):** a Diablo
-  capture credits every client like the vanilla ending would. The `CR` capture-removal message now
-  carries the captured `typeId`; on a Diablo CR every receiver calls the new
-  `player:creditDiabloKill()` binding (idempotent max) — quest STATE still arrives engine-side via
-  `NetSendCmdQuest`. The taming client credits itself in `checkQuestKill`. `capturedNaturalMonsters`
-  stores `typeId` so the RQ→CR replay carries it too (a replay can also credit a late joiner —
-  accepted: generous beats lost credit, and the max() makes it harmless).
-- **Gamemode locking:** a Diablo-gamemode Diablo scroll must be restricted in Hellfire — that is the
-  already-decided enforcement layer (roadmap §Diablo/Hellfire), NOT built here; the data foundation
-  (modData bit 22) already stamps Diablo scrolls correctly.
-- **Hellfire lvl 24 (`UberDiabloMonsterIndex`):** checked — that machinery keys off MT_NAKRUL, not
-  MT_DIABLO; a deployed Diablo ally doesn't touch it.
+## Guardian vs hostile pets: `OnGuardianCanTargetGolem` (BUILT 2026-07-09, awaiting playtest)
 
-## Follow-up BUILT 2026-07-07 (after the clean assert retest): ally exemption from the kill-all
+The last faction-blind turret (user go-ahead 2026-07-09): `GuardianTryFireAt` skipped ALL player-minions
+via `isPlayerMinion()`, so a **hostile** caster's Guardian ignored pets too (observed in PvP testing).
+Built as the exact `OnApocalypseCanTargetGolem` mirror:
 
-**Deployed allies are exempt from `DiabloDeath`'s level-wide kill.** The sweep kills by setting the
-death animation directly, bypassing `MonsterDeath`/`OnMonsterDeath` (untracked deaths + a roster of
-dead slots through the ending pan), so this is state hygiene as well as cosmetics. Built as specced:
-new thin query hook **`OnDiabloDeathCanKillMonster(monster) -> bool|nil`** (default true = vanilla)
-in the kill-all loop's skip condition (`monster.cpp` `DiabloDeath`); Lua handler exempts monsters in
-`deployedAllies`/`remoteAllies` (same protected set on every client = deterministic; a vanilla Golem
-is in neither → still dies — barometer intact). Hook row in `lua_api_reference.md`. **Needs the next
-recompile** (rides along with the `InitializeSpawnedMonster` assert scope + the block-redirect hook).
-Playtest: kill wild Diablo with allies deployed → pets stand through the pan/ending, everything else
-dies; scrolls still recover as before.
+- **Engine (thin hook):** the vanilla skip in `GuardianTryFireAt` (`Source/missiles.cpp`) becomes
+  `isPlayerMinion() && !lua::OnGuardianCanTargetGolem(missile.sourcePlayer(), &monster, false)` —
+  vanilla exclusion kept, hook ANDed after it, default false = byte-for-byte vanilla (can only widen).
+  Declaration/dispatch in `lua_event.hpp/.cpp`; event registered in `events.lua`. Hook row already
+  added to `lua_api_reference.md` (thin hooks take no `cpp_changes/` entry, per the Apoc precedent).
+- **Lua policy (init.lua, the Apoc rule verbatim):** tamed allies only (vanilla Golem = barometer,
+  vanilla exclusion); own pets and peaceful owners' pets keep the vanilla protection unconditionally
+  (a Guardian never fires at players, so peace-time pets stay untouchable independent of Friendly
+  Fire); only a **hostile** caster's Guardian fires at another player's tamed ally. Damage resolves
+  through the standard `CheckMissileCol` → `OnPlayerMissileCanHitGolem` layer (hostile hits pass in
+  both FF modes). Deterministic: the turret scans on every simulating client from synced state
+  (roster, friendlyMode).
+- **Scope boundary:** Berserk / Doppelganger / Stone Curse stay categorically blocked on tamed
+  monsters regardless of faction (the roadmap §Multiplayer Verification safety matrix) — no
+  faction-aware widening there. With this, the Deferred Targeting backlog section is empty and was
+  deleted from `roadmap.md` (the pet spell-damage-immunity idea was superseded by the Friendly Fire
+  toggle rule: with FF off the damage layer already passes friendly players' missiles through pets;
+  with FF on, pets being hittable IS the toggle working — building always-on immunity would violate
+  "do not build anything beyond this toggle-mirroring rule").
 
-## Playtest checklist (user, after compile)
+**Recompile:** `missiles.cpp` + `lua_event.cpp/.hpp` — rides the same recompile the pet to-hit
+overhaul above already requires. Refresh assets: `events.lua`; copy `init.lua`.
 
-- Tame Diablo (CLVL 45+, ≤5% HP): scroll drops (gold), quest flips DONE, **no** freeze / camera pan /
-  level-wide kill / ending; other monsters on lvl 16 stay alive; game continues (TP/stairs work).
-- Barometer: kill a wild Diablo with the mod loaded → full vanilla ending sequence.
-- Deploy elsewhere: spawns, follows, melees adjacent; Apocalypse boom at range on hostile monsters
-  (damage scales with the phys buff); never booms the owner; FF on/off vs friendly players; kite
-  behaviour (avoidance) intact.
-- Multi-target Apocalypse: with several awake hostiles in range, ONE cast booms all of them (one boom
-  each, no double-boom on the primary target); sleeping packs out of combat stay asleep; own/friendly
-  pets and a vanilla Golem in the blast area are untouched; in MP both clients show the same booms and
-  the same damage.
-- MP kill credit: after a Hunter tames Diablo, EVERY connected player's difficulty unlock advances
-  (check char select / new-game difficulty on the peers too), Hunter and non-Hunter alike.
-- Tamed Diablo death: death anim → resurrect beam on last frame → vanishes, no corpse, **no** quest
-  re-trigger / ending; "revived at Pepin" recovery works; redeploy after buy-back.
-- Dedup: second Diablo scroll refuses to deploy while one is out ("I can't do that"); recall + redeploy
-  works; below CLVL 45 the scroll is red + speedbook-hidden + cast-refused.
-- MP spot-checks: peer observes tame (wild Diablo despawns), deployed Diablo syncs, peer-side death
-  shows beam and does NOT end the peer's game; quest state arrives on peers.
+**Playtest watch items:**
+1. Hostile Hunter casts Guardian near your pets → the turret now fires at them; damage lands.
+2. Peaceful/own: Guardian still never fires at your own or a peaceful Hunter's pets (either FF mode).
+3. Vanilla Golem: a hostile player's Guardian still ignores it (barometer).
+
+*On verify: dated entry → `HISTORY.md` (hook row already in `lua_api_reference.md`).*
+
+---
+
+*Previous state: `bugs.md` review-backlog audits (A1–A8) ALL COMPLETE (2026-07-09); next roadmap
+feature: Town-following cosmetic ally (roadmap §4).*
