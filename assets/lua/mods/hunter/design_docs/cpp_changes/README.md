@@ -28,7 +28,14 @@ branches move.
   - **`luanet-hooks`** — the generic net pipe (`net.md` §"The generic Lua net pipe") +
     `system.isMultiplayer`. First upstream PR; description drafted. Its doc links LuaNet at
     `assets/lua/mods/luanet` on the `MonsterTamer` branch.
-  - **`lua-mod-hooks`** — every other engine change. To be split into smaller **stacked** PRs (each
+  - **`lua-stash-hooks`** — mod-registered stashes (`devilutionx.stash`, `GetActiveStash`, mod stash
+    files), the `OnItemAllowedInStash` query hook, `CreateQueryEvent`, and the towner dialog-option
+    placement fix. Self-contained on master. **Ordering:** the later `item.modData` PR must add
+    "mod stashes save each item's `modData`" (an extra `sp/mpstashmoddata` entry in the mod stash file —
+    on `MonsterTamer` already, cut from this branch because master has no `_iModData`). When splitting
+    `lua-mod-hooks`, drop its copies of `OnItemAllowedInStash` + `CreateQueryEvent` (or stack on this branch).
+  - **`lua-mod-hooks`** — every other engine change (predates the stash work and the gamemode-lock hook
+    `OnPlayerCanCutInvItem`; neither is on it yet). To be split into smaller **stacked** PRs (each
     based on the previous, since nearly all touch `lua_event.hpp/.cpp` + `events.lua`). Proposed order:
     dynamic spells → item modData / persistence → monster extensibility → golem / player-minion hooks →
     class mechanics (prefer proposing new class-TSV attributes over hooks where it fits, matching
