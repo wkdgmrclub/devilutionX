@@ -514,7 +514,8 @@ bool IsStandingGround()
 void Interact()
 {
 	if (leveltype == DTYPE_TOWN && pcursmonst != -1) {
-		NetSendCmdLocParam1(true, CMD_TALKXY, Towners[pcursmonst].position, pcursmonst);
+		if (IsTownerIndex(pcursmonst)) // Lua mod support: monsters can stand in town too
+			NetSendCmdLocParam1(true, CMD_TALKXY, Towners[pcursmonst].position, pcursmonst);
 		return;
 	}
 

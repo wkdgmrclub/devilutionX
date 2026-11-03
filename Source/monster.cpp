@@ -4479,7 +4479,10 @@ void DeleteMonsterList()
 		golem.isInvalid = false;
 	}
 
-	for (size_t i = ReservedMonsterSlotsForGolems; i < ActiveMonsterCount;) {
+	// Lua mod support: town has no reserved golem slots (InitGolems only runs for dungeon levels), so a
+	// monster standing in town can be at any active index.
+	const size_t firstDeletable = leveltype == DTYPE_TOWN ? 0 : ReservedMonsterSlotsForGolems;
+	for (size_t i = firstDeletable; i < ActiveMonsterCount;) {
 		if (Monsters[ActiveMonsters[i]].isInvalid) {
 			if (pcursmonst == static_cast<int>(ActiveMonsters[i])) // Unselect monster if player highlighted it
 				pcursmonst = -1;

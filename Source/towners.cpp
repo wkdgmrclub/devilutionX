@@ -12,6 +12,7 @@
 #include "engine/random.hpp"
 #include "game_mode.hpp"
 #include "inv.h"
+#include "levels/gendung.h"
 #include "minitext.h"
 #include "stores.h"
 #include "tables/textdat.h"
@@ -730,6 +731,11 @@ size_t GetNumTownerTypes()
 size_t GetNumTowners()
 {
 	return Towners.size();
+}
+
+bool IsTownerIndex(int index)
+{
+	return leveltype == DTYPE_TOWN && index >= 0 && static_cast<size_t>(index) < Towners.size();
 }
 
 bool IsTownerPresent(_talker_id npc)

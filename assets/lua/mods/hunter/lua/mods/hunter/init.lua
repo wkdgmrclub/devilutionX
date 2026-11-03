@@ -1266,6 +1266,18 @@ function scrollIsGamemodeLocked(seed, item)
 end
 
 LEASH_DISTANCE = 12                       -- emergency snap distance
+TOWN_FOLLOW_DISTANCE = 3                  -- a town follower trails within this many tiles of its owner
+TOWN_LEASH_DISTANCE  = 6                  -- town snap distance (recovers a follower stuck on town scenery)
+
+-- True on the town level (the only place a cosmetic town follower exists).
+function isTownLevel()
+  return items.currentDeltaLevel() == 0
+end
+
+-- Snap distance for the current level.
+function leashDistance()
+  return isTownLevel() and TOWN_LEASH_DISTANCE or LEASH_DISTANCE
+end
 ENGAGE_RADIUS  = 9                        -- max chase/target radius from player
 MAX_ALLIES     =
 MAX_DEPLOYED_PER_HUNTER                   -- deploy-gate cap on simultaneously deployed non-minion allies; must match the per-Hunter slot/type reservations at the top of the file
@@ -2119,6 +2131,103 @@ function finishDeploy(monster, data, seed, ownerId, doBroadcast)
   tameScrollData[seed] = nil
 end
 
+-- Town follower: the Tame Scroll selected in the speedbook follows its Hunter around town (cosmetic, see comments.md).
+FOLLOWER_RETRY_TICKS = 20  -- min ticks between follower spawn attempts
+pendingFollower      = nil -- { seed, data, tick } while a non-owner's follower DR awaits its SP/DF echo
+lastFollowerAttempt  = -FOLLOWER_RETRY_TICKS
+
+-- The scroll the speedbook asks to follow us in town: seed + item, or nil.
+function desiredFollowerScroll(me)
+  if TAME_ID == nil or me.className ~= HUNTER_CLASS or not isTownLevel() then return nil end
+  if me.readySpellType ~= 2 or me.readySpellId ~= TAME_ID then return nil end -- 2 = SpellType::Scroll
+  local seed = me.selectedScrollSeed
+  local item = (seed ~= 0) and me:findScrollBySeed(seed) or nil
+  if item == nil then
+    seed = me:findScrollSeedOf(TAME_ID)
+    if seed == nil then return nil end
+    item = me:findScrollBySeed(seed)
+  end
+  if item == nil or scrollIsGamemodeLocked(seed, item) then return nil end
+  return seed, item
+end
+
+-- Index of our town follower in deployedAllies, or nil.
+function townFollowerIndex()
+  for i, entry in ipairs(deployedAllies) do
+    if entry.isTownFollower then return i end
+  end
+  return nil
+end
+
+-- finishDeploy for a town follower: no recovery backup, no scroll bookkeeping; tracked so hover/infobox/RQ work.
+function setupTownFollower(monster, data, seed, ownerId, doBroadcast)
+  monster:setMaxHitPoints(data.maxHp)
+  monster:setHitPoints(data.savedHp)
+  local entry = { monster = monster, seed = seed, capturedDifficulty = data.capturedDifficulty or 0, isTownFollower = true }
+  trackDeployedAlly(entry)
+  monster:makeGolem(ownerId)
+  if doBroadcast then
+    broadcastSpawnAlly(monster, monster.typeId, data.uniqueTypeIdx or -1, data.capturedDifficulty or 0, ownerId, seed)
+  end
+  snapshotAllyBase(entry)
+  if isBonded(seed, monster.level) then
+    rollBondedBonus(entry)
+    rollBondedTrn(entry)
+    applyBondedBonus(entry)
+    applyBondedGlow(entry)
+  end
+  recalcAllyBuffs()
+end
+
+-- Spawn the follower for `seed`: the level owner spawns it; a non-owner sends a DR (completed in the SP handler).
+function spawnTownFollower(me, seed, item)
+  local data = recoverScrollData(seed, item)
+  if data == nil then return end
+  local pos = me.position
+  local diff = data.capturedDifficulty or 0
+  if system.isMultiplayer() and not me:isLevelOwnedByLocalClient() then
+    pendingFollower = { seed = seed, data = data, tick = system.gameTick() }
+    luanet.send("hunter", table.concat({ NET.DEPLOYREQ, data.typeId or -1, data.uniqueTypeIdx or -1, diff,
+      pos.x, pos.y, seed, data.maxHp, data.savedHp }, "|"))
+    return
+  end
+  local m
+  if data.uniqueTypeIdx ~= nil then
+    m = monsters.spawnUniqueAt(data.uniqueTypeIdx, diff, pos.x, pos.y)
+  else
+    m = monsters.spawnWithDifficulty(data.typeId, diff, pos.x, pos.y)
+  end
+  if m ~= nil then setupTownFollower(m, data, seed, me.id, true) end
+end
+
+-- Remove our town follower locally and on peers.
+function despawnTownFollower(i)
+  local entry = deployedAllies[i]
+  untrackDeployedAt(i)
+  if entry.monster.isGolem then entry.monster:remove() end
+  broadcastRemove(entry.id)
+end
+
+-- Keep the follower matching the speedbook selection: swap on a new selection, despawn when none, retry spawns.
+events.GameTick.add(function()
+  local me = player.self()
+  if me == nil then return end
+  local now = system.gameTick()
+  local seed, item = desiredFollowerScroll(me)
+  local i = townFollowerIndex()
+  if i ~= nil and deployedAllies[i].seed ~= seed then
+    despawnTownFollower(i)
+    i = nil
+  end
+  if pendingFollower ~= nil then
+    if now - pendingFollower.tick > DEPLOY_TIMEOUT_TICKS then pendingFollower = nil end
+    return
+  end
+  if i ~= nil or seed == nil or now - lastFollowerAttempt < FOLLOWER_RETRY_TICKS then return end
+  lastFollowerAttempt = now
+  spawnTownFollower(me, seed, item)
+end)
+
 -- Minion spawning is single-authority on the LEVEL OWNER (only it may allocate a monster slot); the ally's OWNER holds the minion's Plane-2 state (track + buff + CO). Peers recreate by species id.
 
 -- The captured difficulty a tamed ally was tamed at (so its minions scale to match); falls back to the live game difficulty.
@@ -2186,9 +2295,17 @@ luanet.register("hunter", function(senderId, payload)
     if me ~= nil and ownerId == me.id and parentId == nil then
       -- OUR ally, spawned on our behalf by the level owner (non-owner deploy): complete the deferred local Plane-2 setup.
       local pending = pendingDeploys[tonumber(seed)]
-      if pending ~= nil then
+      if pendingFollower ~= nil and pendingFollower.seed == tonumber(seed) then
+        local pf = pendingFollower -- our requested town follower: cosmetic setup, never finishDeploy
+        pendingFollower = nil
+        setupTownFollower(m, pf.data, pf.seed, me.id, false)
+      elseif pending ~= nil then
         finishDeploy(m, pending.data, tonumber(seed), me.id, false)
         pendingDeploys[tonumber(seed)] = nil
+      elseif isTownLevel() and not isDeployedAlly(mid) then
+        -- A town follower whose request we stopped waiting for: nothing wants it, despawn it everywhere.
+        m:remove()
+        broadcastRemove(mid)
       else
         m:makeGolem(ownerId) -- no pending data (e.g. an RQ resend after we already finished): just own it
       end
@@ -2431,6 +2548,10 @@ luanet.register("hunter", function(senderId, payload)
     local seedStr = payload:match("^DF|(%-?%d+)$")
     if seedStr == nil then return end
     local seed = tonumber(seedStr)
+    if pendingFollower ~= nil and pendingFollower.seed == seed then
+      pendingFollower = nil -- the follower couldn't be placed; nothing was consumed, the next attempt retries
+      return
+    end
     local pending = pendingDeploys[seed]
     if pending == nil then return end
     pendingDeploys[seed] = nil
@@ -3046,9 +3167,14 @@ end)
 -- OnLevelExit: auto-recall all deployed allies to inventory (normal transitions + player death). A full inventory keeps the ally as a "lost" recovery backup; no floor drop.
 events.OnLevelExit.add(function()
   local owner = player.self()
+  pendingFollower = nil
   for i = #deployedAllies, 1, -1 do
     local entry = deployedAllies[i]
-    if entry.isMinion then
+    if entry.isTownFollower then
+      -- Cosmetic: its scroll never left inventory, so just despawn it for peers (never recall = no duplicate scroll).
+      broadcastRemove(entry.monster.id)
+      untrackDeployedAt(i)
+    elseif entry.isMinion then
       -- Minions are not recalled (no scroll); RM-broadcast so peers despawn this one (the owner leaving won't reap it for them).
       broadcastRemove(entry.monster.id)
       untrackDeployedAt(i)
@@ -3490,6 +3616,7 @@ end)
 -- OnGolemCanTargetMonster: restrict targets to ACTIVE monsters within the owner's ENGAGE_RADIUS (melee AND ranged), consistent with OnGolemCanChaseTarget. An adjacent monster is always allowed (self-defence).
 events.OnGolemCanTargetMonster.add(function(ally, candidate)
   if not isTamedAlly(ally.id) then return nil end
+  if isTownLevel() then return false end -- town followers are docile
   -- Activation gate FIRST (cheap, no alloc): reject all sleeping monsters so the expensive work below runs only for the handful awake near the player.
   if not candidate.isActive then return false end
   -- Cache .position once: each access allocates a fresh Point userdata, multiplying GC churn across the N*A*tick scan.
@@ -3513,6 +3640,7 @@ end)
 
 -- OnGolemCanTargetGolem: pet-vs-pet combat between mutually-hostile owners (different players, not both friendly). Symmetric, so a defender's pets fight back automatically. Generic for any class's golems.
 events.OnGolemCanTargetGolem.add(function(ally, candidate)
+  if isTownLevel() then return nil end -- town followers are docile (nil = vanilla: no infighting)
   local a = player.get(ally.ownerPlayerId)
   local b = player.get(candidate.ownerPlayerId)
   if a == nil or b == nil then return nil end -- unknown owner -> vanilla (no infighting)
@@ -3524,6 +3652,7 @@ end)
 -- OnGolemCanTargetPlayer: let tamed allies acquire PLAYERS hostile to their owner (the player-target counterpart of OnGolemCanTargetGolem). TAMED ALLIES ONLY — the vanilla Golem must never target players (base-mechanics barometer), and unlike pet-vs-pet there is no engine action for a golem-with-player-target (the melee/chase block is monster-only; our OnGolemChooseAction handlers drive player combat), so granting a vanilla Golem a player target would leave it staring, target-locked, doing nothing. All inputs are synced (ownerPlayerId, hostility flags, positions); on non-owner clients isTamedAlly is false -> default(false), which is fine because a remote pet's AI is suppressed and its enemy arrives via net sync.
 events.OnGolemCanTargetPlayer.add(function(ally, candidate)
   if not isTamedAlly(ally.id) then return nil end
+  if isTownLevel() then return nil end -- town followers are docile (nil = default: no player target)
   local owner = allyOwner(ally)
   if owner == nil then return nil end
   if candidate.id == owner.id then return nil end      -- never the owner
@@ -3629,6 +3758,12 @@ events.OnGolemIdle.add(function(ally, hasTarget, enemyPos)
   if not isTamedAlly(ally.id) then return nil end
   local owner = allyOwner(ally) -- own or remote owner, from ownerPlayerId
   if owner == nil then return false end
+
+  -- Town follower: trail within TOWN_FOLLOW_DISTANCE of the owner, otherwise stand.
+  if isTownLevel() then
+    if ally:distanceTo(owner) > TOWN_FOLLOW_DISTANCE then return owner.position end
+    return false
+  end
 
   -- Pursue an enemy target that is close to the owner.
   if hasTarget then
@@ -4133,7 +4268,7 @@ events.GameTick.add(function()
       if m ~= nil and m.isGolem and m.ownerPlayerId == rec.ownerId then
         local remoteOwner = player.get(rec.ownerId)
         if remoteOwner ~= nil and remoteOwner:isOnActiveLevel()
-            and m:distanceTo(remoteOwner) > LEASH_DISTANCE then
+            and m:distanceTo(remoteOwner) > leashDistance() then
           m:snapToPlayer(remoteOwner)
         end
       end
@@ -4147,7 +4282,7 @@ events.GameTick.add(function()
     local entry = deployedAllies[i]
     if not entry.monster.isGolem then
       untrackDeployedAt(i)
-    elseif owner ~= nil and entry.monster:distanceTo(owner) > LEASH_DISTANCE then
+    elseif owner ~= nil and entry.monster:distanceTo(owner) > leashDistance() then
       entry.monster:snapToPlayer(owner)
     end
   end
@@ -4216,8 +4351,12 @@ events.OnSavePlayerData.add(function()
   if system.isMultiplayer() then
     t[#t + 1] = 0 -- roster count 0: MP persists no ally roster
   else
-    t[#t + 1] = #deployedAllies
+    local saved = {}
     for _, entry in ipairs(deployedAllies) do
+      if not entry.isTownFollower then saved[#saved + 1] = entry end -- a town follower is cosmetic, never saved
+    end
+    t[#t + 1] = #saved
+    for _, entry in ipairs(saved) do
       local base = entry.base or {}
       t[#t + 1] = entry.id or entry.monster.id
       t[#t + 1] = entry.seed or 0

@@ -196,6 +196,15 @@ void InitPlayerUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(playerType, "weaponGraphic", "integer",
 	    "The PlayerWeaponGraphic id of the currently equipped weapon combo (Unarmed=0, UnarmedShield=1, Sword=2, SwordShield=3, Bow=4, Axe=5, Mace=6, MaceShield=7, Staff=8) — the low nibble of _pgfxnum, i.e. the weapon sheet the player's animations play (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pgfxnum & 0xF); });
+	LuaSetDocReadonlyProperty(playerType, "readySpellId", "integer",
+	    "SpellID of the spell/skill/scroll currently selected in the speedbook (_pRSpell) (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pRSpell); });
+	LuaSetDocReadonlyProperty(playerType, "readySpellType", "integer",
+	    "SpellType of the speedbook selection (_pRSplType): 0 Skill, 1 Spell, 2 Scroll, 3 Charges, 4 Invalid (readonly)",
+	    [](const Player &player) { return static_cast<int>(player._pRSplType); });
+	LuaSetDocReadonlyProperty(playerType, "selectedScrollSeed", "integer",
+	    "Seed of the specific custom scroll selected in the speedbook (selectedCustomScrollSeed), or 0 when none / a plain scroll is selected (readonly)",
+	    [](const Player &player) { return player.selectedCustomScrollSeed; });
 	LuaSetDocFn(playerType, "addScrollByMapping", "(mappingId: integer, seed: integer, name: string, dwBuff?: integer, modData?: string) -> boolean",
 	    "Add a custom scroll item directly to the player's inventory using a mapping ID, seed, and display name. Optional dwBuff sets item.dwBuff (preserved through save/load). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file). Returns true if placed successfully, false if inventory is full or item type not found.",
 	    [](Player &player, int32_t mappingId, uint32_t seed, const std::string &name, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) -> bool {

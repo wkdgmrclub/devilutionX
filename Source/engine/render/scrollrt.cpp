@@ -746,7 +746,7 @@ void DrawMonsterHelper(const Surface &out, Point tilePosition, Point targetBuffe
 
 	mi = std::abs(mi) - 1;
 
-	if (leveltype == DTYPE_TOWN) {
+	if (IsTownerIndex(mi)) { // Lua mod support: monsters can stand in town too
 		auto &towner = Towners[mi];
 		const Point position = targetBufferPosition + towner.getRenderingOffset();
 		const ClxSprite sprite = towner.currentSprite();

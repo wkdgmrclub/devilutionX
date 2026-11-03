@@ -423,7 +423,7 @@ void DrawInfoBox(const Surface &out)
 		else if (ObjectUnderCursor != nullptr)
 			GetObjectStr(*ObjectUnderCursor);
 		if (pcursmonst != -1) {
-			if (leveltype != DTYPE_TOWN) {
+			if (!IsTownerIndex(pcursmonst)) { // Lua mod support: monsters can stand in town too
 				const Monster &monster = Monsters[pcursmonst];
 				InfoColor = UiFlags::ColorWhite;
 				InfoString = lua::OnGetMonsterDisplayName(&monster); // Lua mod support; default = monster.name()

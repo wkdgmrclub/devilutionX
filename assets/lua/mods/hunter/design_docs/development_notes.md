@@ -7,6 +7,55 @@
 
 ---
 
+## Town-following ally (roadmap §4) — engine "monsters in town" BUILT + user-checked (town unchanged) 2026-11-02; Lua BUILT, awaiting playtest
+
+**Lua (built):** follower = real spawned ally tracked in `deployedAllies` with `isTownFollower`; selected Tame
+Scroll in the speedbook drives it (new read-only bindings `player.readySpellId` / `readySpellType` /
+`selectedScrollSeed` in `Source/lua/modules/player.cpp` — binding only, no engine change). Never consumed /
+backed up / recalled (despawned on level exit); docile via the town rule in the target hooks; trails within 3
+tiles, snaps back past 6; MP via the normal DR/SP/RM/RQ + its own `pendingFollower`. Full mechanics:
+`comments.md` "Town follower". **Recompile:** `lua/modules/player.cpp` (+ the engine files above); copy init.lua.
+
+**Playtest watch items:**
+1. Select a Tame Scroll in town → its monster appears on a free tile near you, trails 1–3 tiles behind, never
+   inside buildings; switch scrolls → it swaps; select anything else → it disappears.
+2. Hover it: name, regular + floating infobox (Bonded look/recolour intact).
+3. Docile: never attacks, can't be attacked; clicking it does nothing; towners still talk normally.
+4. Get it stuck behind scenery → it snaps back near you.
+5. Leave town (stairs / portal / town portal) → it's gone, the scroll is still in inventory exactly once, no
+   Pepin "lost" message; come back → it reappears.
+6. MP (two clients in town): both see each follower move; the non-level-owner's follower spawns too; a player
+   entering town sees existing followers; leaving / deselecting removes it on both.
+7. SP: save in town, load → no duplicate scroll, follower respawns from the selection.
+
+**Approach (user):** a real spawned monster (not visual-only), full MP, smallest engine footprint. The engine
+never expected monsters in town, so the generic engine part is "allow monsters to exist in town" — likely its
+own upstream PR.
+
+**Town gotchas found (verified in code):**
+- Towners occupy the town's `dMonster` grid with their own indices (towner `i` → `i + 1`, cow extra tiles
+  `-(i + 1)`), and every town reader of `dMonster` / `pcursmonst` treated the index as `Towners[]`.
+- `GameLogic` never ran `ProcessMonsters()` in town (only `ProcessTowners()`).
+- Town has no reserved golem slots (`InitGolems` is dungeon-only; `InitLevelMonsters` zeroes the count for
+  every level), but `DeleteMonsterList` only compacted from index 4.
+- Fine as-is: runtime monster GFX load (`EnsureMonsterType`), `sync_all_monsters` / `OnSyncData` (no town
+  filter), the high-slot spawn path, the `CMD_TALKXY` receiver (validates `townerIdx < GetNumTowners()`), town
+  not saving monsters, town skipping monster damage/spell commands (follower never fights).
+
+**Engine edits (each inert in vanilla town, where `ActiveMonsterCount == 0`):**
+- `towners.h/.cpp`: `IsTownerIndex(int)` — in town, index < towner count.
+- `scrollrt.cpp` `DrawMonsterHelper`; `cursor.cpp` pixel select, `TrySelectTowner` (towners only),
+  `TrySelectMonster` (skip towners), town tile-select also tries monsters; `control_infobox.cpp` hover text;
+  `plrctrls.cpp` `Interact` — all use `IsTownerIndex` instead of "is town".
+- `diablo.cpp` `GameLogic`: in town, `ProcessMonsters()` when `ActiveMonsterCount > 0`.
+- `monster.cpp` `DeleteMonsterList`: in town, compact from index 0.
+
+**Compile check (before the Lua):** vanilla town unchanged — towner drawing, hover outline/name, click and
+gamepad talk, cows. Pre-existing clang-format issues in `monster.cpp` / `cursor.cpp` (old hook comments /
+include order) are not from this change.
+
+---
+
 ## Mod-registered stashes + Tame Tome (engine BUILT + user-verified vanilla-stash-safe 2026-11-02; Tome Lua BUILT, awaiting playtest)
 
 **Tome Lua (built, init.lua only — copy init.lua):** `stash.register("hunters_tome", {pages=4, gold=false})`;

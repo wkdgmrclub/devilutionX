@@ -94,6 +94,14 @@ size_t GetNumTownerTypes();
  */
 size_t GetNumTowners();
 
+/**
+ * @brief Whether a monster-grid index (std::abs(dMonster) - 1) on the town level refers to a towner.
+ *
+ * Towners occupy the town's monster grid with their own indices. Monsters can also stand in town (none do in
+ * the base game); they use monster indices at or above the towner count. Always false outside town.
+ */
+bool IsTownerIndex(int index);
+
 bool IsTownerPresent(_talker_id npc);
 /**
  * @brief Maps from a _talker_id value to a pointer to the Towner object, if they have been initialised

@@ -52,7 +52,8 @@ resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.m
 3. **Mod packaging** (`.mpq` + `manifest.ini`) — §3.
 
 **Cosmetic (after):**
-4. **Town-following cosmetic ally** — §4.
+4. ▶ **BUILT, awaiting playtest — Town-following cosmetic ally** — in `development_notes.md`; §4 below is the
+   spec.
 5. **Monster Nickname** — §5.
 
 Ongoing: residual MP spot-checks in §Multiplayer Verification.
@@ -100,6 +101,19 @@ player in town, leashed to always follow exactly one tile behind.
 - Does **not** consume the scroll — purely a cosmetic effect while in town.
 - Stretch goal: allow hovering it to see the regular + floating infobox of the Tamed/Bonded monster stats
   (the pet infobox is shipped, so this reuses it directly).
+
+**Added 2026-11-02 (user):**
+- **Goal:** select a Tame Scroll in the speedbook while in town → that monster follows us around and can be
+  hovered for its stats. Achieve it with the **smallest possible engine footprint**; the points below are
+  preferences, not requirements that justify extra engine work.
+- Follows **1–3 tiles behind** the player (a loose leash, not exactly one tile).
+- The leash still recovers if it gets **stuck on a town object** (snap back near the player).
+- It only **appears on a valid tile** it can occupy — never inside walls/objects.
+- **Completely docile** in town no matter what the player does: never attacks, never targeted, no combat.
+- Ideally **visual-only** (no full combat-capable monster) — but only if that doesn't cost more engine
+  footprint than reusing a real spawned monster with its AI switched off.
+- *Open when picked up:* which of those two is the smaller footprint; MP visibility; switching scrolls;
+  leaving town.
 
 ---
 

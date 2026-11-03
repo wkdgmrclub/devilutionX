@@ -871,6 +871,24 @@ still leaves a recoverable scroll (a clean recall/retame deletes this entry; onl
 If already Bonded (kills met in a prior session), restores its stored defensive bonus, rolling one if the seed
 has none yet.
 
+### Town follower (`desiredFollowerScroll` / `setupTownFollower` / `spawnTownFollower` / `despawnTownFollower`)
+In town, the Tame Scroll selected in the speedbook (`readySpellType` 2 = Scroll, `readySpellId` = Tame, the exact
+scroll from `selectedScrollSeed`, else the first held Tame Scroll; never a gamemode-locked one) follows its
+Hunter. It is a REAL spawned ally — town needed engine support for that ("monsters can stand in town":
+towner-vs-monster grid disambiguation, `ProcessMonsters` in town, `DeleteMonsterList` from index 0) — tracked in
+`deployedAllies` with `isTownFollower = true`, so hover/infobox, CO profiles, the RQ late-joiner resend and the
+leash all work unchanged. What makes it cosmetic: its scroll is never consumed; `setupTownFollower` is
+`finishDeploy` without the recovery backup; `OnLevelExit` despawns it (RM) instead of recalling it (a recall
+would mint a second copy of a scroll still in inventory); the SP save roster skips it. Tame and Share Potion are
+not castable in town (no `AllowedInTown` flag), so neither can retame/heal it. Docility is the town rule in the
+targeting hooks (no monster / pet / player targets in town); minion summons need a target, so none happen.
+Movement: `OnGolemIdle` trails within `TOWN_FOLLOW_DISTANCE`, and the leash snaps at `TOWN_LEASH_DISTANCE`
+(recovers a follower stuck on scenery); both run on every client from synced positions. MP: the level owner
+spawns it (SP); a non-owner sends the normal DR and parks it in `pendingFollower` (never `pendingDeploys`, which
+refunds/backs up scrolls) — the SP echo completes it, DF or a timeout clears it, and an SP arriving after we
+stopped waiting despawns the orphan. The `GameTick` handler swaps it when the selection changes and despawns it
+when nothing (or a non-Tame) is selected, retrying failed spawns every `FOLLOWER_RETRY_TICKS`.
+
 ### Minion spawning (`allyCapturedDifficulty` / `adoptOwnMinion` / `registerSpawnedMinion`)
 Minion spawning is single-authority on the LEVEL OWNER (the only client that may allocate a monster slot — see
 the deploy path / PrepareSpawnSlot). The level owner spawns the minion for whichever ally raised it, attributes

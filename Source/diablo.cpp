@@ -1549,6 +1549,11 @@ void GameLogic()
 	} else {
 		gGameLogicStep = GameLogicStep::ProcessTowners;
 		ProcessTowners();
+		// Lua mod support: monsters can stand in town too (none do in the base game)
+		if (ActiveMonsterCount > 0) {
+			gGameLogicStep = GameLogicStep::ProcessMonsters;
+			ProcessMonsters();
+		}
 		gGameLogicStep = GameLogicStep::ProcessItemsTown;
 		ProcessItems();
 		gGameLogicStep = GameLogicStep::ProcessMissilesTown;

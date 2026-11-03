@@ -87,6 +87,8 @@ bool TrySelectMonster(bool flipflag, Point tile, tl::function_ref<bool(const Mon
 		if (!InDungeonBounds(posToCheck) || dMonster[posToCheck.x][posToCheck.y] == 0)
 			return;
 		const uint16_t monsterId = std::abs(dMonster[posToCheck.x][posToCheck.y]) - 1;
+		if (IsTownerIndex(monsterId)) // Lua mod support: in town the grid also holds towners
+			return;
 		const Monster &monster = Monsters[monsterId];
 		if (IsTileLit(posToCheck) && HasAnyOf(monster.data().selectionRegion, selectionRegion) && isValidMonster(monster)) {
 			cursPosition = posToCheck;
@@ -115,6 +117,8 @@ bool TrySelectTowner(bool flipflag, Point tile)
 		if (!InDungeonBounds(posToCheck) || dMonster[posToCheck.x][posToCheck.y] == 0)
 			return;
 		const uint16_t monsterId = std::abs(dMonster[posToCheck.x][posToCheck.y]) - 1;
+		if (!IsTownerIndex(monsterId)) // Lua mod support: monsters can stand in town too
+			return;
 		cursPosition = posToCheck;
 		pcursmonst = monsterId;
 	};
@@ -307,7 +311,7 @@ bool TrySelectPixelBased(Point tile)
 		// unless Lua opts in for this cursor state. // Lua mod support
 		if (monsterId != 0 && (IsNoneOf(pcurs, CURSOR_HEALOTHER, CURSOR_RESURRECT) || lua::OnCanSelectMonsterWithCursor(pcurs, false))) { // Lua mod support
 			monsterId = std::abs(monsterId) - 1;
-			if (leveltype == DTYPE_TOWN) {
+			if (IsTownerIndex(monsterId)) { // Lua mod support: monsters can stand in town too
 				const Towner &towner = Towners[monsterId];
 				const ClxSprite sprite = towner.currentSprite();
 				const Displacement renderingOffset = towner.getRenderingOffset();
@@ -928,6 +932,10 @@ bool CheckCursorActions(const Point currentTile, bool flipflag)
 	} else {
 		if (TrySelectTowner(flipflag, currentTile)) {
 			// found a towner
+			return true;
+		}
+		// Lua mod support: monsters can stand in town too (none do in the base game)
+		if (ActiveMonsterCount > 0 && TrySelectMonster(flipflag, currentTile, IsValidMonsterForSelection)) {
 			return true;
 		}
 	}
