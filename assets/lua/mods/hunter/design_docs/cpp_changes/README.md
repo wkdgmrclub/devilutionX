@@ -73,7 +73,7 @@ branches move.
   - **Held: stack on `lua-monster-spawning`:** `lua-monsters-in-town` (nothing on `master` can put a
     monster in town), `lua-player-minions` → `lua-minion-combat`.
   - **Class mechanics → class flags (two PRs).**
-    - `class-flags` (**cut 2026-11-03**, commit `c8ea75da3`, no Lua; `getClassFlags()` is a plain inline
+    - `class-flags` (**cut 2026-11-03**, commits `c8ea75da3` + `9c8af9406`, no Lua; `getClassFlags()` is a plain inline
       there): the remaining hardcoded per-class mechanics become
       `PlayerClassFlag` values set in each class's `attributes.tsv` — `ShieldlessBlock`, `ArmorPierce`,
       `StaggerResistance`, `UnarmedMastery`, `LightArmorMastery`, `BowMastery`, `BowTraining`,
