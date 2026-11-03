@@ -217,8 +217,7 @@ bool CanWield(Player &player, const Item &item)
 
 	// Bard can dual wield swords and maces, so we allow equiping one-handed weapons in her free slot as long as her occupied
 	// slot is another one-handed weapon.
-	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::DualWield)) {
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::DualWield)) {
 		const bool occupiedHandIsOneHandedSwordOrMace = player.GetItemLocation(occupiedHand) == ILOC_ONEHAND
 		    && IsAnyOf(occupiedHand._itype, ItemType::Sword, ItemType::Mace);
 
@@ -291,7 +290,7 @@ bool AutoEquip(Player &player, const Item &item, inv_body_loc bodyLocation, bool
 		ChangeEquipment(player, bodyLocation, item, sendNetworkMessage);
 
 		if (sendNetworkMessage && *GetOptions().Audio.autoEquipSound) {
-			PlaySFX(ItemInvSnds[GetItemAnimType(item)]);
+			PlaySFX(ItemInvSnds[ItemCAnimTbl[item._iCurs]]);
 		}
 
 		CalcPlrInv(player, true);
@@ -369,10 +368,8 @@ void ChangeEquippedItem(Player &player, uint8_t slot)
 	const inv_body_loc selectedHand = slot == SLOTXY_HAND_LEFT ? INVLOC_HAND_LEFT : INVLOC_HAND_RIGHT;
 	const inv_body_loc otherHand = slot == SLOTXY_HAND_LEFT ? INVLOC_HAND_RIGHT : INVLOC_HAND_LEFT;
 
-	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-
 	const bool pasteIntoSelectedHand = (player.InvBody[otherHand].isEmpty() || player.InvBody[otherHand]._iClass != player.HoldItem._iClass)
-	    || (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::DualWield) && player.InvBody[otherHand]._iClass == ICLASS_WEAPON && player.HoldItem._iClass == ICLASS_WEAPON);
+	    || (HasAnyOf(player.getClassFlags(), PlayerClassFlag::DualWield) && player.InvBody[otherHand]._iClass == ICLASS_WEAPON && player.HoldItem._iClass == ICLASS_WEAPON);
 
 	const bool dequipTwoHandedWeapon = (!player.InvBody[otherHand].isEmpty() && player.GetItemLocation(player.InvBody[otherHand]) == ILOC_TWOHAND);
 
@@ -587,7 +584,7 @@ void CheckInvPaste(Player &player, Point cursorPosition)
 	}
 
 	if (&player == MyPlayer) {
-		PlaySFX(ItemInvSnds[GetItemAnimType(player.HoldItem)]);
+		PlaySFX(ItemInvSnds[ItemCAnimTbl[player.HoldItem._iCurs]]);
 	}
 
 	// Select the parameters that go into
@@ -780,7 +777,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 				attemptedMove = true;
 				automaticallyMoved = AutoPlaceItemInInventory(player, player.InvBody[invloc]);
 				if (automaticallyMoved) {
-					successSound = ItemInvSnds[GetItemAnimType(player.InvBody[invloc])];
+					successSound = ItemInvSnds[ItemCAnimTbl[player.InvBody[invloc]._iCurs]];
 					RemoveEquipment(player, invloc, false);
 				} else {
 					failedSpeech = HeroSpeech::IHaveNoRoom;
@@ -890,7 +887,7 @@ void CheckInvCut(Player &player, Point cursorPosition, bool automaticMove, bool 
 					}
 					automaticallyMoved = AutoEquip(player, player.InvList[iv], true, &player == MyPlayer);
 					if (automaticallyMoved) {
-						successSound = ItemInvSnds[GetItemAnimType(player.InvList[iv])];
+						successSound = ItemInvSnds[ItemCAnimTbl[player.InvList[iv]._iCurs]];
 						player.RemoveInvItem(iv, false);
 
 						// If we're holding an item at this point we just lifted it from a body slot to make room for the original item, so we need to put it into the inv
@@ -1634,7 +1631,7 @@ void TransferItemToStash(Player &player, int location)
 		return;
 	}
 
-	PlaySFX(ItemInvSnds[GetItemAnimType(item)]);
+	PlaySFX(ItemInvSnds[ItemCAnimTbl[item._iCurs]]);
 
 	if (location < INVITEM_INV_FIRST) {
 		RemoveEquipment(player, static_cast<inv_body_loc>(location), false);
@@ -2214,7 +2211,7 @@ bool UseInvItem(int cii)
 	if (item->isScroll() && !lua::OnCanCastScroll(&player, static_cast<int>(item->_iSpell), item->_iSeed, -1))
 		return true;
 
-	const int idata = GetItemAnimType(*item);
+	const int idata = ItemCAnimTbl[item->_iCurs];
 	if (item->_iMiscId == IMISC_BOOK)
 		PlaySFX(SfxID::ReadBook);
 	else if (&player == MyPlayer)
@@ -2272,7 +2269,7 @@ void CloseStash()
 				// to not have room for the item all 3 cases are extremely unlikely
 				app_fatal(_("No room for item"));
 			}
-			PlaySFX(ItemInvSnds[GetItemAnimType(myPlayer.HoldItem)]);
+			PlaySFX(ItemInvSnds[ItemCAnimTbl[myPlayer.HoldItem._iCurs]]);
 		}
 		myPlayer.HoldItem.clear();
 		NewCursor(CURSOR_HAND);

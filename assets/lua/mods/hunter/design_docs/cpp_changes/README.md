@@ -46,6 +46,10 @@ branches move.
     - `lua-spell-registry` — `SpellDataLoaded`/`SpellsAssigned`, `spells.addSpellDataFromTsv`,
       deterministic IDs, mod spell icons, the `InitNewSpell` bound, spell-before-player reload order.
     - `lua-class-registration` — `PlayerDataLoaded` + `player.addClassDataFromTsv`.
+    - `lua-custom-items` — per-instance support for TSV-registered items: the mod-item name gate in
+      `GetTranslatedItemName`, `OnCustomItemRecreated` (+ dwBuff kept), `OnItemUsed`, `items.spawnAt`,
+      `items.addToHealerStock`. The `modData` arguments are left out; the item-modData PR appends them as
+      the **last** argument (MonsterTamer already uses that order).
   - **Held: stack on `lua-stash-hooks`** (they need its `CreateQueryEvent`):
     - `lua-item-rules` — `OnCanPlayerUseItem`, `OnPlayerCanPickUpItem`, `OnPlayerCanCutInvItem`,
       `OnCanAutoRefillBeltItem`, `OnVendorWillBuyItem`, `OnShouldExcludeWirtItem`, `OnOilyShrine`.
@@ -53,18 +57,43 @@ branches move.
     - `lua-speedbook-casting` — mod speedbook entries, scroll-slot resolution, cast gates,
       `OnSpellCast`/`OnSpellActionFrame` (these also want `lua-spell-registry`).
     - `lua-item-moddata` — `item.modData`, delta/save persistence, mod stashes saving modData.
-  - **Needs a design pass first:** `lua-monster-spawning`. (1) Our `monster.id` redefines
-    upstream's existing pointer-based `id` as the `Monsters[]` index. Don't change an existing binding;
-    add a new property (e.g. `index`) and move the Hunter mod onto it. (2) Upstream already spawns
-    through the level owner (`SpawnMonster` → `CMD_SPAWNMONSTER`); route our spawn bindings through it
-    where possible.
+    - `lua-monster-capacity` — `requestExtraMonsters` / `requestExtraTypes`: arrays sized to the 252
+      ceiling, `GetMaxMonsters()` / `GetMaxLvlMTypes()` at every bound, the extended-slot delta-load
+      gate. Engine-only otherwise.
+  - **Held: stack on `lua-monster-capacity`:** `lua-monster-spawning` — spawn bindings
+    (`spawnAt` / `spawnWithDifficulty` / `spawnUniqueAt` / `netSpawnAt`), high-slot allocation, the
+    delta helpers (`LuaDeltaRemoveSpawnedMonster` ×2, `LuaDeltaKillMonster`), `monster.index` +
+    `monsters.fromId`, `remove` / `removeAsKilled`, the `PlaceGroup` underflow clamp, the extended-slot
+    `InitializeSpawnedMonster` assert, `OnMonsterDeath` / `OnLevelEnter` / `OnLevelExit` / `GameTick` +
+    `system.gameTick`. Design settled: mod spawns stay local + replayed by species over the mod's own
+    transport, because `CMD_SPAWNMONSTER` carries a level-local type index (no species / difficulty /
+    unique) and changing that struct would change the protocol. Upstream's `monster.id` / `player.id`
+    stay as they are (address-derived; Floating Numbers relies on monster and player ids never
+    colliding); the slot is the new `index` property (MonsterTamer + Hunter moved onto it 2026-11-03).
   - **Held: stack on `lua-monster-spawning`:** `lua-monsters-in-town` (nothing on `master` can put a
     monster in town), `lua-player-minions` → `lua-minion-combat`.
-  - **Class mechanics:** propose as new class-TSV attributes (upstream's direction), not hooks.
-    Builds on `lua-class-registration`; needs its own design pass against current `playerdat`.
-  - **Parked:** hooks layered on the yuripourre custom-items framework (`OnCustomItemRecreated`,
-    custom unique infobox, `OnGetMiscItemDescription`, `OnItemUsed`) until that framework's upstream
-    status is known.
+  - **Class mechanics → class flags (two PRs).**
+    - `class-flags` (**cut 2026-11-03**, commit `c8ea75da3`, no Lua; `getClassFlags()` is a plain inline
+      there): the remaining hardcoded per-class mechanics become
+      `PlayerClassFlag` values set in each class's `attributes.tsv` — `ShieldlessBlock`, `ArmorPierce`,
+      `StaggerResistance`, `UnarmedMastery`, `LightArmorMastery`, `BowMastery`, `BowTraining`,
+      `StaffCleave`, `HeavyCleave`, `DualSwordCleave` (upstream already did `CriticalStrike` / `IronSkin` /
+      `NaturalResistance` this way). The enum widens to `uint16_t` and is parsed with explicit compares
+      (the `magic_enum` range override can't reach the high bits). Each check keeps the vanilla
+      formula; the shipped TSVs carry each class's flags, so behaviour is unchanged. `CanCleave` and
+      `CalculateArmorPierce` stay inline in `player.h`.
+    - `lua-class-flags` (held on `class-flags` + `lua-stash-hooks` for `CreateQueryEvent`):
+      `Player::getClassFlags()` = TSV flags through `OnGetPlayerClassFlags`, every flag check calls it,
+      plus the `player.ClassFlag` table. Replaces eleven boolean/numeric hooks. The numeric
+      `OnGetPlayerDamageMod` / `OnGetBlockChanceBonus` stay (the Hunter takes the best of several
+      formulas) and go in this PR too.
+  - **Held: stack on `lua-stash-hooks`:** `lua-item-descriptions` — `OnGetMiscItemDescription` and the
+    custom unique infobox (`OnPrepareUniqueInfoBox` + `items.setCustomUniqueBox`), both query events.
+  - **Not carried:** the yuripourre framework (Lua-table item definitions, custom cursor sprites) and
+    `skipSpeedbook`. Upstream's `addItemDataFromTsv` covers registration (the Hunter's items are
+    `itemdat_hunter.tsv`), the Hunter uses vanilla cursors, and `OnShouldHideSpeedbookSpell` hides a
+    mod scroll's generic speedbook icon. The speedbook PR's hide hook also fires in `DoSpeedBook`, so
+    the cursor jump matches the drawn list.
 - Building a PR branch: take `MonsterTamer`'s versions of the engine files onto a branch from `master`,
   then strip what belongs elsewhere. Formatting churn (e.g. `[] {}` → `[] { }` from a different
   clang-format) never goes into a PR branch.

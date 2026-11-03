@@ -131,7 +131,6 @@ int8_t ItemCAnimTbl[] = {
 	3, 1, 6, 6, 6, 1, 8, 6, 11, 3,
 	6, 8, 1, 6, 6, 17, 40, 0, 0
 };
-const int ItemCAnimTblSize = static_cast<int>(std::size(ItemCAnimTbl)); // Lua mod support
 
 /** Maps of drop sounds effect of placing the item in the inventory. */
 SfxID ItemInvSnds[] = {
@@ -2538,13 +2537,9 @@ void CalcPlrDamage(Player &player, int minDamage, int maxDamage)
 			maxDamage = 3;
 		}
 
-		if (player._pClass == HeroClass::Monk) {
+		if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::UnarmedMastery)) {
 			minDamage = std::max(minDamage, playerLevel / 2);
 			maxDamage = std::max<int>(maxDamage, playerLevel);
-		} else {
-			const auto floor = lua::OnGetUnarmedDamageFloor(&player, minDamage, maxDamage); // Lua mod support
-			minDamage = floor.first;
-			maxDamage = floor.second;
 		}
 	}
 
@@ -2645,9 +2640,7 @@ void CalcPlrDamageMod(Player &player)
 	    leftHandItem.isEmpty() && rightHandItem.isEmpty(),
 	    player._pDamageMod);
 
-	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::IronSkin)
-	    || lua::OnPlayerHasIronSkin(&player, false)) { // Lua mod support
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::IronSkin)) {
 		player._pIAC += playerLevel / 4;
 	}
 }
@@ -2656,10 +2649,7 @@ void CalcPlrResistances(Player &player, ItemSpecialEffect iflgs, int fire, int l
 {
 	const uint8_t playerLevel = player.getCharacterLevel();
 
-	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::NaturalResistance)
-	    || lua::OnPlayerHasNaturalResistance(&player, false)) { // Lua mod support
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::NaturalResistance)) {
 		magic += playerLevel;
 		fire += playerLevel;
 		lightning += playerLevel;
@@ -2714,16 +2704,11 @@ void CalcPlrBlockFlag(Player &player)
 
 	player._pBlockFlag = false;
 
-	const bool isHoldingStaff = player.isHoldingItem(ItemType::Staff);
-	const bool isUnarmed = leftHandItem.isEmpty() && rightHandItem.isEmpty();
-	const bool isSingleHanded = (leftHandItem._iClass == ICLASS_WEAPON && leftHandItem._iLoc != ILOC_TWOHAND && rightHandItem.isEmpty())
-	    || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty());
-	if (player._pClass == HeroClass::Monk
-	    || lua::OnPlayerCanBlockWithoutShield(&player, isHoldingStaff, isUnarmed, false)) { // Lua mod support
-		if (isHoldingStaff) {
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::ShieldlessBlock)) {
+		if (player.isHoldingItem(ItemType::Staff)) {
 			player._pBlockFlag = true;
 			player._pIFlags |= ItemSpecialEffect::FastBlock;
-		} else if (isUnarmed || isSingleHanded) {
+		} else if ((leftHandItem.isEmpty() && rightHandItem.isEmpty()) || (leftHandItem._iClass == ICLASS_WEAPON && leftHandItem._iLoc != ILOC_TWOHAND && rightHandItem.isEmpty()) || (rightHandItem._iClass == ICLASS_WEAPON && rightHandItem._iLoc != ILOC_TWOHAND && leftHandItem.isEmpty())) {
 			player._pBlockFlag = true;
 		}
 	}
@@ -2775,30 +2760,24 @@ PlayerArmorGraphic GetPlrAnimArmorId(Player &player)
 	if (chestUsable) {
 		switch (chestItem._itype) {
 		case ItemType::HeavyArmor:
-			if (player._pClass == HeroClass::Monk) {
+			if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::LightArmorMastery)) {
 				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
 					player._pIAC += playerLevel / 2;
-			} else {
-				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Heavy", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
 			armorGraphic = PlayerArmorGraphic::Heavy;
 			break;
 		case ItemType::MediumArmor:
-			if (player._pClass == HeroClass::Monk) {
+			if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::LightArmorMastery)) {
 				if (chestItem._iMagical == ITEM_QUALITY_UNIQUE)
 					player._pIAC += playerLevel * 2;
 				else
 					player._pIAC += playerLevel / 2;
-			} else {
-				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Medium", chestItem._iMagical == ITEM_QUALITY_UNIQUE, 0); // Lua mod support
 			}
 			armorGraphic = PlayerArmorGraphic::Medium;
 			break;
 		default:
-			if (player._pClass == HeroClass::Monk)
+			if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::LightArmorMastery))
 				player._pIAC += playerLevel * 2;
-			else
-				player._pIAC += lua::OnGetArmorLevelBonus(&player, "Light", false, 0); // Lua mod support
 			break;
 		}
 	}
@@ -3815,36 +3794,9 @@ void SpawnTheodore(Point position, bool sendmsg)
 	SpawnRewardItem(IDI_THEODORE, position, sendmsg);
 }
 
-int8_t DefaultDropAnimForItemType(ItemType type)
-{
-	switch (type) {
-	case ItemType::Axe: return 1;
-	case ItemType::Bow: return 3;
-	case ItemType::Mace: return 6;
-	case ItemType::Sword: return 8;
-	case ItemType::Shield: return 7;
-	case ItemType::LightArmor: return 14;
-	case ItemType::Helm: return 5;
-	case ItemType::MediumArmor: return 0;
-	case ItemType::HeavyArmor: return 17;
-	case ItemType::Staff: return 11;
-	case ItemType::Gold: return 4;
-	case ItemType::Ring: return 12;
-	case ItemType::Amulet: return 12;
-	default: return 2;
-	}
-}
-
-int8_t GetItemAnimType(const Item &item)
-{
-	if (item._iCurs >= ItemCAnimTblSize)
-		return DefaultDropAnimForItemType(item._itype);
-	return ItemCAnimTbl[item._iCurs];
-}
-
 void RespawnItem(Item &item, bool flipFlag)
 {
-	const int it = GetItemAnimType(item);
+	const int it = ItemCAnimTbl[item._iCurs];
 	item.setNewAnimation(flipFlag);
 	item._iRequest = false; // Item isn't being picked up by a player
 
@@ -3904,7 +3856,7 @@ void ProcessItems()
 				item.AnimInfo.currentFrame = 10;                                                     // Beginning of elevated frames
 		} else {
 			if (item.AnimInfo.currentFrame == (item.AnimInfo.numberOfFrames - 1) / 2)
-				PlaySfxLoc(ItemDropSnds[GetItemAnimType(item)], item.position);
+				PlaySfxLoc(ItemDropSnds[ItemCAnimTbl[item._iCurs]], item.position);
 
 			if (item.AnimInfo.isLastFrame()) {
 				item.AnimInfo.currentFrame = item.AnimInfo.numberOfFrames - 1;
@@ -3925,7 +3877,7 @@ void FreeItemGFX()
 
 void GetItemFrm(Item &item)
 {
-	const int it = GetItemAnimType(item);
+	const int it = ItemCAnimTbl[item._iCurs];
 	if (itemanims[it])
 		item.AnimInfo.sprites.emplace(*itemanims[it]);
 }
@@ -4948,7 +4900,7 @@ bool Item::isUsable() const
 
 void Item::setNewAnimation(bool showAnimation)
 {
-	const int8_t it = static_cast<int8_t>(GetItemAnimType(*this));
+	const int8_t it = ItemCAnimTbl[_iCurs];
 	const int8_t numberOfFrames = ItemAnimLs[it];
 	const OptionalClxSpriteList sprite = itemanims[it] ? OptionalClxSpriteList { *itemanims[static_cast<size_t>(it)] } : std::nullopt;
 	if (_iCurs != ICURS_MAGIC_ROCK)

@@ -1,0 +1,3 @@
+id	dropRate	class	equipType	cursorGraphic	itemType	uniqueBaseItem	name	shortName	minMonsterLevel	durability	minDamage	maxDamage	minArmor	maxArmor	minStrength	minMagic	minDexterity	specialEffects	miscId	spell	usable	value
+hunter:tamescroll	0	Misc	Unequippable	SCROLL_OF	Misc	NONE	Tame Scroll		0	0	0	0	0	0	0	0	0		SCROLL	hunter:tame	true	0
+hunter:forgetpotion	0	Misc	Unequippable	ARENA_POTION	Misc	NONE	Potion of Forgetting		0	0	0	0	0	0	0	0	0		FULLREJUV	hunter:forgetpotion	true	0

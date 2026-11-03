@@ -379,6 +379,11 @@ public:
 		return GetClassAttributes(_pClass);
 	}
 
+	/**
+	 * @brief The class flags in effect for this player
+	 */
+	[[nodiscard]] PlayerClassFlag getClassFlags() const;
+
 	[[nodiscard]] const PlayerCombatData &getPlayerCombatData() const
 	{
 		return GetPlayerCombatDataForClass(_pClass);
@@ -403,7 +408,16 @@ public:
 
 	bool CanUseItem(const Item &item) const;
 
-	bool CanCleave();
+	bool CanCleave()
+	{
+		const PlayerClassFlag classFlags = getClassFlags();
+		if (HasAnyOf(classFlags, PlayerClassFlag::StaffCleave) && isEquipped(ItemType::Staff))
+			return true;
+		if (HasAnyOf(classFlags, PlayerClassFlag::DualSwordCleave) && InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Sword && InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Sword)
+			return true;
+		return HasAnyOf(classFlags, PlayerClassFlag::HeavyCleave)
+		    && (isEquipped(ItemType::Axe) || (!isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true))));
+	}
 
 	bool isEquipped(ItemType itemType, bool isTwoHanded = false)
 	{
@@ -635,7 +649,26 @@ public:
 	 * @param monsterArmor - monster armor before applying % armor pierce
 	 * @param isMelee - indicates if it's melee or ranged combat
 	 */
-	int CalculateArmorPierce(int monsterArmor, bool isMelee) const;
+	int CalculateArmorPierce(int monsterArmor, bool isMelee) const
+	{
+		int tmac = monsterArmor;
+		if (_pIEnAc > 0) {
+			if (gbIsHellfire) {
+				int pIEnAc = _pIEnAc - 1;
+				if (pIEnAc > 0)
+					tmac >>= pIEnAc;
+				else
+					tmac -= tmac / 4;
+			}
+			if (isMelee && HasAnyOf(getClassFlags(), PlayerClassFlag::ArmorPierce)) {
+				tmac -= monsterArmor / 8;
+			}
+		}
+		if (tmac < 0)
+			tmac = 0;
+
+		return tmac;
+	}
 
 	/**
 	 * @brief Calculates the players current Hit Points as a percentage of their max HP and stores it for later reference

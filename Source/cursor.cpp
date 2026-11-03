@@ -64,7 +64,6 @@ namespace {
 /** Cursor images CEL */
 OptionalOwnedClxSpriteList pCursCels;
 OptionalOwnedClxSpriteList pCursCels2;
-std::vector<OwnedClxSpriteList> customCursorSprites; // Lua mod support
 
 OptionalOwnedClxSpriteList *HalfSizeItemSprites;
 OptionalOwnedClxSpriteList *HalfSizeItemSpritesRed;
@@ -465,35 +464,12 @@ void FreeCursor()
 {
 	pCursCels = std::nullopt;
 	pCursCels2 = std::nullopt;
-	FreeCustomCursorSprites(); // Lua mod support
 	ClearCursor();
-}
-
-// Lua mod support
-int RegisterCustomCursorGraphic(OwnedClxSpriteList sprite)
-{
-	const int iCurs = ItemCAnimTblSize + static_cast<int>(customCursorSprites.size());
-	customCursorSprites.push_back(std::move(sprite));
-	return iCurs;
-}
-
-// Lua mod support
-void FreeCustomCursorSprites()
-{
-	customCursorSprites.clear();
 }
 
 ClxSprite GetInvItemSprite(int cursId)
 {
 	assert(cursId > 0);
-	const int itemCurs = cursId - static_cast<int>(CURSOR_FIRSTITEM);
-	if (itemCurs >= ItemCAnimTblSize) { // Lua mod support: custom cursor sprites registered by mods
-		const size_t customIdx = static_cast<size_t>(itemCurs - ItemCAnimTblSize);
-		if (customIdx < customCursorSprites.size()) {
-			return customCursorSprites[customIdx][0];
-		}
-		return GetInvItemSprite(static_cast<int>(CURSOR_FIRSTITEM));
-	}
 	const size_t numSprites = pCursCels->numSprites();
 	if (static_cast<size_t>(cursId) <= numSprites) {
 		return (*pCursCels)[cursId - 1];
@@ -511,25 +487,11 @@ Size GetInvItemSize(int cursId)
 
 ClxSprite GetHalfSizeItemSprite(int cursId)
 {
-	if (cursId >= ItemCAnimTblSize) { // Lua mod support
-		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
-		if (customIdx < customCursorSprites.size()) {
-			return customCursorSprites[customIdx][0];
-		}
-		return (*HalfSizeItemSprites[0])[0];
-	}
 	return (*HalfSizeItemSprites[cursId])[0];
 }
 
 ClxSprite GetHalfSizeItemSpriteRed(int cursId)
 {
-	if (cursId >= ItemCAnimTblSize) { // Lua mod support
-		const size_t customIdx = static_cast<size_t>(cursId - ItemCAnimTblSize);
-		if (customIdx < customCursorSprites.size()) {
-			return customCursorSprites[customIdx][0];
-		}
-		return (*HalfSizeItemSpritesRed[0])[0];
-	}
 	return (*HalfSizeItemSpritesRed[cursId])[0];
 }
 

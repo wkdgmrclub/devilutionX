@@ -369,67 +369,9 @@ int OnMonsterMissileHit(const Monster *source, const Monster *target, int missil
 	return CallLuaEventReturn<int>(-1, "OnMonsterMissileHit", source, target, missileId, damageType, minDamage, maxDamage, dist, isDamageShifted);
 }
 
-bool OnPlayerHasCriticalStrike(const Player *player, bool defaultValue)
+uint16_t OnGetPlayerClassFlags(const Player *player, uint16_t classFlags)
 {
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasCriticalStrike", player);
-}
-
-bool OnPlayerHasIronSkin(const Player *player, bool defaultValue)
-{
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasIronSkin", player);
-}
-
-bool OnPlayerHasNaturalResistance(const Player *player, bool defaultValue)
-{
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasNaturalResistance", player);
-}
-
-int OnGetBowDamageMod(const Player *player, int fullMod, int defaultValue)
-{
-	return CallLuaEventReturn<int>(defaultValue, "OnGetBowDamageMod", player, fullMod);
-}
-
-int OnGetArrowVelocityBonus(const Player *player, int defaultValue)
-{
-	return CallLuaEventReturn<int>(defaultValue, "OnGetArrowVelocityBonus", player);
-}
-
-bool OnPlayerCanBlockWithoutShield(const Player *player, bool isHoldingStaff, bool isUnarmed, bool defaultValue)
-{
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanBlockWithoutShield", player, isHoldingStaff, isUnarmed);
-}
-
-int OnGetArmorLevelBonus(const Player *player, std::string_view armorType, bool isUnique, int defaultValue)
-{
-	return CallLuaEventReturn<int>(defaultValue, "OnGetArmorLevelBonus", player, std::string(armorType), isUnique);
-}
-
-bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue)
-{
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasArmorPierce", player);
-}
-
-bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTwoHandedHeavy, bool isHoldingStaff, bool defaultValue)
-{
-	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanCleave", player, isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff);
-}
-
-int OnGetHitRecoveryThreshold(const Player *player, int defaultThreshold)
-{
-	return CallLuaEventReturn<int>(defaultThreshold, "OnGetHitRecoveryThreshold", player, defaultThreshold);
-}
-
-std::pair<int, int> OnGetUnarmedDamageFloor(const Player *player, int minDamage, int maxDamage)
-{
-	sol::table *events = GetLuaEvents();
-	if (events == nullptr) return { minDamage, maxDamage };
-	const auto trigger = events->traverse_get<std::optional<sol::object>>("OnGetUnarmedDamageFloor", "trigger");
-	if (!trigger.has_value() || !trigger->is<sol::protected_function>()) return { minDamage, maxDamage };
-	const sol::protected_function fn = trigger->as<sol::protected_function>();
-	sol::object result = SafeCallResult(fn(player, minDamage, maxDamage), /*optional=*/true);
-	if (!result.is<sol::table>()) return { minDamage, maxDamage };
-	const sol::table tbl = result.as<sol::table>();
-	return { tbl.get_or(1, minDamage), tbl.get_or(2, maxDamage) };
+	return CallLuaEventReturn<uint16_t>(classFlags, "OnGetPlayerClassFlags", player, classFlags);
 }
 
 int OnGetBlockChanceBonus(const Player *player, int blockBonus)

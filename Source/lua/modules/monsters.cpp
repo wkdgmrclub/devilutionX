@@ -201,9 +201,15 @@ void InitMonsterUserType(sol::state_view &lua)
 		    return Point { monster.position.tile };
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "id", "integer",
-	    "Monster's index in the Monsters array (readonly). Stable within a session; range 0..GetMaxMonsters()-1.",
+	    "Monster's unique ID (readonly)",
 	    [](const Monster &monster) {
-		    return static_cast<int>(&monster - &Monsters[0]);
+		    return static_cast<int>(reinterpret_cast<uintptr_t>(&monster));
+	    });
+	LuaSetDocReadonlyProperty(monsterType, "index", "integer",
+	    "Monster's slot in the Monsters array (readonly), 0..GetMaxMonsters()-1. The same on every client in multiplayer; "
+	    "pass it to monsters.fromId.",
+	    [](const Monster &monster) {
+		    return static_cast<int>(monster.getId());
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "typeId", "integer",
 	    "Monster type ID matching _monster_id constants (readonly)",
@@ -896,7 +902,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 		    return &Monsters[pcursmonst];
 	    });
 	LuaSetDocFn(table, "fromId", "(id: integer) -> Monster|nil",
-	    "Returns the active Monster occupying the given slot id (Monster.id), or nil if no active monster holds that slot. // Lua mod support",
+	    "Returns the active Monster occupying the given slot (Monster.index), or nil if no active monster holds that slot. // Lua mod support",
 	    [](int id) -> Monster * {
 		    if (id < 0 || id >= static_cast<int>(GetMaxMonsters())) return nullptr;
 		    for (size_t i = 0; i < ActiveMonsterCount; i++) {

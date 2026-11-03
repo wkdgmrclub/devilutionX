@@ -425,7 +425,8 @@ void DoSpeedBook()
 			}
 			uint64_t spell = 1;
 			for (size_t j = 1; j < SpellsData.size(); j++) {
-				if ((spell & spells) != 0) {
+				// Lua mod support: skip hidden entries so the layout matches GetSpellListItems.
+				if ((spell & spells) != 0 && !lua::OnShouldHideSpeedbookSpell(&myPlayer, static_cast<int>(j), SpellTypeName(static_cast<SpellType>(i)))) {
 					if (j == static_cast<size_t>(myPlayer._pRSpell) && static_cast<SpellType>(i) == myPlayer._pRSplType) {
 						x = xo + SPLICONLENGTH / 2;
 						y = yo - SPLICONLENGTH / 2;

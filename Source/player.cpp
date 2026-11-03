@@ -574,9 +574,7 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 	int dam2 = dam << 6;
 	dam += player._pDamageMod;
 
-	const ClassAttributes &classAttributes = GetClassAttributes(player._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)
-	    || lua::OnPlayerHasCriticalStrike(&player, false)) { // Lua mod support
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::CriticalStrike)) {
 		if (GenerateRnd(100) < player.getCharacterLevel()) {
 			dam *= 2;
 		}
@@ -743,9 +741,7 @@ bool PlrHitPlr(Player &attacker, Player &target)
 	dam += (dam * attacker._pIBonusDam) / 100;
 	dam += attacker._pIBonusDamMod + attacker._pDamageMod;
 
-	const ClassAttributes &classAttributes = GetClassAttributes(attacker._pClass);
-	if (HasAnyOf(classAttributes.classFlags, PlayerClassFlag::CriticalStrike)
-	    || lua::OnPlayerHasCriticalStrike(&attacker, false)) { // Lua mod support
+	if (HasAnyOf(attacker.getClassFlags(), PlayerClassFlag::CriticalStrike)) {
 		if (GenerateRnd(100) < attacker.getCharacterLevel()) {
 			dam *= 2;
 		}
@@ -1533,8 +1529,7 @@ void Player::CalcScrolls()
 {
 	_pScrlSpells = 0;
 	for (const Item &item : InventoryAndBeltPlayerItemsRange { *this }) {
-		if (item.isScroll() && item._iStatFlag
-		    && !AllItemsList[static_cast<size_t>(item.IDidx)].iSkipSpeedbook) { // Lua mod support: iSkipSpeedbook excludes mod scrolls from speedbook
+		if (item.isScroll() && item._iStatFlag) {
 			_pScrlSpells |= GetSpellBitmask(item._iSpell);
 		}
 	}
@@ -1614,6 +1609,11 @@ void Player::RemoveSpdBarItem(int iv)
 [[nodiscard]] uint8_t Player::getId() const
 {
 	return static_cast<uint8_t>(std::distance<const Player *>(&Players[0], this));
+}
+
+PlayerClassFlag Player::getClassFlags() const
+{
+	return static_cast<PlayerClassFlag>(lua::OnGetPlayerClassFlags(this, static_cast<uint16_t>(getClassAttributes().classFlags))); // Lua mod support
 }
 
 int Player::getBaseToBlock() const
@@ -1751,49 +1751,6 @@ void Player::Stop()
 bool Player::isWalking() const
 {
 	return IsAnyOf(_pmode, PM_WALK_NORTHWARDS, PM_WALK_SOUTHWARDS, PM_WALK_SIDEWAYS);
-}
-
-bool Player::CanCleave()
-{
-	switch (_pClass) {
-	case HeroClass::Warrior:
-	case HeroClass::Rogue:
-	case HeroClass::Sorcerer:
-		return false;
-	case HeroClass::Monk:
-		return isEquipped(ItemType::Staff);
-	case HeroClass::Bard:
-		return InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Sword && InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Sword;
-	case HeroClass::Barbarian:
-		return isEquipped(ItemType::Axe) || (!isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true)));
-	default: {
-		const bool isHoldingAxe = isEquipped(ItemType::Axe);
-		const bool isHoldingTwoHandedHeavy = !isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true));
-		const bool isHoldingStaff = isEquipped(ItemType::Staff);
-		return lua::OnPlayerCanCleave(this, isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff, false); // Lua mod support
-	}
-	}
-}
-
-int Player::CalculateArmorPierce(int monsterArmor, bool isMelee) const
-{
-	int tmac = monsterArmor;
-	if (_pIEnAc > 0) {
-		if (gbIsHellfire) {
-			int pIEnAc = _pIEnAc - 1;
-			if (pIEnAc > 0)
-				tmac >>= pIEnAc;
-			else
-				tmac -= tmac / 4;
-		}
-		if (isMelee && (_pClass == HeroClass::Barbarian || lua::OnPlayerHasArmorPierce(this, false))) { // Lua mod support
-			tmac -= monsterArmor / 8;
-		}
-	}
-	if (tmac < 0)
-		tmac = 0;
-
-	return tmac;
 }
 
 int Player::GetManaShieldDamageReduction()
@@ -2719,14 +2676,12 @@ void StartPlrHit(Player &player, Fixed26_6 dam, bool forcehit)
 	player.Say(HeroSpeech::ArghClang);
 
 	RedrawComponent(PanelDrawComponent::Health);
-	{
-		int threshold = player.getCharacterLevel();
-		if (player._pClass == HeroClass::Barbarian)
-			threshold += threshold / 4;
-		threshold = lua::OnGetHitRecoveryThreshold(&player, threshold); // Lua mod support
-		if (dam.whole() < threshold && !forcehit) {
+	if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::StaggerResistance)) {
+		if (dam.whole() < player.getCharacterLevel() + player.getCharacterLevel() / 4 && !forcehit) {
 			return;
 		}
+	} else if (dam.whole() < player.getCharacterLevel() && !forcehit) {
+		return;
 	}
 
 	const Direction pd = player._pdir;

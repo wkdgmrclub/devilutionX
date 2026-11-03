@@ -7,6 +7,19 @@
 
 ---
 
+## `monster.index` / `player.index` replace the slot meaning of `.id` (BUILT 2026-11-03, awaiting compile + two-client check)
+
+`monster.id` / `player.id` are back to upstream's meaning (address-derived; the two never collide, which
+upstream's Floating Numbers mod relies on, and they differ per client). The slot number we relied on is
+now `.index`, the same on every client. `init.lua`: all 143 uses on engine monsters/players moved to
+`.index`; the 15 left are the mod's own records (`entry.id`, `rec.id`, Original-Trainer `o.id` /
+`origin.id`, `deployedAllies[i].id`). **Recompile:** `lua/modules/monsters.cpp`, `lua/modules/player.cpp`;
+copy `init.lua`. **Two-client check:** deploy, fight, recall and re-deploy a pet; a peer sees it and its
+infobox; pet death; Pepin recovery; minions (Skeleton King / Hork); the town follower; a level change
+with pets out. Any identity mix-up shows as a pet not tracked, duplicated or not despawned.
+
+---
+
 ## Spell API matches upstream: `spells.addSpellDataFromTsv` (BUILT 2026-11-03, awaiting compile + check)
 
 `spells.registerSpell(name, path, icon)` is replaced by upstream's shape: `spells.addSpellDataFromTsv(path)`,
@@ -14,9 +27,47 @@ where each row's `id` column is the spell name. The Hunter's three spells now li
 `txtdata/spells/spelldat_hunter.tsv` (ids `hunter:tame` / `hunter:sharepotion` / `hunter:forgetpotion`; the
 three single-spell TSVs are deleted). Icons are set in `SpellsAssigned` via `spells.setSpellIcon`. A
 duplicate id or too many mod spells is now a fatal load error. **Recompile:** `tables/spelldat.cpp/.h`,
-`lua/modules/spells.cpp`, `msg.cpp` (comment only). Refresh `events.lua`; copy `init.lua` **and the new
+`lua/modules/spells.cpp`, `msg.cpp` (comment only), `lua/modules/items.cpp` (`addToHealerStock` now
+takes `magical` before `modData`; the Hunter's Pepin buy-back call is updated to match). Refresh `events.lua`; copy `init.lua` **and the new
 TSV** (and delete the three old TSVs from the installed mod). **Check:** a Hunter starts with Tame;
-Tame / Share Potion show their Golem / Heal Other icons; Forget Potion still works.
+Tame / Share Potion show their Golem / Heal Other icons; Forget Potion still works; a Pepin buy-back
+scroll keeps its gold/unique look and its data.
+
+---
+
+## Class mechanics as class flags + `OnGetPlayerClassFlags` (BUILT 2026-11-03, awaiting compile + check)
+
+Ten new `PlayerClassFlag` values replace the hardcoded `HeroClass` checks for shieldless block, armor pierce,
+stagger resistance, the unarmed floor, the Monk armor bonus, bow damage / arrow speed and cleave; the six
+vanilla `attributes.tsv` files carry them (vanilla behaviour unchanged). Every flag check goes through
+`Player::getClassFlags()`, which fires `OnGetPlayerClassFlags`. Eleven hooks are gone (`OnPlayerHasCriticalStrike`,
+`…IronSkin`, `…NaturalResistance`, `OnGetBowDamageMod`, `OnGetArrowVelocityBonus`, `OnPlayerCanBlockWithoutShield`,
+`OnGetArmorLevelBonus`, `OnPlayerHasArmorPierce`, `OnPlayerCanCleave`, `OnGetHitRecoveryThreshold`,
+`OnGetUnarmedDamageFloor`); the Hunter adds archetype flags in one handler. One intended change: a
+Rogue-archetype Hunter now also gets the Rogue's speed bonus on elemental arrows (and Diablo's −1 there),
+which the old hooks missed. **Recompile:** `tables/playerdat.cpp/.hpp`, `player.cpp/.h`, `items.cpp`,
+`missiles.cpp`, `inv.cpp`, `objects.cpp`, `lua/lua_event.cpp/.hpp`, `lua/modules/player.cpp`; refresh
+`events.lua` and the six vanilla class `attributes.tsv`; copy `init.lua`. **Check:** vanilla classes —
+Monk staff block + unarmed damage, Barbarian cleave + stagger, Bard dual-sword cleave, Rogue arrow speed;
+Hunter — each archetype's crit / cleave / block / AC / arrow behaviour as before, and a peer joining a
+Hunter with archetypes met isn't refused (derived stats must match on both clients).
+
+---
+
+## Hunter items from TSV; custom-items framework + `skipSpeedbook` removed (BUILT 2026-11-03, awaiting compile + check)
+
+The Tame Scroll and Potion of Forgetting are rows in `txtdata/items/itemdat_hunter.tsv`, loaded with
+upstream's `items.addItemDataFromTsv(path, TAME_SCROLL_MAP)` (mapping ids 90001/90002 unchanged; spell
+column `hunter:tame` / `hunter:forgetpotion`; equip type is now `Unequippable` like vanilla scrolls). Engine:
+the Lua-table item loaders, `registerCursorGraphic` + custom cursor sprites, `GetItemAnimType`, and
+`iSkipSpeedbook` are gone (those lines match `master` again). The generic Tame speedbook icon is hidden by
+`OnShouldHideSpeedbookSpell`, which now also fires in `DoSpeedBook`. Side effect: the Tame bit is in the
+scroll mask, so a readied Tame scroll is no longer cleared on inventory recalculation. **Recompile:**
+`cursor.cpp/.h`, `items.cpp/.h`, `inv.cpp`, `qol/stash.cpp`, `qol/itemlabels.cpp`, `qol/visual_store.cpp`,
+`tables/itemdat.h`, `player.cpp`, `panels/spell_list.cpp`, `lua/modules/items.cpp`; copy `init.lua` **and the
+new TSV**. **Check:** Tame scrolls drop / buy back / deploy as before; the speedbook shows only the named Tame
+entries (no plain "Tame Scroll" icon); opening the speedbook puts the mouse on the readied spell; Potion of
+Forgetting still works.
 
 ---
 

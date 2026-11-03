@@ -601,11 +601,6 @@ void UpdateHellfireFlag(Item &item, const char *identifiedItemName);
 extern int MaxGold;
 
 extern int8_t ItemCAnimTbl[];
-extern const int ItemCAnimTblSize;
-
-int8_t DefaultDropAnimForItemType(ItemType type);
-int8_t GetItemAnimType(const Item &item);
-
 extern SfxID ItemInvSnds[];
 
 } // namespace devilution

@@ -222,79 +222,18 @@ local events = {
   OnGetManaCost = CreateQueryEvent(),
   __doc_OnGetManaCost = "Query: return integer to override the spell mana cost (whole points, before the class manaCost multiplier). Args: player, baseCost. Return nil to keep.",
 
-  ---Query event fired at the CriticalStrike class-flag check in DealDamage and P2PGetDamageDealt.
-  ---Return true to grant critical strike ability (50% chance per level to 2x damage).
-  ---Return nil to use the class flag only.
-  OnPlayerHasCriticalStrike = CreateQueryEvent(),
-  __doc_OnPlayerHasCriticalStrike = "Query: return true to grant critical strike (50% chance per level to 2x melee damage). Return nil to use class flag only.",
-
-  ---Query event fired at the IronSkin class-flag check in CalcPlrDamageMod.
-  ---Return true to grant iron skin (AC += level/4).
-  ---Return nil to use the class flag only.
-  OnPlayerHasIronSkin = CreateQueryEvent(),
-  __doc_OnPlayerHasIronSkin = "Query: return true to grant iron skin (AC += level/4). Return nil to use class flag only.",
-
-  ---Query event fired at the NaturalResistance class-flag check in CalcPlrResistances.
-  ---Return true to grant natural resistance (all resistances += level).
-  ---Return nil to use the class flag only.
-  OnPlayerHasNaturalResistance = CreateQueryEvent(),
-  __doc_OnPlayerHasNaturalResistance = "Query: return true to grant natural resistance (all resists += level). Return nil to use class flag only.",
-
-  ---Query event fired in GetDamageAttackArrow for the bow _pDamageMod contribution.
-  ---fullMod is player._pDamageMod (the full modifier). Default is fullMod for Rogue, fullMod/2 for others.
-  ---Return an integer to replace the damage modifier added to arrow damage.
-  OnGetBowDamageMod = CreateQueryEvent(),
-  __doc_OnGetBowDamageMod = "Query: return integer to override bow damage modifier contribution. fullMod = player._pDamageMod. Return nil to use class default (Rogue=full, others=half).",
-
-  ---Query event fired after the class velocity checks in AddSpectralArrow and AddArrow.
-  ---Return an integer bonus to ADD to arrow velocity (stacks with existing class bonus).
-  ---Return nil or 0 for no extra bonus.
-  OnGetArrowVelocityBonus = CreateQueryEvent(),
-  __doc_OnGetArrowVelocityBonus = "Query: return integer bonus to add to arrow velocity (stacks with class bonus). Return nil or 0 for no bonus.",
-
-  ---Query event fired from CalcPlrBlockFlag for classes that are not HeroClass::Monk.
-  ---isHoldingStaff and isUnarmed describe the current weapon state.
-  ---Return true to enable Monk-style blocking: staff = FastBlock, unarmed/single-weapon = normal block.
-  ---Return nil to disallow blocking without a shield.
-  OnPlayerCanBlockWithoutShield = CreateQueryEvent(),
-  __doc_OnPlayerCanBlockWithoutShield = "Query: return true to enable Monk-style block without a shield (staff=FastBlock, unarmed/single=normal). isHoldingStaff and isUnarmed are passed. Return nil to disallow.",
-
-  ---Query event fired from GetPlrAnimArmorId for classes that are not HeroClass::Monk.
-  ---armorType is \"Light\", \"Medium\", or \"Heavy\". isUnique is true for unique-quality items.
-  ---Return an integer to add to _pIAC (armor class). Return nil or 0 for no bonus.
-  OnGetArmorLevelBonus = CreateQueryEvent(),
-  __doc_OnGetArmorLevelBonus = "Query: return integer AC bonus to add based on armor type. armorType: \"Light\"/\"Medium\"/\"Heavy\". isUnique: true for unique items. Return nil or 0 for no bonus.",
-
-  ---Query event fired from StartPlrHit before the hit-recovery animation decision.
-  ---baseThreshold is the damage floor (dam>>6 must be >= threshold to stagger the player).
-  ---The Barbarian's level+level/4 bonus is pre-applied by C++ before this fires.
-  ---Return an integer to override the threshold. Return nil to keep baseThreshold unchanged.
-  OnGetHitRecoveryThreshold = CreateQueryEvent(),
-  __doc_OnGetHitRecoveryThreshold = "Query: return integer to override the hit-recovery stagger threshold (dam>>6 < threshold = no stagger). Barbarian bonus is pre-applied. Args: player, baseThreshold. Return nil to keep.",
-
-  ---Query event fired from CalcPlrDamage when a player has no weapon equipped
-  ---(both hand slots empty and no shield; minDamage and maxDamage were 0 entering the function).
-  ---Return a table {newMin, newMax} to set damage floors. Return nil for no change.
-  OnGetUnarmedDamageFloor = CreateQueryEvent(),
-  __doc_OnGetUnarmedDamageFloor = "Query: return {minDamage, maxDamage} table to set unarmed damage floors. Fires only when player has no weapon equipped. Args: player, currentMin, currentMax. Return nil for no change.",
+  ---Query event fired wherever the engine checks a player's class flags (critical strike, iron skin,
+  ---shieldless block, cleave, bow mastery, ...). classFlags is the class's classFlags from its
+  ---attributes.tsv, as a bitmask of player.ClassFlag values. Return an integer to replace it for this
+  ---player. Return nil to keep it.
+  OnGetPlayerClassFlags = CreateQueryEvent(),
+  __doc_OnGetPlayerClassFlags = "Query: return an integer bitmask of player.ClassFlag values to replace this player's class flags. Args: player, classFlags. Return nil to keep.",
 
   ---Query event fired from getBaseToBlock() for every block-chance calculation.
   ---baseBonusFromTsv is the class's TSV blockBonus value.
   ---Return an integer to replace the block bonus. Return nil to keep baseBonusFromTsv unchanged.
   OnGetBlockChanceBonus = CreateQueryEvent(),
   __doc_OnGetBlockChanceBonus = "Query: return integer to replace the block chance bonus (replaces TSV blockBonus). Fires on every block-chance calculation. Args: player, baseBonusFromTsv. Return nil to keep.",
-
-  ---Query event fired in CalculateArmorPierce when a melee hit lands.
-  ---Return true to grant Barbarian-style armor pierce (subtracts monsterArmor/8 from effective armor).
-  ---Return nil to use class check only (Barbarian only by default).
-  OnPlayerHasArmorPierce = CreateQueryEvent(),
-  __doc_OnPlayerHasArmorPierce = "Query: return true to grant armor pierce in melee (reduces effective monster AC by 1/8). Return nil to use class check only.",
-
-  ---Query event fired from CanCleave() for classes that are not named classes.
-  ---isHoldingAxe, isHoldingTwoHandedHeavy (2H mace/sword without shield), isHoldingStaff describe weapon state.
-  ---Return true to grant cleave for the current weapon. Return nil to disallow.
-  OnPlayerCanCleave = CreateQueryEvent(),
-  __doc_OnPlayerCanCleave = "Query: return true to grant cleave. isHoldingAxe, isHoldingTwoHandedHeavy, isHoldingStaff passed. Return nil to disallow.",
 
   ---Event fired from OperateShrineOily default case (classes not handled by the switch).
   ---Use player:modifyStat(name, amount) to grant the shrine bonus. CheckStats and CalcPlrInv are called automatically after this event.

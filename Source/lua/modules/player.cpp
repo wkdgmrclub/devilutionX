@@ -33,7 +33,13 @@ void InitPlayerUserType(sol::state_view &lua)
 	    "Player's name (readonly)",
 	    &Player::name);
 	LuaSetDocReadonlyProperty(playerType, "id", "integer",
-	    "Player's 0-based index into the Players array (readonly). Matches player.get(id) and monster.ownerPlayerId.",
+	    "Player's unique ID (readonly)",
+	    [](const Player &player) {
+		    return static_cast<int>(reinterpret_cast<uintptr_t>(&player));
+	    });
+	LuaSetDocReadonlyProperty(playerType, "index", "integer",
+	    "Player's 0-based index into the Players array (readonly). The same on every client in multiplayer; matches "
+	    "player.get(index) and monster.ownerPlayerId.",
 	    [](const Player &player) {
 		    return static_cast<int>(player.getId());
 	    });
@@ -405,6 +411,24 @@ sol::table LuaPlayerModule(sol::state_view &lua)
 		cursorIdTable[std::string(magic_enum::enum_name(val))] = static_cast<int>(val);
 	}
 	table["CursorID"] = cursorIdTable;
+
+	// Expose PlayerClassFlag bits for OnGetPlayerClassFlags (combine with | and test with &).
+	table["ClassFlag"] = lua.create_table_with(
+	    "CriticalStrike", static_cast<int>(PlayerClassFlag::CriticalStrike),
+	    "DualWield", static_cast<int>(PlayerClassFlag::DualWield),
+	    "IronSkin", static_cast<int>(PlayerClassFlag::IronSkin),
+	    "NaturalResistance", static_cast<int>(PlayerClassFlag::NaturalResistance),
+	    "TrapSense", static_cast<int>(PlayerClassFlag::TrapSense),
+	    "ShieldlessBlock", static_cast<int>(PlayerClassFlag::ShieldlessBlock),
+	    "ArmorPierce", static_cast<int>(PlayerClassFlag::ArmorPierce),
+	    "StaggerResistance", static_cast<int>(PlayerClassFlag::StaggerResistance),
+	    "UnarmedMastery", static_cast<int>(PlayerClassFlag::UnarmedMastery),
+	    "LightArmorMastery", static_cast<int>(PlayerClassFlag::LightArmorMastery),
+	    "BowMastery", static_cast<int>(PlayerClassFlag::BowMastery),
+	    "BowTraining", static_cast<int>(PlayerClassFlag::BowTraining),
+	    "StaffCleave", static_cast<int>(PlayerClassFlag::StaffCleave),
+	    "HeavyCleave", static_cast<int>(PlayerClassFlag::HeavyCleave),
+	    "DualSwordCleave", static_cast<int>(PlayerClassFlag::DualSwordCleave));
 
 	return table;
 }

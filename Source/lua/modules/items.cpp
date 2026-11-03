@@ -1,14 +1,10 @@
 #include "lua/modules/items.hpp"
 
-#include <format>
 #include <string_view>
 
 #include <sol/sol.hpp>
 
-#include "appfat.h"
-#include "cursor.h"
 #include "data/file.hpp"
-#include "engine/load_cel.hpp"
 #include "items.h"
 #include "lua/metadoc.hpp"
 #include "msg.h"
@@ -479,104 +475,6 @@ void AddUniqueItemDataFromTsv(const std::string_view path, const int32_t baseMap
 	LoadUniqueItemDatFromFile(dataFile, path, baseMappingId);
 }
 
-ItemData ParseItemDataTable(sol::table t)
-{
-	ItemData item = {};
-	item.dropRate = static_cast<uint8_t>(t.get_or("dropRate", 1));
-	item.iClass = t.get_or("class", ICLASS_NONE);
-	item.iLoc = t.get_or("equipType", ILOC_NONE);
-	item.iCurs = static_cast<item_cursor_graphic>(t.get_or("cursorGraphic", 0));
-	item.itype = t.get_or("type", ItemType::None);
-	item.iItemId = static_cast<unique_base_item>(t.get_or("uniqueBaseItem", UITYPE_NONE));
-	item.iName = t.get<std::string>("name");
-	item.iSName = t.get_or("shortName", item.iName);
-	item.iMinMLvl = static_cast<uint8_t>(t.get_or("minMonsterLevel", 0));
-	item.iDurability = static_cast<uint8_t>(t.get_or("durability", 0));
-	item.iMinDam = static_cast<uint8_t>(t.get_or("minDam", 0));
-	item.iMaxDam = static_cast<uint8_t>(t.get_or("maxDam", 0));
-	item.iMinAC = static_cast<uint8_t>(t.get_or("minAC", 0));
-	item.iMaxAC = static_cast<uint8_t>(t.get_or("maxAC", 0));
-	item.iMinStr = static_cast<uint8_t>(t.get_or("minStr", 0));
-	item.iMinMag = static_cast<uint8_t>(t.get_or("minMag", 0));
-	item.iMinDex = static_cast<uint8_t>(t.get_or("minDex", 0));
-	item.iFlags = t.get_or("flags", ItemSpecialEffect::None);
-	item.iMiscId = t.get_or("miscId", IMISC_NONE);
-	item.iSpell = t.get_or("spell", SpellID::Null);
-	item.iUsable = t.get_or("usable", false);
-	item.iSkipSpeedbook = t.get_or("skipSpeedbook", false);
-	item.iValue = static_cast<uint16_t>(t.get_or("value", 0));
-	return item;
-}
-
-UniqueItem ParseUniqueItemDataTable(sol::table t)
-{
-	UniqueItem item = {};
-	item.UIName = t.get<std::string>("name");
-	item.UICurs = static_cast<item_cursor_graphic>(t.get_or("cursorGraphic", 0));
-	item.UIItemId = static_cast<unique_base_item>(t.get_or("uniqueBaseItem", UITYPE_NONE));
-	item.UIMinLvl = static_cast<int8_t>(t.get_or("minLevel", 0));
-	item.UIValue = t.get_or("value", 0);
-	item.UINumPL = 0;
-	sol::optional<sol::table> powers = t["powers"];
-	if (powers) {
-		for (size_t i = 1; i <= std::size(item.powers); ++i) {
-			sol::optional<sol::table> power = (*powers)[i];
-			if (!power) break;
-			item.powers[item.UINumPL].type = power->get_or("type", IPL_INVALID);
-			item.powers[item.UINumPL].param1 = power->get_or("param1", 0);
-			item.powers[item.UINumPL].param2 = power->get_or("param2", 0);
-			item.UINumPL++;
-		}
-	}
-	return item;
-}
-
-void AddItemData(sol::table itemData, const int32_t baseMappingId)
-{
-	const size_t numItems = itemData.size();
-	AllItemsList.reserve(AllItemsList.size() + numItems);
-	for (size_t i = 1; i <= numItems; ++i) {
-		sol::optional<sol::table> itemTable = itemData[i];
-		if (!itemTable) {
-			app_fatal(std::format("Expected item data table at index {}.", i));
-		}
-		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
-		ItemData item = ParseItemDataTable(*itemTable);
-		item.iMappingId = mappingId;
-		AllItemsList.push_back(std::move(item));
-		const auto [it, inserted] = ItemMappingIdsToIndices.emplace(mappingId, static_cast<int16_t>(AllItemsList.size()) - 1);
-		if (!inserted) {
-			app_fatal(std::format("An item already exists for mapping ID {}.", mappingId));
-		}
-	}
-}
-
-void AddUniqueItemData(sol::table itemData, const int32_t baseMappingId)
-{
-	const size_t numItems = itemData.size();
-	UniqueItems.reserve(UniqueItems.size() + numItems);
-	for (size_t i = 1; i <= numItems; ++i) {
-		sol::optional<sol::table> itemTable = itemData[i];
-		if (!itemTable) {
-			app_fatal(std::format("Expected unique item data table at index {}.", i));
-		}
-		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
-		UniqueItem item = ParseUniqueItemDataTable(*itemTable);
-		item.mappingId = mappingId;
-		UniqueItems.push_back(std::move(item));
-		const auto [it, inserted] = UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
-		if (!inserted) {
-			app_fatal(std::format("A unique item already exists for mapping ID {}.", mappingId));
-		}
-	}
-}
-
-int LuaRegisterCursorGraphic(const std::string &path, int width)
-{
-	OwnedClxSpriteList sprite = LoadCel(path.c_str(), static_cast<uint16_t>(width));
-	return RegisterCustomCursorGraphic(std::move(sprite));
-}
-
 void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride) // Lua mod support
 {
 	if (ActiveItemCount >= MAXITEMS)
@@ -615,7 +513,7 @@ void LuaSpawnItemAt(int x, int y, int32_t mappingId, uint32_t seed, sol::optiona
 	NetSendCmdPItem(true, CMD_SPAWNITEM, Items[ii].position, Items[ii]);
 }
 
-void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<std::string> modDataOverride, sol::optional<int> magicalOverride)
+void LuaAddToHealerStock(int32_t mappingId, int ivalue, sol::optional<uint32_t> seedOpt, sol::optional<std::string> nameOverride, sol::optional<uint32_t> buffOverride, sol::optional<int> magicalOverride, sol::optional<std::string> modDataOverride)
 {
 	const auto it = ItemMappingIdsToIndices.find(mappingId);
 	if (it == ItemMappingIdsToIndices.end()) return;
@@ -682,13 +580,10 @@ sol::table LuaItemModule(sol::state_view &lua)
 
 	LuaSetDocFn(table, "addItemDataFromTsv", "(path: string, baseMappingId: number)", AddItemDataFromTsv);
 	LuaSetDocFn(table, "addUniqueItemDataFromTsv", "(path: string, baseMappingId: number)", AddUniqueItemDataFromTsv);
-	LuaSetDocFn(table, "addItemData", "(itemData: table[], baseMappingId: number)", "Add item definitions from a list of Lua tables. Required field: name. Optional: dropRate, class, equipType, cursorGraphic, type, uniqueBaseItem, shortName, minMonsterLevel, durability, minDam, maxDam, minAC, maxAC, minStr, minMag, minDex, flags, miscId, spell, usable, skipSpeedbook, value.", AddItemData);
-	LuaSetDocFn(table, "addUniqueItemData", "(itemData: table[], baseMappingId: number)", "Add unique item definitions from a list of Lua tables. Required field: name. Optional: cursorGraphic, uniqueBaseItem, minLevel, value, powers (array of {type, param1, param2}).", AddUniqueItemData);
-	LuaSetDocFn(table, "registerCursorGraphic", "(path: string, width: number) -> number", "Load a sprite for inventory/cursor display and return its cursorGraphic ID (pass to item's cursorGraphic field).", LuaRegisterCursorGraphic);
 	LuaSetDocFn(table, "spawnAt", "(x: integer, y: integer, mappingId: integer, seed: integer, name?: string, dwBuff?: integer, modData?: string)",
 	    "Drop a custom item at the nearest free tile to (x, y) with the given seed, announced like any dynamically spawned item (CMD_SPAWNITEM): in multiplayer, same-level peers spawn a live copy and every client registers it in the level delta, so it persists and replicates with no further calls. Optional name overrides the display name (local only; a peer's copy is recreated from the wire and renamed via OnCustomItemRecreated). Optional dwBuff sets item.dwBuff (bit 0 must be 0). Optional modData sets item.modData (binary-safe blob; base game ignores it, not saved to the hero file, and not carried on the item wire — persist it via setItemDeltaModData and/or a mod net message).",
 	    LuaSpawnItemAt);
-	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, modData?: string, magical?: integer)",
+	LuaSetDocFn(table, "addToHealerStock", "(mappingId: integer, ivalue: integer, seed?: integer, name?: string, dwBuff?: integer, magical?: integer, modData?: string)",
 	    "Add a custom item to the healer's buy list at the given identified value (shop price). Optional seed/name/dwBuff/modData stock a per-instance seeded item (e.g. a custom scroll) that roundtrips when bought; omitting them stocks a single static item. modData is a binary-safe blob (base game ignores it). Optional magical sets the item quality (item_quality: 0=normal, 2=unique) so the bought copy keeps gold/unique presentation — a vendor purchase preserves the stock item's fields and fires no pickup/recreate fixups, so quality must be set here. Idempotent — without a seed any same-mapping entry is a no-op, with a seed only a matching seed is a no-op, so distinct seeds coexist. If the list is at capacity the last random entry is replaced. Call from StoreOpened(\"pepin\") so items reappear after purchase.",
 	    LuaAddToHealerStock);
 	// Lua mod support: persist an optional mod-data blob for an item seed in a level's delta, so a dropped

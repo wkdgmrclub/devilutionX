@@ -312,10 +312,10 @@ bool MonsterMHit(const Player &player, Monster &monster, int mindam, int maxdam,
 
 	if (missileData.isArrow() && damageType == DamageType::Physical) {
 		dam = player._pIBonusDamMod + dam * player._pIBonusDam / 100 + dam;
-		{
-			const int defaultBowMod = (player._pClass == HeroClass::Rogue) ? player._pDamageMod : player._pDamageMod / 2;
-			dam += lua::OnGetBowDamageMod(&player, player._pDamageMod, defaultBowMod); // Lua mod support
-		}
+		if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery))
+			dam += player._pDamageMod;
+		else
+			dam += player._pDamageMod / 2;
 		if (monster.data().monsterClass == MonsterClass::Demon && HasAnyOf(player._pIFlags, ItemSpecialEffect::TripleDemonDamage))
 			dam *= 3;
 	}
@@ -422,7 +422,7 @@ bool Plr2PlrMHit(const Player &player, Player &target, int mindam, int maxdam, i
 	} else {
 		dam = RandomIntBetween(mindam, maxdam);
 		if (missileData.isArrow() && damageType == DamageType::Physical) {
-			const int damMod = IsAnyOf(player._pClass, HeroClass::Rogue) ? player._pDamageMod : player._pDamageMod / 2;
+			const int damMod = HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery) ? player._pDamageMod : player._pDamageMod / 2;
 			dam += player._pIBonusDamMod + damMod + dam * player._pIBonusDam / 100;
 		}
 		if (!shift)
@@ -1510,11 +1510,10 @@ void AddSpectralArrow(Missile &missile, AddMissileParameter &parameter)
 	if (missile.sourceType() == MissileSource::Player) {
 		const Player &player = *missile.sourcePlayer();
 
-		if (player._pClass == HeroClass::Rogue)
+		if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery))
 			av += (player.getCharacterLevel() - 1) / 4;
-		else if (player._pClass == HeroClass::Warrior || player._pClass == HeroClass::Bard)
+		else if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowTraining))
 			av += (player.getCharacterLevel() - 1) / 8;
-		av += lua::OnGetArrowVelocityBonus(&player, 0); // Lua mod support
 
 		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::QuickAttack))
 			av++;
@@ -1769,9 +1768,9 @@ void AddElementalArrow(Missile &missile, AddMissileParameter &parameter)
 	int av = 32;
 	if (missile._micaster == TARGET_MONSTERS) {
 		const Player &player = Players[missile._misource];
-		if (player._pClass == HeroClass::Rogue)
+		if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery))
 			av += (player.getCharacterLevel()) / 4;
-		else if (IsAnyOf(player._pClass, HeroClass::Warrior, HeroClass::Bard))
+		else if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowTraining))
 			av += (player.getCharacterLevel()) / 8;
 
 		if (gbIsHellfire) {
@@ -1784,7 +1783,7 @@ void AddElementalArrow(Missile &missile, AddMissileParameter &parameter)
 			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FastestAttack))
 				av += 8;
 		} else {
-			if (IsAnyOf(player._pClass, HeroClass::Rogue, HeroClass::Warrior, HeroClass::Bard))
+			if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery | PlayerClassFlag::BowTraining))
 				av -= 1;
 		}
 	}
@@ -1810,11 +1809,10 @@ void AddArrow(Missile &missile, AddMissileParameter &parameter)
 		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::RandomArrowVelocity)) {
 			av = RandomIntBetween(16, 47);
 		}
-		if (player._pClass == HeroClass::Rogue)
+		if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowMastery))
 			av += (player.getCharacterLevel() - 1) / 4;
-		else if (player._pClass == HeroClass::Warrior || player._pClass == HeroClass::Bard)
+		else if (HasAnyOf(player.getClassFlags(), PlayerClassFlag::BowTraining))
 			av += (player.getCharacterLevel() - 1) / 8;
-		av += lua::OnGetArrowVelocityBonus(&player, 0); // Lua mod support
 
 		if (gbIsHellfire) {
 			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::QuickAttack))

@@ -655,17 +655,17 @@ Hunter's combat mechanics scale with base stat investment. Each archetype requir
 Archetype gates: Barbarian STR≥150, VIT≥200, MAG≤15; Warrior STR≥200, DEX≥150; Rogue STR≥100, DEX≥250; Monk
 STR≥100, MAG≥50, DEX≥200; Sorc-lite MAG≥150. `OnGetPlayerDamageMod` (`_pDamageMod`) computes the best archetype
 formula using total stats (passed pre-computed), returning the highest value among all met archetypes (nil if
-none). The remaining archetype hooks grant: critical strike (Warrior), iron skin AC + natural resistances + hit
-recovery stagger (Barbarian), full bow damage + arrow velocity (Rogue), block-without-shield + armor
-level-scaling AC (Monk). The hit-recovery hook adds level+level/4 that C++ pre-applies only for native
-Barbarian (Hunter is a dynamic class).
+none). Everything else an archetype grants is a vanilla class flag, added in `OnGetPlayerClassFlags` so the
+engine runs the exact vanilla mechanic: Warrior → `CriticalStrike`; Barbarian → `IronSkin`,
+`NaturalResistance`, `ArmorPierce`, `StaggerResistance`, `HeavyCleave` (axe or 2H mace/sword); Rogue →
+`BowMastery` (full bow damage mod + level/4 arrow speed); Monk → `ShieldlessBlock`, `UnarmedMastery`,
+`LightArmorMastery`, `StaffCleave`. Hunter's own `classFlags` in `attributes.tsv` is empty, so with no
+archetype met it behaves like a flagless class.
 
 ### Other archetype hooks
-`OnGetUnarmedDamageFloor` (Monk): fires when both hand slots are empty (no weapon; `CalcPlrDamage` entered
-with minDamage==0). `OnGetBlockChanceBonus`: overrides TSV `blockBonus` by active archetype (nil falls back to
-the TSV value of 10). `OnGetManaCost` (Sorc-lite): 25% reduction, same as Rogue/Monk/Bard. `OnPlayerCanCleave`:
-Barb grants cleave with axe or 2H mace/sword, Monk with staff. Partial potion heal/mana: Hunter always gets 2×
-(heal like Warrior/Barbarian, mana like Hellfire Sorcerer).
+`OnGetBlockChanceBonus`: overrides TSV `blockBonus` by active archetype (nil falls back to the TSV value of 10).
+`OnGetManaCost` (Sorc-lite): 25% reduction, same as Rogue/Monk/Bard. Partial potion heal/mana: Hunter always
+gets 2× (heal like Warrior/Barbarian, mana like Hellfire Sorcerer).
 
 ### `WIRT_EXCLUSIONS` / `OnShouldExcludeWirtItem`
 When Hunter has a full archetype, bias Wirt's item toward usable types. Types are excluded only when ALL active
@@ -1084,9 +1084,9 @@ tier too.
 
 ### Speedbook scroll injection (`OnGetCustomSpeedbookScrollEntries` / `OnResolveCustomScrollSlot`)
 `OnGetCustomSpeedbookScrollEntries` injects one entry per unique Tame Scroll name held in inventory,
-deduplicated by display name (count reflects how many of that name exist). Tame scrolls carry `iSkipSpeedbook`
-and are custom-injected here, so they don't auto-hide from being made red — out-of-tier scrolls are filtered
-at injection. Tame scroll item names already carry their full "Tamed/Bonded [Lvl N] [Name]" form; used as-is so
+deduplicated by display name (count reflects how many of that name exist). The engine's own generic Tame
+icon is hidden via `OnShouldHideSpeedbookSpell`, and these entries are built here rather than from the
+engine's scroll mask, so out-of-tier scrolls are filtered at injection. Tame scroll item names already carry their full "Tamed/Bonded [Lvl N] [Name]" form; used as-is so
 the spellbook entry matches the scroll's own item box (unique names already omit "Lvl N"). `OnResolveCustomScrollSlot`
 resolves a Tame scroll cast to the EXACT scroll the player selected: every Tame scroll shares the single
 `TAME_ID`, so the engine's default "first matching scroll" can deploy/consume the wrong one when several

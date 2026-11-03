@@ -93,7 +93,7 @@ Taming destroys the monster → drops a Tame Scroll on the floor. Casting the sc
 
 ## Tame Scroll Speedbook
 
-- Item definition keeps `skipSpeedbook = true` (prevents a generic bitmask entry)
+- The item is a row in `txtdata/items/itemdat_hunter.tsv`; the generic Tame icon the engine would show is hidden via `OnShouldHideSpeedbookSpell`
 - Named per-monster entries injected via `OnGetCustomSpeedbookScrollEntries` — one entry per unique scroll name, deduped by `item.name`
 - Hovering shows `"Tamed Lvl N Name"` + `"N Scrolls"` (or `"Tamed [Name]"` for unique monsters — no level prefix since unique stats are difficulty-based)
 - `OnGetSpeedbookSelectionType` reverts the engine's starting-skill promotion so TAME_ID scroll entries dispatch as `SpellType::Scroll`, not `SpellType::Skill`
