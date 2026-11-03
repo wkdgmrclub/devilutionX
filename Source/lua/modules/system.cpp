@@ -1,5 +1,10 @@
 #include "lua/modules/system.hpp"
 
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <string_view>
+
 #include <sol/sol.hpp>
 
 #ifdef USE_SDL3
@@ -8,7 +13,9 @@
 #include <SDL.h>
 #endif
 
+#include "control/control_text_prompt.hpp"
 #include "game_mode.hpp"
+#include "lua/lua_global.hpp"
 #include "lua/metadoc.hpp"
 #include "msg.h"
 #include "multi.h"
@@ -61,6 +68,20 @@ sol::table LuaSystemModule(sol::state_view &lua)
 		    if (!gbIsMultiplayer || MyPlayer == nullptr) return;
 		    const uint32_t pmask = mask.value_or(0xFFFFFF & ~(1U << MyPlayerId));
 		    NetSendCmdLuaMessage(pmask, payload.data(), payload.size());
+	    });
+
+	LuaSetDocFn(table, "promptText", "(prompt: string, maxLength: integer, onFinish: function)",
+	    "Open a modal text-entry box showing `prompt`. onFinish(text) is called with the entered text when the "
+	    "player presses Enter, or onFinish(nil) on Escape. maxLength is in bytes (at most 255). The text is not "
+	    "filtered; validate it in onFinish. Opening a prompt cancels any open one.",
+	    [](std::string_view prompt, int maxLength, const sol::protected_function &onFinish) {
+		    OpenTextPrompt(prompt, static_cast<size_t>(std::max(maxLength, 1)),
+		        [onFinish](std::optional<std::string> text) {
+			        if (text.has_value())
+				        SafeCallResult(onFinish(*text), /*optional=*/true);
+			        else
+				        SafeCallResult(onFinish(sol::lua_nil), /*optional=*/true);
+		        });
 	    });
 
 	return table;

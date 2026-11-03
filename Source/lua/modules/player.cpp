@@ -233,27 +233,27 @@ void InitPlayerUserType(sol::state_view &lua)
 		    return &player.HoldItem;
 	    });
 	LuaSetDocFn(playerType, "findScrollBySeed", "(seed: integer) -> Item|nil",
-	    "Return the Item in inventory or belt whose _iSeed matches the given seed, or nil if not found.",
+	    "Return the scroll in inventory or belt whose _iSeed matches the given seed, or nil if not found (non-scroll items are never matched).",
 	    [](Player &player, uint32_t seed) -> Item * {
 		    for (int i = 0; i < player._pNumInv; i++) {
-			    if (!player.InvList[i].isEmpty() && player.InvList[i]._iSeed == seed)
+			    if (!player.InvList[i].isEmpty() && player.InvList[i].isScroll() && player.InvList[i]._iSeed == seed)
 				    return &player.InvList[i];
 		    }
 		    for (int i = 0; i < MaxBeltItems; i++) {
-			    if (!player.SpdList[i].isEmpty() && player.SpdList[i]._iSeed == seed)
+			    if (!player.SpdList[i].isEmpty() && player.SpdList[i].isScroll() && player.SpdList[i]._iSeed == seed)
 				    return &player.SpdList[i];
 		    }
 		    return nullptr;
 	    });
 	LuaSetDocFn(playerType, "findScrollSlotBySeed", "(seed: integer) -> integer|nil",
-	    "Return the INVITEM_* slot index (inventory 7-46, belt 47-54) of the item whose _iSeed matches the given seed, or nil if not found.",
+	    "Return the INVITEM_* slot index (inventory 7-46, belt 47-54) of the scroll whose _iSeed matches the given seed, or nil if not found.",
 	    [](Player &player, uint32_t seed) -> std::optional<int> {
 		    for (int i = 0; i < player._pNumInv; i++) {
-			    if (!player.InvList[i].isEmpty() && player.InvList[i]._iSeed == seed)
+			    if (!player.InvList[i].isEmpty() && player.InvList[i].isScroll() && player.InvList[i]._iSeed == seed)
 				    return INVITEM_INV_FIRST + i;
 		    }
 		    for (int i = 0; i < MaxBeltItems; i++) {
-			    if (!player.SpdList[i].isEmpty() && player.SpdList[i]._iSeed == seed)
+			    if (!player.SpdList[i].isEmpty() && player.SpdList[i].isScroll() && player.SpdList[i]._iSeed == seed)
 				    return INVITEM_BELT_FIRST + i;
 		    }
 		    return std::nullopt;

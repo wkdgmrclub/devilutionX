@@ -30,12 +30,13 @@ out-of-band via `OnSavePlayerData`/`OnLoadPlayerData` and rebuilds it onto held 
 `encodeBlob`/`decodeBlob`/`blobForSeed` pack the per-scroll Plane-2 data:
 
 ```lua
--- string.pack "I2 B B B I4 s1" = kills / immunity-idx / TRN / gamemode + OHID + OT name
-item.modData = encodeBlob(kills, immIdx, trn, gamemode, ohId, ohName)
+-- string.pack "I2 B B B B I4 s1 s1" = kills / immunity-idx / TRN / gamemode / area level + OHID + OT name + nickname
+item.modData = encodeBlob(kills, immIdx, trn, gamemode, areaLvl, ohId, ohName, nickname)
 ```
 
 - kills (`I2`, clamped 65535) + Bonded immunity index (`B`) + Bonded TRN variant (`B`) + tamed-in
-  gamemode (`B`, also bit 22) + **Original Trainer id + name folded in** (`I4 s1`).
+  gamemode (`B`) + tamed-in area level (`B`) + **Original Trainer id + name folded in** (`I4 s1`) +
+  the Cain **nickname** (`s1`, ≤16 chars, `""` = none).
 - `s1` = a length-prefixed string (≤255 bytes; player names ≤32). Empty `""` for any non-scroll.
 - The old `OO`/`NET_ORIGIN` pipe message for Original-Trainer is **retired** — origin rides the one blob.
 

@@ -555,6 +555,9 @@ bondedTrn              = {}
 scrollGamemode         = {}
 -- scrollAreaLevel[seed] = dungeon level the scroll was first tamed in; mapped to an area name for the "Found:" field.
 scrollAreaLevel        = {}
+-- scrollNickname[seed] = nickname given at Cain (absent = none); rides the blob, saved.
+scrollNickname         = {}
+NICKNAME_MAX_LEN       = 16
 -- Pre-Bonded flash phase, derived from the synced tick clock once per GameTick (read per-frame by OnGetMonsterTRN).
 flashOn                = false
 
@@ -586,9 +589,9 @@ IMMUNITY_BY_INDEX = { [1] = RES.ImmuneFire, [2] = RES.ImmuneMagic, [3] = RES.Imm
 IMMUNITY_TO_INDEX = {}
 for idx, val in pairs(IMMUNITY_BY_INDEX) do IMMUNITY_TO_INDEX[val] = idx end
 
-SCROLL_BLOB_FMT = "I2 B B B B I4 s1" -- kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName
+SCROLL_BLOB_FMT = "I2 B B B B I4 s1 s1" -- kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName, nickname
 
-function encodeBlob(kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName)
+function encodeBlob(kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName, nickname)
   return string.pack(SCROLL_BLOB_FMT,
     math.min(math.max(math.floor(kills or 0), 0), 65535),
     math.min(math.max(math.floor(immIdx or 0), 0), 7),
@@ -596,14 +599,15 @@ function encodeBlob(kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName)
     (gamemode == 1) and 1 or 0,
     math.min(math.max(math.floor(areaLvl or 0), 0), 255),
     math.floor(ohId or 0),
-    tostring(ohName or ""))
+    tostring(ohName or ""),
+    tostring(nickname or ""))
 end
 
 function decodeBlob(blob)
-  if blob == nil or blob == "" then return 0, 0, 0, 0, 0, 0, "" end
-  local ok, kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName = pcall(string.unpack, SCROLL_BLOB_FMT, blob)
-  if not ok then return 0, 0, 0, 0, 0, 0, "" end
-  return kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName
+  if blob == nil or blob == "" then return 0, 0, 0, 0, 0, 0, "", "" end
+  local ok, kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName, nickname = pcall(string.unpack, SCROLL_BLOB_FMT, blob)
+  if not ok then return 0, 0, 0, 0, 0, 0, "", "" end
+  return kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName, nickname
 end
 
 -- Build the self-describing blob for a seed from its live/saved tables + recorded Original Trainer.
@@ -615,7 +619,31 @@ function blobForSeed(seed)
     bondedTrn[seed] or 0,
     scrollGamemode[seed] or 0,
     scrollAreaLevel[seed] or 0,
-    o.id, o.name)
+    o.id, o.name, scrollNickname[seed])
+end
+
+-- A Tame Scroll's nickname ("" = none): its own blob during a Tome session, else this hero's table, else the
+-- item's / announced blob (a scroll another Hunter named).
+function scrollNicknameFor(item)
+  local tb = tomeSessionBlob(item)
+  if tb ~= nil then return select(8, decodeBlob(tb)) end
+  local nick = scrollNickname[item.seed]
+  if nick ~= nil then return nick end
+  local blob = item.modData or ""
+  if blob == "" then blob = receivedBlobs[item.seed] or "" end
+  return select(8, decodeBlob(blob))
+end
+
+-- The one name format for scrolls and pets: "Tamed Lvl 23 Fire Drake" / "Bonded Skeleton King", or with a
+-- nickname "Doggo Lvl 23 Bonded" / "Doggo Bonded" (the species moves to the hover boxes).
+function tameDisplayName(bonded, level, species, isUnique, nickname)
+  local status = bonded and "Bonded" or "Tamed"
+  if nickname ~= nil and nickname ~= "" then
+    if isUnique then return nickname .. " " .. status end
+    return nickname .. " Lvl " .. level .. " " .. status
+  end
+  if isUnique then return status .. " " .. species end
+  return status .. " Lvl " .. level .. " " .. species
 end
 
 -- A Tamed ally becomes Bonded once kill count reaches mlvl * BONDED_KILLS_PER_LEVEL (derived live; no encoded field).
@@ -1860,16 +1888,11 @@ function buildScrollParams(monsterData, existingSeed, origin)
     scrollAreaLevel[seed] = (player.self() ~= nil) and items.currentDeltaLevel() or 1
   end
   -- Every "Tamed" name surface becomes "Bonded" once the kill threshold is met.
-  local prefix = isBonded(seed, monsterData.level) and "Bonded" or "Tamed"
-  local scrollName, dwBuff
-  if (uIdx ~= nil and uIdx >= 0) or seedIsDiablo(seed) then
-    scrollName = prefix .. " " .. monsterData.name
-    -- Unique/Diablo names carry no "Lvl N" prefix, but the level is still stored in dwBuff for the infobox.
-    dwBuff = encodeDwBuff(monsterData.savedHp, monsterData.maxHp, monsterData.level or 0, dif)
-  else
-    scrollName = prefix .. " Lvl " .. monsterData.level .. " " .. monsterData.name
-    dwBuff = encodeDwBuff(monsterData.savedHp, monsterData.maxHp, monsterData.level, dif)
-  end
+  local bonded = isBonded(seed, monsterData.level)
+  local isUnique = (uIdx ~= nil and uIdx >= 0) or seedIsDiablo(seed)
+  -- Unique/Diablo names carry no "Lvl N" prefix, but the level is still stored in dwBuff for the infobox.
+  local scrollName = tameDisplayName(bonded, monsterData.level or 0, monsterData.name, isUnique, scrollNickname[seed])
+  local dwBuff = encodeDwBuff(monsterData.savedHp, monsterData.maxHp, monsterData.level or 0, dif)
   -- modData is the self-describing blob so the scroll survives a floor-drop trade and a re-stamp; empty for a non-scroll.
   return seed, scrollName, dwBuff, blobForSeed(seed)
 end
@@ -2079,7 +2102,7 @@ local function broadcastCombatOverride(entry, mask)
     math.floor(prof.sharePct * 1000), prof.magicCurrent, prof.resFire, prof.resLight, prof.resMagic,
     prof.trnVariant or 0, prof.nearBonded and 1 or 0,
     prof.baseMinDamage, prof.baseToHit, prof.baseArmorClass, prof.baseMaxHp, prof.kills, prof.gamemode,
-    prof.areaLevel, prof.ohId, ohName,
+    prof.areaLevel, prof.ohId, (entry.seed ~= nil) and scrollNickname[entry.seed] or "", ohName,
   }, "|")
   luanet.send("hunter", payload, mask) -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
@@ -2138,7 +2161,13 @@ lastFollowerAttempt  = -FOLLOWER_RETRY_TICKS
 
 -- The scroll the speedbook asks to follow us in town: seed + item, or nil.
 function desiredFollowerScroll(me)
-  if TAME_ID == nil or me.className ~= HUNTER_CLASS or not isTownLevel() then return nil end
+  if not isTownLevel() then return nil end
+  return selectedTameScroll(me)
+end
+
+-- The Tame Scroll a Hunter has selected in the speedbook (never a gamemode-locked one): seed + item, or nil.
+function selectedTameScroll(me)
+  if TAME_ID == nil or me.className ~= HUNTER_CLASS then return nil end
   if me.readySpellType ~= 2 or me.readySpellId ~= TAME_ID then return nil end -- 2 = SpellType::Scroll
   local seed = me.selectedScrollSeed
   local item = (seed ~= 0) and me:findScrollBySeed(seed) or nil
@@ -2392,16 +2421,16 @@ luanet.register("hunter", function(senderId, payload)
     -- A remote ally's owner sent its final combat values + caster profile: apply the values to the live monster and cache the profile. Guarded on remoteAllies membership (never our own ally).
     local sender = player.get(senderId)
     if sender == nil or not sender:isOnActiveLevel() then return end
-    -- Pull the 28 fixed leading fields positionally, then take everything after the 28th "|" as ohName verbatim (a player name may contain "|").
+    -- Pull the 29 fixed leading fields positionally (the 29th is the nickname, which can't contain "|"), then take everything after the 29th "|" as ohName verbatim (a player name may contain "|").
     local parts = {}
     local rest = payload
-    for i = 1, 28 do
+    for i = 1, 29 do
       local tok, tail = rest:match("^([^|]*)|(.*)$")
-      if tok == nil then return end -- malformed: fewer than 28 delimiters
+      if tok == nil then return end -- malformed: fewer than 29 delimiters
       parts[i] = tok
       rest = tail
     end
-    parts[29] = rest -- free-form ohName, kept intact even if it contains "|"
+    parts[30] = rest -- free-form ohName, kept intact even if it contains "|"
     local id = tonumber(parts[2])
     local rec = remoteAllies[id]
     if rec == nil then return end -- not (yet) a tracked remote ally; the next CO/RQ will catch it
@@ -2436,7 +2465,8 @@ luanet.register("hunter", function(senderId, payload)
       gamemode       = tonumber(parts[26]),
       areaLevel      = tonumber(parts[27]),
       ohId           = tonumber(parts[28]),
-      ohName         = parts[29],
+      nickname       = parts[29],
+      ohName         = parts[30],
     }
     -- Mirror the Bonded aura glow (idempotent); OnGetMonsterTRN paints the recolour from prof.trnVariant.
     if newBonded then m:setLightRadius(BONDED_LIGHT_RADIUS) end
@@ -2890,6 +2920,13 @@ end)
 
 -- OnGetMiscItemDescription: override the Potion of Forgetting's info box (its FullRejuv miscId would show "restore all life and mana").
 events.OnGetMiscItemDescription.add(function(item)
+  -- A nicknamed Tame Scroll's name no longer shows its species, so the hover box does.
+  if TAME_ID ~= nil and item:isScrollOf(TAME_ID) then
+    local me = player.self()
+    if me == nil or me.className ~= HUNTER_CLASS or scrollNicknameFor(item) == "" then return nil end
+    local species = scrollSpeciesName(item.seed)
+    return (species ~= nil) and ("Species: " .. species) or nil
+  end
   if item.miscId ~= items.ItemMiscID.FullRejuv then return nil end
   if item.name ~= "Potion of Forgetting" then return nil end
   return "Resets All Stats\nItem Lost on Game Exit"
@@ -2954,25 +2991,25 @@ end)
 -- Rebuild a Tame Scroll's display name + quality from its seed + the CURRENT tables. Shared by
 -- OnCustomItemRecreated (pfile/delta round-trip) and OnItemPickedUp (after the re-key restores the
 -- kill count, the name/gold must be re-derived or a traded Bonded scroll keeps reading "Tamed").
+-- Species name a Tame Scroll's seed encodes (unique name, Diablo, or the monster type), or nil.
+function scrollSpeciesName(seed)
+  local uIdx = seedGetUniqueType(seed)
+  if uIdx >= 0 then return monsters.getUniqueName(uIdx) end
+  if seedIsDiablo(seed) then return monsters.getNameByTypeId(DIABLO_TYPE_ID) end
+  local typeId = seedToTypeId(seed)
+  if typeId == nil then return nil end
+  return monsters.getNameByTypeId(typeId)
+end
+
 function restampScrollPresentation(item)
   local uIdx = seedGetUniqueType(item.seed)
   local bonded = scrollIsBonded(item)
-  local prefix = bonded and "Bonded" or "Tamed"
-  local scrollName
-  if uIdx >= 0 or seedIsDiablo(item.seed) then
-    local monsterName = (uIdx >= 0) and monsters.getUniqueName(uIdx) or monsters.getNameByTypeId(DIABLO_TYPE_ID)
-    if monsterName == nil then return end
-    scrollName = prefix .. " " .. monsterName
-    item.magical = 2 -- ITEM_QUALITY_UNIQUE → gold text + outline
-  else
-    local typeId = seedToTypeId(item.seed)
-    if typeId == nil then return end
-    local _, _, level = decodeDwBuff(item.buff)
-    local monsterName = monsters.getNameByTypeId(typeId)
-    if monsterName == nil then return end
-    scrollName = prefix .. " Lvl " .. level .. " " .. monsterName
-    if bonded then item.magical = 2 end -- Bonded normal scrolls render at gold tier too
-  end
+  local isUnique = uIdx >= 0 or seedIsDiablo(item.seed)
+  local monsterName = scrollSpeciesName(item.seed)
+  if monsterName == nil then return end
+  local _, _, level = decodeDwBuff(item.buff)
+  local scrollName = tameDisplayName(bonded, level, monsterName, isUnique, scrollNicknameFor(item))
+  if isUnique or bonded then item.magical = 2 end -- ITEM_QUALITY_UNIQUE → gold text + outline (Bonded normal scrolls too)
   item.name  = scrollName
   item.iName = scrollName
 end
@@ -3282,6 +3319,9 @@ events.GameStart.add(function()
   pendingResurrectBeam = {}
   lastBuffFingerprint = nil
   capturedNaturalMonsters = {}
+  pendingFollower = nil                         -- tick-stamped state from a previous game would stall the follower
+  lastFollowerAttempt = -FOLLOWER_RETRY_TICKS
+  tomeSnapshot = nil
   relinkSavedAllies()
   announceRecoveryOnEntry()
   rebuildHeldScrollModData() -- the primary load-time rebuild: held modData is never hero-saved
@@ -3587,6 +3627,7 @@ events.GameDrawComplete.add(function()
     fboxStatRow("HP:", d.hp, monster.maxHealth),
     { { "Found: " .. areaLevelName(d.areaLevel) .. " / "
     .. (FBOX_DIFF_NAMES[d.difficulty] or "Normal"), FBOX_GOLD } },
+    { { "Species: " .. monster.name, FBOX_GOLD } },
     { { "Type: " .. monster.monsterClass, FBOX_GOLD } },
     { { "OH: " .. d.ohName, FBOX_GOLD },                                      { "   ID: " .. formatOhId(d.ohId), FBOX_GOLD } },
     { { "Version: " .. (FBOX_MODE_NAMES[d.gamemode] or "Diablo"), FBOX_GOLD } },
@@ -4313,6 +4354,7 @@ function resetPersistedCharacterState()
   scrollOrigin      = {}
   scrollGamemode    = {}
   scrollAreaLevel   = {}
+  scrollNickname    = {}
   tameScrollData    = {}
   pendingAllyRoster = nil
   pendingStatPts    = nil
@@ -4405,6 +4447,16 @@ events.OnSavePlayerData.add(function()
   -- wraps on the next load (445 -> 189, the observed join-time point loss). The GameStart restore
   -- writes this value back over the engine's wrapped byte.
   t[#t + 1] = me.statPoints
+  -- Trailing: nicknames (count, then seed + packed string per entry).
+  local nickList = {}
+  for seed, nick in pairs(scrollNickname) do
+    if nick ~= "" then nickList[#nickList + 1] = seed end
+  end
+  t[#t + 1] = #nickList
+  for _, seed in ipairs(nickList) do
+    t[#t + 1] = seed
+    packStringToWords(t, scrollNickname[seed])
+  end
   return t
 end)
 
@@ -4528,15 +4580,25 @@ events.OnLoadPlayerData.add(function(data)
     pendingStatPts = data[i]
     i = i + 1
   end
+  -- Trailing: nicknames (count, then seed + packed string per entry).
+  if i <= n and data[i] ~= nil then
+    local count = data[i]
+    i = i + 1
+    for _ = 1, count do
+      if i > n then break end
+      local seed = data[i]
+      local nick
+      nick, i = unpackStringFromWords(data, i + 1)
+      if nick ~= "" then scrollNickname[seed] = nick end
+    end
+  end
 end)
 
 -- Visual Polish
 
--- Compose an ally's display name matching the scroll-name convention: "Tamed/Bonded Lvl N [Name]", or no "Lvl N" for a unique. (prefix includes its trailing space.)
-function allyDisplayName(monster, bonded, isUnique)
-  local prefix = bonded and "Bonded " or "Tamed "
-  if isUnique then return prefix .. monster.name end
-  return prefix .. "Lvl " .. monster.level .. " " .. monster.name
+-- An ally's display name in the scroll-name convention (see tameDisplayName).
+function allyDisplayName(monster, bonded, isUnique, nickname)
+  return tameDisplayName(bonded, monster.level, monster.name, isUnique, nickname)
 end
 
 events.OnGetMonsterDisplayName.add(function(monster)
@@ -4547,7 +4609,8 @@ events.OnGetMonsterDisplayName.add(function(monster)
   if entry ~= nil then
     -- Our own ally/minion; unique-ness derives from the seed (the live monster reads back non-unique).
     if entry.isMinion then return monster.name .. " Minion" end
-    return allyDisplayName(monster, isBonded(entry.seed, monster.level), diablo or seedGetUniqueType(entry.seed) >= 0)
+    return allyDisplayName(monster, isBonded(entry.seed, monster.level), diablo or seedGetUniqueType(entry.seed) >= 0,
+      scrollNickname[entry.seed])
   end
   -- Another Hunter's ally/minion (any hostility); nil until its broadcast record arrives.
   if isOtherHuntersAlly(monster) then
@@ -4555,7 +4618,7 @@ events.OnGetMonsterDisplayName.add(function(monster)
     if rec == nil then return nil end
     if rec.parentId ~= nil then return monster.name .. " Minion" end
     local bonded = rec.profile ~= nil and rec.profile.bonded
-    return allyDisplayName(monster, bonded, diablo or (rec.uniqueIdx or -1) >= 0)
+    return allyDisplayName(monster, bonded, diablo or (rec.uniqueIdx or -1) >= 0, rec.profile and rec.profile.nickname)
   end
   return nil
 end)
@@ -4635,7 +4698,7 @@ end)
 -- Re-key an acquired Tame Scroll (traded, or withdrawn from the Tame Tome) into this hero's seed space, rebuilt from its blob.
 function rekeyAcquiredScroll(p, invItem, blob)
   local oldSeed = invItem.seed
-  local kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName = decodeBlob(blob)
+  local kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName, nickname = decodeBlob(blob)
   local immVal = IMMUNITY_BY_INDEX[immIdx]
 
   -- Fresh seed in our own counter space, preserving the scroll's type / unique identity.
@@ -4652,6 +4715,7 @@ function rekeyAcquiredScroll(p, invItem, blob)
   if origin ~= nil then scrollOrigin[newSeed] = origin end
   if gamemode == 1 then scrollGamemode[newSeed] = 1 end          -- carry the tamed-in gamemode (Diablo = default 0)
   if areaLvl > 0 then scrollAreaLevel[newSeed] = areaLvl end     -- carry the tamed-in area level
+  if nickname ~= nil and nickname ~= "" then scrollNickname[newSeed] = nickname end -- carry the nickname
   tameScrollData[newSeed] = nil                                  -- rebuilt from seed+dwBuff on cast
   invItem.modData = blobForSeed(newSeed)                         -- re-key the held blob to the fresh seed (a live-trade item arrived empty)
 
@@ -4663,6 +4727,7 @@ function rekeyAcquiredScroll(p, invItem, blob)
     scrollOrigin[oldSeed]    = nil
     scrollGamemode[oldSeed]  = nil
     scrollAreaLevel[oldSeed] = nil
+    scrollNickname[oldSeed]  = nil
     tameScrollData[oldSeed]  = nil
     receivedBlobs[oldSeed]   = nil
   end
@@ -4784,6 +4849,51 @@ towners.addDialogOption("gillian",
   end,
   openTameTome)
 
+-- Monster Nickname: Cain names the Tame Scroll selected in the speedbook (Hunters only, hidden otherwise).
+NICKNAME_LABEL = "Nickname Monster"
+
+-- Trimmed nickname if valid ("" clears it), or nil: up to NICKNAME_MAX_LEN letters, digits, spaces, ' or -.
+function sanitizeNickname(text)
+  text = text:match("^%s*(.-)%s*$")
+  if #text > NICKNAME_MAX_LEN or text:find("[^%w '%-]") then return nil end
+  return (text:gsub("%s+", " "))
+end
+
+-- Apply a nickname to a held scroll's seed: name, blob and peers (incl. a town follower showing it).
+function setScrollNickname(me, seed, text)
+  local nick = sanitizeNickname(text)
+  if nick == nil then
+    message("Nicknames: up to " .. NICKNAME_MAX_LEN .. " letters, numbers, spaces, ' or -")
+    return
+  end
+  scrollNickname[seed] = (nick ~= "") and nick or nil
+  me:iterateInventory(function(item)
+    if item:isScrollOf(TAME_ID) and item.seed == seed then
+      item.modData = blobForSeed(seed)
+      restampScrollPresentation(item)
+    end
+  end)
+  broadcastScrollData(seed)
+  local i = townFollowerIndex()
+  if i ~= nil and deployedAllies[i].seed == seed then broadcastCombatOverride(deployedAllies[i]) end
+end
+
+towners.addDialogOption("cain",
+  function()
+    local me = player.self()
+    return (me ~= nil and selectedTameScroll(me) ~= nil) and NICKNAME_LABEL or ""
+  end,
+  function()
+    local me = player.self()
+    if me == nil then return end
+    local seed = selectedTameScroll(me)
+    if seed == nil then return end
+    local species = scrollSpeciesName(seed) or "monster"
+    system.promptText("Nickname your " .. species .. " (blank clears it):", NICKNAME_MAX_LEN, function(text)
+      if text ~= nil then setScrollNickname(me, seed, text) end
+    end)
+  end)
+
 -- The Tome closed (stash window shut or switched): settle its withdrawals and end the session.
 events.GameTick.add(function()
   if tomeSnapshot == nil or stash.activeName() == TOME_STASH then return end
@@ -4825,11 +4935,18 @@ events.OnPrepareUniqueInfoBox.add(function(item)
     tier = "Bonded" -- a Bonded normal monster has no champion/boss tier of its own
   end
 
-  items.setCustomUniqueBox(prefix .. monsterName, {
+  local lines = {
     tier .. " (" .. diff .. ")",
     "Level: " .. level,
     "HP: " .. savedHp .. " / " .. maxHp,
     "Kills: " .. kills,
-  })
+  }
+  local title = prefix .. monsterName
+  local nick = scrollNicknameFor(item)
+  if nick ~= "" then -- nicknamed: the nickname takes the title, the species gets its own line
+    title = nick .. " " .. (bonded and "Bonded" or "Tamed")
+    table.insert(lines, 1, "Species: " .. monsterName)
+  end
+  items.setCustomUniqueBox(title, lines)
   return true
 end)

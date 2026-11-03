@@ -6,7 +6,39 @@ Active and resolved bugs. New open bugs go to the top (under High); fixed bugs m
 
 ## High
 
-*No open bugs.*
+### Rapid scroll casting minted "Hunter's Bow" Tame Scrolls — FIX BUILT 2026-11-03, needs recompile + playtest
+
+**Symptom (Hellfire, fastest speed, rapid right-click casting):** one Tame Scroll was replaced by a Tame
+Scroll named "Hunter's Bow" (the bow in the inventory). Casting it consumed a real Tame Scroll each time and
+produced another "Hunter's Bow" scroll, with no monster.
+
+**Root cause:** `lua_event.cpp` `OnSpellCast`/`OnSpellActionFrame` took the seed of whatever item sat at
+`spellFrom`, without checking it. A queued cast's slot goes stale once an earlier cast's `ConsumeScroll`
+compacts the inventory, so the slot held the bow. Lua got the bow's seed, found no Tame data, and its
+refund-by-copy path cloned the bow (name/buff/modData) as a Tame Scroll. The engine's `ConsumeScroll`
+validates the slot (`isScrollOf`/`isRuneOf`) and fell back to the first real Tame Scroll, which it consumed.
+`findScrollBySeed` also matched any item, so every later cast of the clone resolved to the bow again.
+
+**Fix:**
+- The dispatcher applies `ConsumeScroll`'s rule: the slot item counts only if it is a scroll or rune of the
+  cast spell, otherwise the first match (inventory, then belt). The reported seed is always the item the
+  engine consumes.
+- `player:findScrollBySeed` / `findScrollSlotBySeed` now match scrolls only.
+- Already-minted "Hunter's Bow" scrolls are junk; discard them.
+
+### Town follower stops spawning for every scroll until a dungeon trip — FIX BUILT 2026-11-03 (pending confirmation)
+
+**Symptom:** after a Pepin recovery visit, no Tame Scroll produced a town follower. Casting and retaming in the
+dungeon, then returning to town, restored it.
+
+**Probable cause:** `GameStart` did not reset `pendingFollower` / `lastFollowerAttempt`. They are stamped
+with `system.gameTick()`, which restarts each game. After a quit/rejoin, a leftover `pendingFollower`
+never times out (`now - tick` stays negative) and blocks every spawn. A leftover `lastFollowerAttempt`
+keeps the retry gate shut. `OnLevelExit` clears `pendingFollower`, which matches the dungeon-trip cure.
+`tomeSnapshot` had the same gap: a game ended with the Tome open would re-key held scrolls in the next game.
+
+**Fix:** all three are reset in `GameStart`. **Unconfirmed:** this needs a quit/rejoin between sessions. If the
+stall repeats without one, the cause is elsewhere; look at the DR→DF path (level owner refusing the follower).
 
 ---
 

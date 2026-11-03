@@ -7,6 +7,51 @@
 
 ---
 
+## Scroll-seed validation + follower session reset (BUILT 2026-11-03, awaiting compile + playtest)
+
+The two High bugs in `bugs.md` ("Hunter's Bow" scrolls; town follower stall). **Recompile:**
+`lua/lua_event.cpp`, `lua/modules/player.cpp`; copy `init.lua`. **Playtest:** at fastest speed, right-click
+several Tame Scrolls rapidly, with a non-scroll item in an earlier inventory slot. Each cast must spawn its
+own monster and consume exactly that scroll. Then quit, rejoin, and check the town follower appears straight
+away.
+
+---
+
+## Monster Nickname (roadmap §5) — engine text prompt BUILT + user-checked 2026-11-03; Lua BUILT, awaiting playtest
+
+**Lua (built, init.lua only — copy init.lua):** `scrollNickname[seed]` (saved trailing section, blob field 8,
+CO field 29 before the free-form `ohName`); Cain option via `selectedTameScroll`; one name formatter
+`tameDisplayName` for scroll creation/recall (`buildScrollParams`), restamp and pet names; `Species:` line in
+the floating box (always), the gold unique box and the regular scroll hover (nicknamed only). CO size: +≤17 B
+on the ~157 B nominal + ≤32 B ohName budget — still well under 255 B. Full mechanics: `comments.md`
+"Monster Nickname".
+
+**Playtest watch items:**
+1. Cain shows "Nickname Monster" only for a Hunter with a Tame Scroll selected; a non-Hunter / no selection sees
+   vanilla Cain.
+2. Name it "Doggo" → scroll reads `Doggo Lvl N Tamed/Bonded` in inventory, speedbook and the Hunters Tome; hover
+   shows `Species:`; a gold scroll's unique box titles `Doggo Bonded` with a `Species:` line.
+3. Invalid text (17+ chars, `|`, symbols) → message, name unchanged; blank → nickname cleared.
+4. Deploy it / town follower → pet name `Doggo Lvl N ...`; floating box `Species:` line; recall → scroll keeps
+   the nickname.
+5. Save/load, deposit in the Tome on hero A and withdraw on hero B, trade to another Hunter → nickname intact.
+6. MP: the other client sees the nickname on the pet (CO) and on a traded scroll.
+
+**Decisions (user, 2026-11-03):** Cain gets a "Nickname Monster" option for **Hunters only**, shown only when a
+Tame Scroll is selected in the speedbook (the follower's selection shortcut — no shop-style list); select it →
+type a nickname. Bottom infobox is full at 5 lines, so the species moves to the floating box as a
+`Species: Fire Drake` line. Name rules enforced in Lua (proposed ≤16 chars; letters, digits, space, `'`, `-`).
+Display + persistence are pure Lua (the nickname rides the scroll blob → trades / Tome / saves / MP).
+
+**Engine (built):** the only missing piece was text entry. New generic `system.promptText(prompt, maxLength,
+onFinish)` — `Source/control/control_text_prompt.*` (gold-drop box art + layout, centred, `TextInputState`),
+wired like the gold-withdraw dialog: `PressKey` (Enter/keys), text-input events, `PressEscKey`, draw in
+`scrollrt.cpp`; discarded on mod reload / Lua shutdown. Everything is gated on `IsTextPromptOpen()`, which is
+never true without a mod. **Compile check:** gold drop / gold withdraw / chat still work; then a Lua test
+prompt opens, types, Enter/Escape both return.
+
+---
+
 ## Town-following ally (roadmap §4) — engine "monsters in town" BUILT + user-checked (town unchanged) 2026-11-02; Lua BUILT, awaiting playtest
 
 **Lua (built):** follower = real spawned ally tracked in `deployedAllies` with `isTownFollower`; selected Tame

@@ -54,7 +54,8 @@ resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.m
 **Cosmetic (after):**
 4. ▶ **BUILT, awaiting playtest — Town-following cosmetic ally** — in `development_notes.md`; §4 below is the
    spec.
-5. **Monster Nickname** — §5.
+5. ▶ **BUILT, awaiting playtest — Monster Nickname** — in `development_notes.md`; §5 below is the original
+   spec (now: speedbook-selected scroll instead of a list).
 
 Ongoing: residual MP spot-checks in §Multiplayer Verification.
 

@@ -183,25 +183,27 @@ void OnSpellCast(const Player *player, int spellId, int spellType, const Monster
 	// distinguish between multiple scrolls of the same spell in inventory.
 	uint32_t scrollSeed = 0;
 	if (spellType == static_cast<int>(SpellType::Scroll) && player != nullptr) {
+		// Same rule as ConsumeScroll: the recorded slot counts only if it still holds a scroll/rune of this spell
+		// (a queued slot goes stale when an earlier cast compacts the inventory), else the first match.
 		const int8_t spellFrom = player->queuedSpell.spellFrom;
 		if (spellFrom >= INVITEM_INV_FIRST && spellFrom <= INVITEM_INV_LAST) {
 			const Item &item = player->InvList[spellFrom - INVITEM_INV_FIRST];
-			if (!item.isEmpty()) scrollSeed = item._iSeed;
+			if (!item.isEmpty() && (item.isScrollOf(static_cast<SpellID>(spellId)) || item.isRuneOf(static_cast<SpellID>(spellId)))) scrollSeed = item._iSeed;
 		} else if (spellFrom >= INVITEM_BELT_FIRST && spellFrom <= INVITEM_BELT_LAST) {
 			const Item &item = player->SpdList[spellFrom - INVITEM_BELT_FIRST];
-			if (!item.isEmpty()) scrollSeed = item._iSeed;
+			if (!item.isEmpty() && (item.isScrollOf(static_cast<SpellID>(spellId)) || item.isRuneOf(static_cast<SpellID>(spellId)))) scrollSeed = item._iSeed;
 		}
-		// spellFrom == 0 (cast via spell selection): find first matching scroll.
+		// spellFrom == 0 (cast via spell selection) or a stale slot: first match.
 		if (scrollSeed == 0) {
 			const auto spellIdEnum = static_cast<SpellID>(spellId);
 			for (int i = 0; i < player->_pNumInv && scrollSeed == 0; i++) {
 				const Item &item = player->InvList[i];
-				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+				if (!item.isEmpty() && (item.isScrollOf(spellIdEnum) || item.isRuneOf(spellIdEnum)))
 					scrollSeed = item._iSeed;
 			}
 			for (int i = 0; i < MaxBeltItems && scrollSeed == 0; i++) {
 				const Item &item = player->SpdList[i];
-				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+				if (!item.isEmpty() && (item.isScrollOf(spellIdEnum) || item.isRuneOf(spellIdEnum)))
 					scrollSeed = item._iSeed;
 			}
 		}
@@ -214,24 +216,25 @@ void OnSpellActionFrame(const Player *player, int spellId, int spellType, int ta
 	// Resolve scrollSeed from executedSpell (same logic as OnSpellCast but reads executedSpell).
 	uint32_t scrollSeed = 0;
 	if (spellType == static_cast<int>(SpellType::Scroll) && player != nullptr) {
+		// Same rule as ConsumeScroll (see OnSpellCast), so the seed reported is the scroll the engine consumes.
 		const int8_t spellFrom = player->executedSpell.spellFrom;
 		if (spellFrom >= INVITEM_INV_FIRST && spellFrom <= INVITEM_INV_LAST) {
 			const Item &item = player->InvList[spellFrom - INVITEM_INV_FIRST];
-			if (!item.isEmpty()) scrollSeed = item._iSeed;
+			if (!item.isEmpty() && (item.isScrollOf(static_cast<SpellID>(spellId)) || item.isRuneOf(static_cast<SpellID>(spellId)))) scrollSeed = item._iSeed;
 		} else if (spellFrom >= INVITEM_BELT_FIRST && spellFrom <= INVITEM_BELT_LAST) {
 			const Item &item = player->SpdList[spellFrom - INVITEM_BELT_FIRST];
-			if (!item.isEmpty()) scrollSeed = item._iSeed;
+			if (!item.isEmpty() && (item.isScrollOf(static_cast<SpellID>(spellId)) || item.isRuneOf(static_cast<SpellID>(spellId)))) scrollSeed = item._iSeed;
 		}
 		if (scrollSeed == 0) {
 			const auto spellIdEnum = static_cast<SpellID>(spellId);
 			for (int i = 0; i < player->_pNumInv && scrollSeed == 0; i++) {
 				const Item &item = player->InvList[i];
-				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+				if (!item.isEmpty() && (item.isScrollOf(spellIdEnum) || item.isRuneOf(spellIdEnum)))
 					scrollSeed = item._iSeed;
 			}
 			for (int i = 0; i < MaxBeltItems && scrollSeed == 0; i++) {
 				const Item &item = player->SpdList[i];
-				if (!item.isEmpty() && item.isScrollOf(spellIdEnum))
+				if (!item.isEmpty() && (item.isScrollOf(spellIdEnum) || item.isRuneOf(spellIdEnum)))
 					scrollSeed = item._iSeed;
 			}
 		}

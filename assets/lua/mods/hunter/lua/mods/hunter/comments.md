@@ -336,7 +336,7 @@ creation. Layout (`string.pack`, empty for a non-scroll item):
 `I2` kill count (clamped 65535); `B` Bonded immunity index (0 = none; see `IMMUNITY_BY_INDEX`); `B` Bonded TRN
 variant (0 = none); `B` tamed-in gamemode (0 = Diablo, 1 = Hellfire); `B` tamed-in area level (dungeon level
 at fresh tame; see `scrollAreaLevel`); `I4` Original-Trainer OHID; `s1` Original-Trainer name (length-prefixed,
-≤255). (Gamemode is mod-owned here — NOT dwBuff bit 0, which is the engine's live `CF_HELLFIRE` flag.) The
+≤255); `s1` Cain nickname (`""` = none; see `scrollNickname`). (Gamemode is mod-owned here — NOT dwBuff bit 0, which is the engine's live `CF_HELLFIRE` flag.) The
 blob is opaque to the engine and travels two ways: live by seed over the LuaNet "SD" message
 (`broadcastScrollData`) and at rest with a dropped floor item via the level delta (`items.setItemDeltaModData`),
 so a scroll picked up after its original dropper has left the game still carries everything. `blobForSeed`
@@ -786,7 +786,7 @@ Message types (`NET.*` tags), payload = `"<TAG>|<args...>"`:
 - **DR** `typeId|uniqueIdx|difficulty|x|y|seed|maxHp|savedHp` → a non-owner asks the level owner to spawn its
   ally (mirrors `CMD_REQUESTSPAWNGOLEM`).
 - **DF** `seed` → owner couldn't place it; requester refunds.
-- **CO** `id|maxHp|hp|minDmg|maxDmg|toHit|ac|resist|isMinion|bonded|bondedImm|baseMaxDmg|sharePctMille|magicCur|resFire|resLight|resMagic|trnVariant|nearBonded|baseMinDmg|baseToHit|baseAC|baseMaxHp|kills|gamemode|areaLevel|ohId|ohName`
+- **CO** `id|maxHp|hp|minDmg|maxDmg|toHit|ac|resist|isMinion|bonded|bondedImm|baseMaxDmg|sharePctMille|magicCur|resFire|resLight|resMagic|trnVariant|nearBonded|baseMinDmg|baseToHit|baseAC|baseMaxHp|kills|gamemode|areaLevel|ohId|nickname|ohName`
   → the ally's OWNER broadcasts its final combat values + caster profile to same-level clients. Receivers
   apply the combat values to the live monster (so hostile combat, melee damage, and HP-threshold AI all use
   the owner's buffed numbers, not the base re-roll) and cache the caster profile for spell-damage resolution +
@@ -871,6 +871,18 @@ still leaves a recoverable scroll (a clean recall/retame deletes this entry; onl
 If already Bonded (kills met in a prior session), restores its stored defensive bonus, rolling one if the seed
 has none yet.
 
+### Monster Nickname (`scrollNickname` / `tameDisplayName` / `setScrollNickname` / Cain option)
+Cain's "Nickname Monster" option appears only for a Hunter with a Tame Scroll selected in the speedbook
+(`selectedTameScroll`, shared with the town follower; never a gamemode-locked scroll). It opens the engine text
+prompt (`system.promptText`); the text is trimmed and validated in Lua (≤`NICKNAME_MAX_LEN` letters, digits,
+spaces, `'` or `-`; blank clears it). The nickname is keyed by seed in `scrollNickname`, saved as a trailing
+luamoddata section, carried in the scroll blob (so trades, the Hunters Tome and `rekeyAcquiredScroll` keep it)
+and sent to peers in the CO profile (`rec.profile.nickname`) for remote pets. Every name surface goes through
+`tameDisplayName`: `Doggo Lvl 23 Bonded` / `Doggo Bonded` when nicknamed, else the usual `Tamed Lvl 23 Fire
+Drake`. With the species gone from the name it shows elsewhere: the floating box always has a `Species:` line,
+the gold unique box adds one (title `Doggo Bonded`), and a regular scroll's hover gets it from
+`OnGetMiscItemDescription` (Hunters only).
+
 ### Town follower (`desiredFollowerScroll` / `setupTownFollower` / `spawnTownFollower` / `despawnTownFollower`)
 In town, the Tame Scroll selected in the speedbook (`readySpellType` 2 = Scroll, `readySpellId` = Tame, the exact
 scroll from `selectedScrollSeed`, else the first held Tame Scroll; never a gamemode-locked one) follows its
@@ -925,7 +937,7 @@ shared level. Allies are always on our current level (recalled on level exit), s
 entry is eligible; we also answer with the full identity blob of every Tame Scroll we're holding, so the
 newly-entered Hunter already has it cached if we trade one to them.
 
-**CO handler**: parses 28 fixed fields then a free-form ohName (kept intact even if it contains "|"). Applies
+**CO handler**: parses 29 fixed fields (the last is the nickname) then a free-form ohName (kept intact even if it contains "|"). Applies
 combat values to the live monster and rebuilds `rec.profile`. Mirrors the Bonded cosmetics on this peer: the
 permanent aura glow is state-driven (idempotent), so it's (re)applied whenever the ally is Bonded;
 `OnGetMonsterTRN` paints the recolour from `prof.trnVariant`. The one-shot promotion Flash burst fires only on
@@ -1536,9 +1548,9 @@ delta so this client can serve it to a late joiner even after the dropper leaves
 and may contain "|"/NUL — captured verbatim, not split. **CO**: the owner of a remote ally sent its final
 combat values + caster profile. Apply the values to the live monster (so our hostile combat / melee damage /
 HP-threshold AI use the buffed numbers) and cache the profile for spell-damage resolution. Only for a remote
-ally we track — never our own (we own the live values) — so guarded on `remoteAllies` membership. The 28 fixed
-leading fields (tag + numbers, never contain "|") are pulled positionally, then everything after the 28th "|"
-is taken as `ohName` (the 29th field) verbatim because a player name may contain "|".
+ally we track — never our own (we own the live values) — so guarded on `remoteAllies` membership. The 29 fixed
+leading fields (tag + numbers + the nickname, none of which can contain "|") are pulled positionally, then
+everything after the 29th "|" is taken as `ohName` (the 30th field) verbatim because a player name may contain "|".
 
 ### `reapOrphanedRemoteAllies`
 Despawn any observed remote ally whose owner has left the game. `player.get` returns nil for an inactive

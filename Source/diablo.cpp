@@ -26,6 +26,7 @@
 #include "automap.h"
 #include "capture.h"
 #include "control/control.hpp"
+#include "control/control_text_prompt.hpp"
 #include "cursor.h"
 #include "dead.h"
 #ifdef _DEBUG
@@ -564,6 +565,10 @@ void PressKey(SDL_Keycode vkey, uint16_t modState)
 		WithdrawGoldKeyPress(vkey);
 		return;
 	}
+	if (IsTextPromptOpen()) { // Lua mod support
+		TextPromptKeyPress(vkey);
+		return;
+	}
 
 	if (sgnTimeoutCurs != CURSOR_NONE) {
 		return;
@@ -778,6 +783,9 @@ void GameEventHandler(const SDL_Event &event, uint16_t modState)
 		return;
 	}
 	if (IsWithdrawGoldOpen && HandleGoldWithdrawTextInputEvent(event)) {
+		return;
+	}
+	if (IsTextPromptOpen() && HandleTextPromptTextInputEvent(event)) { // Lua mod support
 		return;
 	}
 
@@ -3043,6 +3051,11 @@ bool PressEscKey()
 
 	if (IsWithdrawGoldOpen) {
 		WithdrawGoldKeyPress(SDLK_ESCAPE);
+		rv = true;
+	}
+
+	if (IsTextPromptOpen()) { // Lua mod support
+		TextPromptKeyPress(SDLK_ESCAPE);
 		rv = true;
 	}
 
