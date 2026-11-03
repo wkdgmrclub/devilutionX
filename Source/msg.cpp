@@ -9,6 +9,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <format>
 #include <list>
 #include <memory>
 
@@ -19,7 +20,6 @@
 #endif
 
 #include <ankerl/unordered_dense.h>
-#include <fmt/format.h>
 
 #if !defined(UNPACKED_MPQS) || !defined(UNPACKED_SAVES) || !defined(NONET)
 #define USE_PKWARE
@@ -59,6 +59,7 @@
 #include "tmsg.h"
 #include "towners.h"
 #include "utils/endian_swap.hpp"
+#include "utils/format.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/str_cat.hpp"
@@ -87,7 +88,7 @@ namespace devilution {
 
 void EventFailedPacket(const char *playerName)
 {
-	const std::string message = fmt::format("Player '{}' sent an invalid packet.", playerName);
+	const std::string message = std::format("Player '{}' sent an invalid packet.", playerName);
 	EventPlrMsg(message);
 }
 
@@ -236,12 +237,14 @@ struct DSpawnedMonster {
 	int16_t golemSpellLevel;
 };
 
+constexpr int MaxDeltaItems = MAXITEMS * 2;
+
 // Lua mod support: upper bound on the optional per-item mod-data blob carried in the level delta.
 // Bounds the worst-case delta receive buffer; the blob is opaque to the engine.
 constexpr size_t MaxItemModDataBytes = 255;
 
 struct DLevel {
-	TCmdPItem item[MAXITEMS];
+	TCmdPItem item[MaxDeltaItems];
 	ankerl::unordered_dense::map<WorldTilePosition, DObjectStr> object;
 	ankerl::unordered_dense::map<size_t, DSpawnedMonster> spawnedMonsters;
 	DMonsterStr monster[AbsoluteMaxMonsters]; // Lua mod support: ceiling-sized; serialized count is GetMaxMonsters()
@@ -550,7 +553,7 @@ int WaitForTurns()
 
 std::byte *DeltaExportItem(std::byte *dst, const TCmdPItem *src)
 {
-	for (int i = 0; i < MAXITEMS; i++, src++) {
+	for (int i = 0; i < MaxDeltaItems; i++, src++) {
 		if (src->bCmd == CMD_INVALID) {
 			*dst++ = std::byte { 0xFF };
 		} else {
@@ -565,7 +568,7 @@ std::byte *DeltaExportItem(std::byte *dst, const TCmdPItem *src)
 const std::byte *DeltaImportItem(const std::byte *src, const std::byte *end, TCmdPItem *dst)
 {
 	size_t size = 0;
-	for (int i = 0; i < MAXITEMS; i++, dst++) {
+	for (int i = 0; i < MaxDeltaItems; i++, dst++) {
 		if (&src[size] >= end)
 			return nullptr;
 		if (src[size] == std::byte { 0xFF }) {
@@ -948,7 +951,7 @@ void DeltaLoadMonsters(const DLevel &deltaLevel)
 				ChangeLightXY(monster.lightId, position);
 		}
 
-		monster.hitPoints = Swap32LE(deltaMonster.hitPoints);
+		monster.hitPoints = Fixed26_6::fromRaw(Swap32LE(deltaMonster.hitPoints));
 		monster.whoHit = deltaMonster.mWhoHit;
 		if (deltaMonster.hitPoints != 0)
 			continue;
@@ -1112,7 +1115,7 @@ void DeltaLeaveSync(uint8_t bLevel)
 		DMonsterStr &delta = deltaLevel.monster[ma];
 		delta.position = monster.position.tile;
 		delta.menemy = encode_enemy(monster);
-		delta.hitPoints = monster.hitPoints;
+		delta.hitPoints = monster.hitPoints.raw();
 		delta.mactive = monster.activeForTicks;
 		delta.mWhoHit = monster.whoHit;
 	}
@@ -2005,7 +2008,7 @@ size_t OnResurrect(const TCmdParam1 &message, Player &caster)
 		return sizeof(message);
 	}
 
-	if (playerIdx >= Players.size())
+	if (playerIdx >= Players.size() || !caster.isOnActiveLevel())
 		return sizeof(message);
 
 	Player &target = Players[playerIdx];
@@ -2136,9 +2139,9 @@ size_t OnMonstDamage(const TCmdMonDamage &message, Player &player)
 				Monster &monster = Monsters[monsterIdx];
 				monster.tag(player);
 				if (monster.hitPoints > 0) {
-					monster.hitPoints -= Swap32LE(message.dwDam);
-					if ((monster.hitPoints >> 6) < 1)
-						monster.hitPoints = 1 << 6;
+					monster.hitPoints -= Fixed26_6::fromRaw(Swap32LE(message.dwDam));
+					if (monster.hitPoints.whole() < 1)
+						monster.hitPoints = Fixed26_6::fromInt(1);
 					delta_monster_hp(monster, player);
 				}
 			}
@@ -2173,7 +2176,7 @@ size_t OnPlayerDamage(const TCmdDamage &message, Player &player)
 	Player &target = Players[message.bPlr];
 	if (&target == MyPlayer && leveltype != DTYPE_TOWN && gbBufferMsgs != 1) {
 		if (player.isOnActiveLevel() && damage <= 192000 && !target.hasNoLife()) {
-			ApplyPlrDamage(message.damageType, target, 0, 0, static_cast<int>(damage), DeathReason::Player);
+			ApplyPlrDamage(message.damageType, target, Fixed26_6::fromRaw(static_cast<int>(damage)), 0, DeathReason::Player);
 		}
 	}
 
@@ -2396,7 +2399,7 @@ size_t OnPlayerJoinLevel(const TCmdLocParam2 &message, Player &player)
 		ResetPlayerGFX(player);
 		player.plractive = true;
 		gbActivePlayers++;
-		EventPlrMsg(fmt::format(fmt::runtime(_("Player '{:s}' (level {:d}) just joined the game")), player._pName, player.getCharacterLevel()));
+		EventPlrMsg(FormatRuntime(_("Player '{:s}' (level {:d}) just joined the game"), player._pName, player.getCharacterLevel()));
 	}
 
 	if (player.plractive && &player != MyPlayer) {
@@ -2972,8 +2975,8 @@ void delta_monster_hp(const Monster &monster, const Player &player)
 		return;
 
 	DMonsterStr *pD = &GetDeltaLevel(player).monster[monster.getId()];
-	if (SwapSigned32LE(pD->hitPoints) > monster.hitPoints)
-		pD->hitPoints = SwapSigned32LE(monster.hitPoints);
+	if (SwapSigned32LE(pD->hitPoints) > monster.hitPoints.raw())
+		pD->hitPoints = SwapSigned32LE(monster.hitPoints.raw());
 }
 
 // Lua mod support: erase a dynamically spawned monster (golem / raised / mod-spawned) from the level delta

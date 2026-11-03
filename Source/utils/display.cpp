@@ -106,6 +106,7 @@ void CalculatePreferredWindowSize(int &width, int &height)
 	SDL_DisplayID *displays = SDL_GetDisplays(&numDisplays);
 	if (numDisplays <= 0 || displays == nullptr) ErrSdl();
 	const SDL_DisplayMode *modePtr = SDL_GetDesktopDisplayMode(displays[0]);
+	SDL_free(displays);
 	if (modePtr == nullptr) ErrSdl();
 	mode = *modePtr;
 #else
@@ -283,6 +284,11 @@ void UpdateAvailableResolutions()
 				size.width = size.height * mode.w / mode.h;
 		}
 	}
+#endif
+
+#ifndef __3DS__
+	// Only display compatible resolutions.
+	std::erase_if(sizes, [](const Size &s) { return s.width < 640 || s.height < 480; });
 #endif
 
 	// Sort by width then by height
@@ -546,6 +552,9 @@ bool SpawnWindow(const char *lpWindowName)
 #endif
 #if SDL_VERSION_ATLEAST(2, 0, 12) && !defined(USE_SDL3)
 	SDL_SetHint(SDL_HINT_GAMECONTROLLER_USE_BUTTON_LABELS, "0");
+#endif
+#if defined(USE_SDL3) && defined(__DJGPP__)
+	SDL_SetHint(SDL_HINT_DOS_ALLOW_DIRECT_FRAMEBUFFER, "1");
 #endif
 
 	int initFlags = SDL_INIT_VIDEO | SDL_INIT_JOYSTICK;
@@ -819,7 +828,11 @@ void SetFullscreenMode()
 	// fullscreen mode so that the display mode only has to change once
 	if (*GetOptions().Graphics.fullscreen && !*GetOptions().Graphics.upscale) {
 		const Size windowSize = GetPreferredWindowSize();
+#if defined(DEVILUTIONX_DISPLAY_PIXELFORMAT)
+		const SDL_DisplayMode displayMode = GetNearestDisplayMode(windowSize, DEVILUTIONX_DISPLAY_PIXELFORMAT);
+#else
 		const SDL_DisplayMode displayMode = GetNearestDisplayMode(windowSize);
+#endif
 #ifdef USE_SDL3
 		if (!SDL_SetWindowFullscreenMode(ghMainWnd, &displayMode)) ErrSdl();
 #else
@@ -863,7 +876,11 @@ void ResizeWindow()
 	// For "true fullscreen" windows, the window resizes automatically based on the display mode
 	const bool trueFullscreen = *GetOptions().Graphics.fullscreen && !*GetOptions().Graphics.upscale;
 	if (trueFullscreen) {
+#if defined(DEVILUTIONX_DISPLAY_PIXELFORMAT)
+		const SDL_DisplayMode displayMode = GetNearestDisplayMode(windowSize, DEVILUTIONX_DISPLAY_PIXELFORMAT);
+#else
 		const SDL_DisplayMode displayMode = GetNearestDisplayMode(windowSize);
+#endif
 #ifdef USE_SDL3
 		if (!SDL_SetWindowFullscreenMode(ghMainWnd, &displayMode)) ErrSdl();
 #else

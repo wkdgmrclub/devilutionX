@@ -6,12 +6,14 @@
 #include "pfile.h"
 #include "lua/lua_event.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <expected>
+#include <optional>
 #include <string>
 #include <string_view>
 
 #include <ankerl/unordered_dense.h>
-#include <expected.hpp>
 
 #ifdef USE_SDL3
 #include <SDL3/SDL_iostream.h>
@@ -20,12 +22,14 @@
 #include <SDL.h>
 #endif
 
+#include "appfat.h"
 #include "codec.h"
 #include "engine/load_file.hpp"
 #include "engine/render/primitive_render.hpp"
 #include "game_mode.hpp"
 #include "loadsave.h"
 #include "menu.h"
+#include "mods/mod_identity.h"
 #include "mpq/mpq_common.hpp"
 #include "pack.h"
 #include "qol/stash.h"
@@ -66,29 +70,39 @@ namespace {
 /** List of character names for the character selection screen. */
 char hero_names[MAX_CHARACTERS][PlayerNameLength];
 
+// Effective save-file extension token (no leading dot). Defaults to "sv"; an active mod may
+// override the save namespace by declaring `saveExtension` in its manifest.
+std::string_view GetSaveExtension()
+{
+	const std::string_view modExtension = GetActiveModSaveExtension();
+	return modExtension.empty() ? std::string_view("sv") : modExtension;
+}
+
 std::string GetSavePath(uint32_t saveNum, std::string_view savePrefix = {})
 {
+	const std::string_view ext = GetSaveExtension();
 	return StrCat(paths::PrefPath(), savePrefix,
 	    gbIsSpawn
 	        ? (gbIsMultiplayer ? "share_" : "spawn_")
 	        : (gbIsMultiplayer ? "multi_" : "single_"),
 	    saveNum,
 #ifdef UNPACKED_SAVES
-	    gbIsHellfire ? "_hsv" DIRECTORY_SEPARATOR_STR : "_sv" DIRECTORY_SEPARATOR_STR
+	    "_", ext, DIRECTORY_SEPARATOR_STR
 #else
-	    gbIsHellfire ? ".hsv" : ".sv"
+	    ".", ext
 #endif
 	);
 }
 
 std::string GetStashSavePath()
 {
+	const std::string_view ext = GetSaveExtension();
 	return StrCat(paths::PrefPath(),
 	    gbIsSpawn ? "stash_spawn" : "stash",
 #ifdef UNPACKED_SAVES
-	    gbIsHellfire ? "_hsv" DIRECTORY_SEPARATOR_STR : "_sv" DIRECTORY_SEPARATOR_STR
+	    "_", ext, DIRECTORY_SEPARATOR_STR
 #else
-	    gbIsHellfire ? ".hsv" : ".sv"
+	    ".", ext
 #endif
 	);
 }
@@ -252,8 +266,9 @@ std::optional<SaveReader> CreateSaveReader(std::string &&path)
 		return std::nullopt;
 	return SaveReader(std::move(path));
 #else
-	std::int32_t error;
-	return MpqArchive::Open(path.c_str(), error);
+	std::expected<MpqArchive, std::string> opened = MpqArchive::Open(path.c_str());
+	if (!opened.has_value()) return std::nullopt;
+	return std::move(*opened);
 #endif
 }
 
@@ -692,7 +707,7 @@ bool pfile_ui_set_hero_infos(bool (*uiAddHeroInfo)(_uiheroinfo *))
 			if (ReadHero(*archive, &pkplr)) {
 				_uiheroinfo uihero;
 				uihero.saveNumber = i;
-				strcpy(hero_names[i], pkplr.pName);
+				CopyUtf8(hero_names[i], std::string_view(pkplr.pName, PlayerNameLength), sizeof(hero_names[i]));
 				const bool hasSaveGame = ArchiveContainsGame(*archive);
 				if (hasSaveGame)
 					pkplr.bIsHellfire = gbIsHellfireSaveGame ? 1 : 0;
@@ -800,7 +815,7 @@ void pfile_save_level()
 	SaveLevel(saveWriter);
 }
 
-tl::expected<void, std::string> pfile_convert_levels()
+std::expected<void, std::string> pfile_convert_levels()
 {
 	SaveWriter saveWriter = GetSaveWriter(gSaveNumber);
 	return ConvertLevels(saveWriter);

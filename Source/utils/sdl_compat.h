@@ -213,6 +213,7 @@ inline const SDL_GamepadDeviceEvent &SDLC_EventGamepadDevice(const SDL_Event &ev
 #define SDL_PIXELFORMAT_XRGB1555 SDL_PIXELFORMAT_RGB555
 #define SDL_PIXELFORMAT_XRGB8888 SDL_PIXELFORMAT_RGB888
 
+#define SDL_IOWhence int
 #define SDL_IO_SEEK_CUR RW_SEEK_CUR
 #define SDL_IO_SEEK_END RW_SEEK_END
 #define SDL_IO_SEEK_SET RW_SEEK_SET
@@ -236,7 +237,15 @@ inline const SDL_GamepadDeviceEvent &SDLC_EventGamepadDevice(const SDL_Event &ev
 
 #define SDLC_SURFACE_BITSPERPIXEL(surface) surface->format->BitsPerPixel
 
-inline bool SDLC_PushEvent(SDL_Event *event) { return SDL_PushEvent(event) == 1; }
+inline bool SDLC_PushEvent(SDL_Event *event)
+{
+#ifdef USE_SDL1
+	constexpr int EventSuccess = 0;
+#else
+	constexpr int EventSuccess = 1;
+#endif
+	return SDL_PushEvent(event) == EventSuccess;
+}
 
 inline
 #ifdef USE_SDL1

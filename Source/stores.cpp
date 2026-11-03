@@ -13,8 +13,6 @@
 #include <utility>
 #include <vector>
 
-#include <fmt/format.h>
-
 #include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
 #include "cursor.h"
@@ -30,10 +28,12 @@
 #include "multi.h"
 #include "options.h"
 #include "panels/info_box.hpp"
+#include "panels/quest_log.hpp"
 #include "qol/stash.h"
 #include "qol/visual_store.h"
 #include "tables/townerdat.hpp"
 #include "towners.h"
+#include "utils/format.hpp"
 #include "utils/format_int.hpp"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -370,7 +370,7 @@ void PrintStoreItem(const Item &item, int l, UiFlags flags, bool cursIndent = fa
 	if (item._iMiscId == IMISC_STAFF && item._iMaxCharges != 0) {
 		if (!productLine.empty())
 			productLine.append(_(",  "));
-		productLine.append(fmt::format(fmt::runtime(_("Charges: {:d}/{:d}")), item._iCharges, item._iMaxCharges));
+		productLine.append(FormatRuntime(_("Charges: {:d}/{:d}"), item._iCharges, item._iMaxCharges));
 	}
 	if (!productLine.empty()) {
 		AddSText(40, l, productLine, flags, false, -1, cursIndent);
@@ -380,11 +380,11 @@ void PrintStoreItem(const Item &item, int l, UiFlags flags, bool cursIndent = fa
 
 	if (item._itype != ItemType::Misc) {
 		if (item._iClass == ICLASS_WEAPON)
-			productLine = fmt::format(fmt::runtime(_("Damage: {:d}-{:d}  ")), item._iMinDam, item._iMaxDam);
+			productLine = FormatRuntime(_("Damage: {:d}-{:d}  "), item._iMinDam, item._iMaxDam);
 		else if (item._iClass == ICLASS_ARMOR)
-			productLine = fmt::format(fmt::runtime(_("Armor: {:d}  ")), item._iAC);
+			productLine = FormatRuntime(_("Armor: {:d}  "), item._iAC);
 		if (item._iMaxDur != DUR_INDESTRUCTIBLE && item._iMaxDur != 0)
-			productLine += fmt::format(fmt::runtime(_("Dur: {:d}/{:d}")), item._iDurability, item._iMaxDur);
+			productLine += FormatRuntime(_("Dur: {:d}/{:d}"), item._iDurability, item._iMaxDur);
 		else
 			productLine.append(_("Indestructible"));
 	}
@@ -398,11 +398,11 @@ void PrintStoreItem(const Item &item, int l, UiFlags flags, bool cursIndent = fa
 			productLine.append(_(",  "));
 		productLine.append(_("Required:"));
 		if (str != 0)
-			productLine.append(fmt::format(fmt::runtime(_(" {:d} Str")), str));
+			productLine.append(FormatRuntime(_(" {:d} Str"), str));
 		if (mag != 0)
-			productLine.append(fmt::format(fmt::runtime(_(" {:d} Mag")), mag));
+			productLine.append(FormatRuntime(_(" {:d} Mag"), mag));
 		if (dex != 0)
-			productLine.append(fmt::format(fmt::runtime(_(" {:d} Dex")), dex));
+			productLine.append(FormatRuntime(_(" {:d} Dex"), dex));
 	}
 	AddSText(40, l++, productLine, flags, false, -1, cursIndent);
 }
@@ -437,7 +437,7 @@ void StartSmith()
 	AddSText(0, 3, _("Blacksmith's shop"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 7, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 10, _("Talk to Griswold"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	if (*GetOptions().Gameplay.visualStoreUI) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		AddSText(0, 12, _("Trade / Repair"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
 		AddSText(0, 14, _("Leave the shop"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
 	} else {
@@ -694,7 +694,7 @@ void StartWitch()
 	AddSText(0, 2, _("Witch's shack"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 9, _("Would you like to:"), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSText(0, 12, _("Talk to Adria"), UiFlags::ColorBlue | UiFlags::AlignCenter, true);
-	if (*GetOptions().Gameplay.visualStoreUI) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		AddSText(0, 14, _("Buy / Sell"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
 		AddSText(0, 16, _("Recharge staves"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
 		AddSText(0, 18, _("Leave the shack"), UiFlags::ColorWhite | UiFlags::AlignCenter, true);
@@ -1207,10 +1207,10 @@ void StartTalk()
 
 	IsTextFullSize = false;
 	HasScrollbar = false;
-	AddSText(0, 2, fmt::format(fmt::runtime(_("Talk to {:s}")), _(TownerNames[TownerId])), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
+	AddSText(0, 2, FormatRuntime(_("Talk to {:s}"), _(TownerNames[TownerId])), UiFlags::ColorWhitegold | UiFlags::AlignCenter, false);
 	AddSLine(5);
 	if (gbIsSpawn) {
-		AddSText(0, 10, fmt::format(fmt::runtime(_("Talking to {:s}")), _(TownerNames[TownerId])), UiFlags::ColorWhite | UiFlags::AlignCenter, false);
+		AddSText(0, 10, FormatRuntime(_("Talking to {:s}"), _(TownerNames[TownerId])), UiFlags::ColorWhite | UiFlags::AlignCenter, false);
 		AddSText(0, 12, _("is not available"), UiFlags::ColorWhite | UiFlags::AlignCenter, false);
 		AddSText(0, 14, _("in the shareware"), UiFlags::ColorWhite | UiFlags::AlignCenter, false);
 		AddSText(0, 16, _("version"), UiFlags::ColorWhite | UiFlags::AlignCenter, false);
@@ -1284,7 +1284,7 @@ void StartDrunk()
 
 void SmithEnter()
 {
-	if (*GetOptions().Gameplay.visualStoreUI) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		switch (CurrentTextLine) {
 		case 10:
 			TownerId = TOWN_SMITH;
@@ -1530,7 +1530,7 @@ void SmithRepairEnter()
 
 void WitchEnter()
 {
-	if (*GetOptions().Gameplay.visualStoreUI) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 		switch (CurrentTextLine) {
 		case 12:
 			OldTextLine = 12;
@@ -1672,7 +1672,7 @@ void WitchRechargeEnter()
 {
 	if (CurrentTextLine == BackButtonLine()) {
 		StartStore(TalkID::Witch);
-		CurrentTextLine = *GetOptions().Gameplay.visualStoreUI ? 16 : 18;
+		CurrentTextLine = *GetOptions().Gameplay.storeUi == StoreUi::VisualGrid ? 16 : 18;
 		return;
 	}
 
@@ -1701,7 +1701,7 @@ void BoyEnter()
 			StartStore(TalkID::NoMoney);
 		} else {
 			TakePlrsMoney(50);
-			if (*GetOptions().Gameplay.visualStoreUI) {
+			if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 				ActiveStore = TalkID::None;
 				OpenVisualStore(VisualStoreVendor::Boy);
 			} else {
@@ -1883,7 +1883,7 @@ void HealerEnter()
 		StartStore(TalkID::Gossip);
 		break;
 	case 14:
-		if (*GetOptions().Gameplay.visualStoreUI) {
+		if (*GetOptions().Gameplay.storeUi == StoreUi::VisualGrid) {
 			ActiveStore = TalkID::None;
 			OpenVisualStore(VisualStoreVendor::Healer);
 		} else {
@@ -2182,7 +2182,7 @@ void SetupTownStores()
 
 void FreeStoreMem()
 {
-	if (*GetOptions().Gameplay.showItemGraphicsInStores) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::ListWithItemGraphics) {
 		FreeHalfSizeItemSprites();
 	}
 	ActiveStore = TalkID::None;
@@ -2214,7 +2214,7 @@ void PrintSString(const Surface &out, int margin, int line, std::string_view tex
 	constexpr int CursWidth = INV_SLOT_SIZE_PX * 2;
 	constexpr int HalfCursWidth = CursWidth / 2;
 
-	if (*GetOptions().Gameplay.showItemGraphicsInStores && cursId >= 0) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::ListWithItemGraphics && cursId >= 0) {
 		const Size size = GetInvItemSize(static_cast<int>(CURSOR_FIRSTITEM) + cursId);
 		const bool useHalfSize = size.width > INV_SLOT_SIZE_PX || size.height > INV_SLOT_SIZE_PX;
 		const bool useRed = HasAnyOf(flags, UiFlags::ColorRed);
@@ -2232,7 +2232,7 @@ void PrintSString(const Surface &out, int margin, int line, std::string_view tex
 		}
 	}
 
-	if (*GetOptions().Gameplay.showItemGraphicsInStores && cursIndent) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::ListWithItemGraphics && cursIndent) {
 		const Rectangle textRect { { rect.position.x + HalfCursWidth + 8, rect.position.y }, { rect.size.width - HalfCursWidth + 8, rect.size.height } };
 		DrawString(out, text, textRect, { .flags = flags });
 	} else {
@@ -2286,7 +2286,7 @@ void ClearSText(int s, int e)
 
 void StartStore(TalkID s)
 {
-	if (*GetOptions().Gameplay.showItemGraphicsInStores) {
+	if (*GetOptions().Gameplay.storeUi == StoreUi::ListWithItemGraphics) {
 		CreateHalfSizeItemSprites();
 	}
 	SpellbookFlag = false;
@@ -2471,7 +2471,7 @@ void DrawSText(const Surface &out)
 	}
 
 	if (RenderGold) {
-		PrintSString(out, 28, 1, fmt::format(fmt::runtime(_("Your gold: {:s}")), FormatInteger(TotalPlayerGold())).c_str(), UiFlags::ColorWhitegold | UiFlags::AlignRight);
+		PrintSString(out, 28, 1, FormatRuntime(_("Your gold: {:s}"), FormatInteger(TotalPlayerGold())).c_str(), UiFlags::ColorWhitegold | UiFlags::AlignRight);
 	}
 
 	if (HasScrollbar)
@@ -2529,7 +2529,7 @@ void StoreESC()
 		break;
 	case TalkID::WitchRecharge:
 		StartStore(TalkID::Witch);
-		CurrentTextLine = *GetOptions().Gameplay.visualStoreUI ? 16 : 18;
+		CurrentTextLine = *GetOptions().Gameplay.storeUi == StoreUi::VisualGrid ? 16 : 18;
 		break;
 	case TalkID::HealerBuy:
 		StartStore(TalkID::Healer);

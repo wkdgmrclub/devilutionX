@@ -217,11 +217,10 @@ local events = {
   OnGetPlayerDamageMod = CreateQueryEvent(),
   __doc_OnGetPlayerDamageMod = "Query: return integer to override _pDamageMod. Args: player, strMod, strDexMod, totalVit, isBow, isShield, isStaff, isUnarmed. Return nil to keep default.",
 
-  ---Query event fired from GetManaAmount for classes that don't match the named-class
-  ---mana cost reduction checks (Sorcerer 50%, Rogue/Monk/Bard 25%).
-  ---Return an integer to replace the mana cost. Return nil to pay full cost.
+  ---Query event fired from GetManaAmount with the whole-point mana cost, before the class
+  ---manaCost multiplier is applied. Return an integer to replace it. Return nil to keep it.
   OnGetManaCost = CreateQueryEvent(),
-  __doc_OnGetManaCost = "Query: return integer to override spell mana cost. Fires only for classes without a hardcoded mana cost reduction. Return nil for full cost.",
+  __doc_OnGetManaCost = "Query: return integer to override the spell mana cost (whole points, before the class manaCost multiplier). Args: player, baseCost. Return nil to keep.",
 
   ---Query event fired at the CriticalStrike class-flag check in DealDamage and P2PGetDamageDealt.
   ---Return true to grant critical strike ability (50% chance per level to 2x damage).
@@ -284,18 +283,6 @@ local events = {
   ---Return an integer to replace the block bonus. Return nil to keep baseBonusFromTsv unchanged.
   OnGetBlockChanceBonus = CreateQueryEvent(),
   __doc_OnGetBlockChanceBonus = "Query: return integer to replace the block chance bonus (replaces TSV blockBonus). Fires on every block-chance calculation. Args: player, baseBonusFromTsv. Return nil to keep.",
-
-  ---Query event fired from RestorePartialLife for classes that are not Warrior/Barbarian/Rogue/Monk/Bard.
-  ---l is the base partial heal amount (before class multiplier). Return an integer to replace l.
-  ---Return nil to heal the base amount (no multiplier).
-  OnGetPotionHealAmount = CreateQueryEvent(),
-  __doc_OnGetPotionHealAmount = "Query: return integer to override partial potion heal amount. Fires for classes without a hardcoded heal multiplier. Return nil for 1x base amount.",
-
-  ---Query event fired from RestorePartialMana for classes that are not Sorcerer/Rogue/Monk/Bard.
-  ---l is the base partial mana amount (before class multiplier). Return an integer to replace l.
-  ---Return nil to restore the base amount (no multiplier).
-  OnGetPotionManaAmount = CreateQueryEvent(),
-  __doc_OnGetPotionManaAmount = "Query: return integer to override partial potion mana amount. Fires for classes without a hardcoded mana multiplier. Return nil for 1x base amount.",
 
   ---Query event fired in CalculateArmorPierce when a melee hit lands.
   ---Return true to grant Barbarian-style armor pierce (subtracts monsterArmor/8 from effective armor).

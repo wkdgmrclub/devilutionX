@@ -126,13 +126,15 @@ protected:
 	void SetUp() override
 	{
 		UITest::SetUp();
+		if (IsSkipped())
+			return;
 
 		// Seed the RNG for deterministic item generation.
 		SetRndSeed(42);
 
-		// Make sure visualStoreUI is off (the base fixture does this too,
+		// Make sure visual store is off (the base fixture does this too,
 		// but be explicit).
-		GetOptions().Gameplay.visualStoreUI.SetValue(false);
+		GetOptions().Gameplay.storeUi.SetValue(StoreUi::Text);
 	}
 
 	/**

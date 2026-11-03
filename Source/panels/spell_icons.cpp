@@ -149,7 +149,7 @@ void LuaClearDynamicSpellIcons()
 	LuaDynamicSpellIconFrames.clear();
 }
 
-tl::expected<void, std::string> LoadLargeSpellIcons()
+std::expected<void, std::string> LoadLargeSpellIcons()
 {
 #ifdef UNPACKED_MPQS
 	LargeSpellIcons = LoadOptionalClx("data\\spelicon_fg.clx");
@@ -176,7 +176,7 @@ void FreeLargeSpellIcons()
 	LargeSpellIcons = std::nullopt;
 }
 
-tl::expected<void, std::string> LoadSmallSpellIcons()
+std::expected<void, std::string> LoadSmallSpellIcons()
 {
 #ifdef UNPACKED_MPQS
 	ASSIGN_OR_RETURN(SmallSpellIcons, LoadClxWithStatus("data\\spelli2_fg.clx"));

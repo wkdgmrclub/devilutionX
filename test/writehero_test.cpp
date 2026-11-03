@@ -287,11 +287,11 @@ void AssertPlayer(Player &player)
 	ASSERT_EQ(player._pStatPts, 0);
 	ASSERT_EQ(player._pExperience, 1583495809);
 	ASSERT_EQ(player._pGold, 0);
-	ASSERT_EQ(player._pMaxHPBase, 12864);
-	ASSERT_EQ(player._pHPBase, 12864);
+	ASSERT_EQ(player._pMaxHPBase.raw(), 12864);
+	ASSERT_EQ(player._pHPBase.raw(), 12864);
 	ASSERT_EQ(player.getBaseToBlock(), 20);
-	ASSERT_EQ(player._pMaxManaBase, 11104);
-	ASSERT_EQ(player._pManaBase, 11104);
+	ASSERT_EQ(player._pMaxManaBase.raw(), 11104);
+	ASSERT_EQ(player._pManaBase.raw(), 11104);
 	ASSERT_EQ(player._pMemSpells, 66309357295);
 	ASSERT_EQ(player._pNumInv, 2);
 	ASSERT_EQ(player.wReflections, 0);
@@ -324,10 +324,10 @@ void AssertPlayer(Player &player)
 	ASSERT_EQ(player._pBlockFlag, 0);
 	ASSERT_EQ(player._pLightRad, 11);
 	ASSERT_EQ(player._pDamageMod, 101);
-	ASSERT_EQ(player._pHitPoints, 16640);
-	ASSERT_EQ(player._pMaxHP, 16640);
-	ASSERT_EQ(player._pMana, 14624);
-	ASSERT_EQ(player._pMaxMana, 14624);
+	ASSERT_EQ(player._pHitPoints.raw(), 16640);
+	ASSERT_EQ(player._pMaxHP.raw(), 16640);
+	ASSERT_EQ(player._pMana.raw(), 14624);
+	ASSERT_EQ(player._pMaxMana.raw(), 14624);
 	ASSERT_EQ(player.getNextExperienceThreshold(), 1583495809);
 	ASSERT_EQ(player._pMagResist, 75);
 	ASSERT_EQ(player._pFireResist, 16);
@@ -418,7 +418,7 @@ TEST(Writehero, pfile_write_hero)
 	// only the binary representation differs.
 	// To regenerate: run this test, let it fail, and update the hash below.
 	EXPECT_EQ(picosha2::bytes_to_hex_string(s.begin(), s.end()),
-	    "b52885393aedc22c856c7c315975c9be89a034b64a2067e22d5387a51998a51b");
+	    "e206d9233785e12fa222fe1550489ec2de19eaba99d6b5fee173c91f55af494b");
 }
 
 } // namespace

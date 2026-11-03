@@ -19,8 +19,6 @@
 #endif
 #endif
 
-#include <fmt/format.h>
-
 #include <config.h>
 
 #include "DiabloUI/selstart.h"
@@ -69,6 +67,7 @@
 #include "levels/setmaps.h"
 #include "levels/themes.h"
 #include "levels/town.h"
+#include "levels/town_data.h"
 #include "levels/trigs.h"
 #include "lighting.h"
 #include "loadsave.h"
@@ -77,6 +76,7 @@
 #include "menu.h"
 #include "minitext.h"
 #include "missiles.h"
+#include "mods/mod_identity.h"
 #include "movie.h"
 #include "multi.h"
 #include "nthread.h"
@@ -85,6 +85,7 @@
 #include "panels/console.hpp"
 #include "panels/info_box.hpp"
 #include "panels/partypanel.hpp"
+#include "panels/quest_log.hpp"
 #include "panels/spell_book.hpp"
 #include "panels/spell_list.hpp"
 #include "pfile.h"
@@ -107,8 +108,10 @@
 #include "track.h"
 #include "utils/console.h"
 #include "utils/display.h"
+#include "utils/format.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/parse_int.hpp"
 #include "utils/paths.h"
 #include "utils/screen_reader.hpp"
@@ -133,8 +136,6 @@
 
 namespace devilution {
 
-uint32_t DungeonSeeds[NUMLEVELS];
-std::optional<uint32_t> LevelSeeds[NUMLEVELS];
 Point MousePosition;
 bool gbRunGameResult;
 bool ReturnToMainMenu;
@@ -905,6 +906,10 @@ void RunGameLoop(interface_mode uMsg)
 			}
 			DebugCmdsFromCommandLine.clear();
 		}
+#else
+		if (gbIsMultiplayer && IsAssetIntegrityViolated) {
+			app_fatal(_("Cannot play Multiplayer with overridden *.lua, *.tsv, or *.sol assets."));
+		}
 #endif
 
 		SDL_Event event;
@@ -940,6 +945,7 @@ void RunGameLoop(interface_mode uMsg)
 		}
 
 		ProcessGameMessagePackets();
+		this_sdl_thread::yield();
 		if (game_loop(gbGameLoopStartup))
 			diablo_color_cyc_logic();
 		gbGameLoopStartup = false;
@@ -1308,8 +1314,6 @@ void DiabloInit()
 
 	// Always available.
 	LoadSmallSelectionSpinner();
-
-	CheckArchivesUpToDate();
 }
 
 void DiabloSplash()
@@ -1358,12 +1362,12 @@ void DiabloDeinit()
 		SDL_Quit();
 }
 
-tl::expected<void, std::string> LoadLvlGFX()
+std::expected<void, std::string> LoadLvlGFX()
 {
 	assert(pDungeonCels == nullptr);
 	constexpr int SpecialCelWidth = 64;
 
-	const auto loadAll = [](const char *cel, const char *til, const char *special) -> tl::expected<void, std::string> {
+	const auto loadAll = [](const char *cel, const char *til, const char *special) -> std::expected<void, std::string> {
 		ASSIGN_OR_RETURN(pDungeonCels, LoadFileInMemWithStatus(cel));
 		ASSIGN_OR_RETURN(pMegaTiles, LoadFileInMemWithStatus<MegaTile>(til));
 		ASSIGN_OR_RETURN(pSpecialCels, LoadCelWithStatus(special, SpecialCelWidth));
@@ -1372,19 +1376,17 @@ tl::expected<void, std::string> LoadLvlGFX()
 
 	switch (leveltype) {
 	case DTYPE_TOWN: {
-		auto cel = LoadFileInMemWithStatus("nlevels\\towndata\\town.cel");
-		if (!cel.has_value()) {
-			ASSIGN_OR_RETURN(pDungeonCels, LoadFileInMemWithStatus("levels\\towndata\\town.cel"));
-		} else {
-			pDungeonCels = std::move(*cel);
-		}
-		auto til = LoadFileInMemWithStatus<MegaTile>("nlevels\\towndata\\town.til");
-		if (!til.has_value()) {
-			ASSIGN_OR_RETURN(pMegaTiles, LoadFileInMemWithStatus<MegaTile>("levels\\towndata\\town.til"));
-		} else {
-			pMegaTiles = std::move(*til);
-		}
-		ASSIGN_OR_RETURN(pSpecialCels, LoadCelWithStatus("levels\\towndata\\towns", SpecialCelWidth));
+		const TownAssets &active = GetActiveTownConfigForTileLoad().assets;
+		const TownAssets &tristram = GetTownRegistry().GetTown(TristramTownId).assets;
+		LogVerbose("LoadLvlGFX (town): cel {} | til {} | special {} | pal {}",
+		    active.dungeonCelPath, active.megaTilePath, active.specialCelsPath, active.palettePath);
+
+		ASSIGN_OR_RETURN(pDungeonCels, LoadTownAssetWithFallback(active.dungeonCelPath, tristram.dungeonCelPath.c_str(), TownAssets::RetailDungeonCel, [](const char *p) { return LoadFileInMemWithStatus(p); }));
+
+		ASSIGN_OR_RETURN(pMegaTiles, LoadTownAssetWithFallback(active.megaTilePath, tristram.megaTilePath.c_str(), TownAssets::RetailMegaTile, [](const char *p) { return LoadFileInMemWithStatus<MegaTile>(p); }));
+
+		ASSIGN_OR_RETURN(pSpecialCels, LoadTownAssetWithFallback(active.specialCelsPath, tristram.specialCelsPath.c_str(), nullptr, [](const char *p) { return LoadCelWithStatus(p, SpecialCelWidth); }));
+
 		return {};
 	}
 	case DTYPE_CATHEDRAL:
@@ -1418,11 +1420,11 @@ tl::expected<void, std::string> LoadLvlGFX()
 		    "nlevels\\l5data\\l5.til",
 		    "nlevels\\l5data\\l5s");
 	default:
-		return tl::make_unexpected("LoadLvlGFX");
+		return std::unexpected("LoadLvlGFX");
 	}
 }
 
-tl::expected<void, std::string> LoadAllGFX()
+std::expected<void, std::string> LoadAllGFX()
 {
 	IncProgress();
 #if !defined(USE_SDL1) && !defined(__vita__)
@@ -1586,17 +1588,17 @@ void TimeoutCursor(bool bTimeout)
 
 				DvlNetLatencies latencies = DvlNet_GetLatencies(i);
 
-				std::string ping = fmt::format(
-				    fmt::runtime(_(/* TRANSLATORS: {:s} means: Character Name */ "Player {:s} is timing out!")),
+				std::string ping = FormatRuntime(
+				    _(/* TRANSLATORS: {:s} means: Character Name */ "Player {:s} is timing out!"),
 				    Players[i].name());
 
-				StrAppend(ping, "\n  ", fmt::format(fmt::runtime(_(/* TRANSLATORS: Network connectivity statistics */ "Echo latency: {:d} ms")), latencies.echoLatency));
+				StrAppend(ping, "\n  ", FormatRuntime(_(/* TRANSLATORS: Network connectivity statistics */ "Echo latency: {:d} ms"), latencies.echoLatency));
 
 				if (latencies.providerLatency) {
 					if (latencies.isRelayed && *latencies.isRelayed) {
-						StrAppend(ping, "\n  ", fmt::format(fmt::runtime(_(/* TRANSLATORS: Network connectivity statistics */ "Provider latency: {:d} ms (Relayed)")), *latencies.providerLatency));
+						StrAppend(ping, "\n  ", FormatRuntime(_(/* TRANSLATORS: Network connectivity statistics */ "Provider latency: {:d} ms (Relayed)"), *latencies.providerLatency));
 					} else {
-						StrAppend(ping, "\n  ", fmt::format(fmt::runtime(_(/* TRANSLATORS: Network connectivity statistics */ "Provider latency: {:d} ms")), *latencies.providerLatency));
+						StrAppend(ping, "\n  ", FormatRuntime(_(/* TRANSLATORS: Network connectivity statistics */ "Provider latency: {:d} ms"), *latencies.providerLatency));
 					}
 				}
 				EventPlrMsg(ping);
@@ -1815,6 +1817,29 @@ void OptionLanguageCodeChanged()
 const auto OptionChangeHandlerLanguage = (GetOptions().Language.code.SetValueChangedCallback(OptionLanguageCodeChanged), true);
 
 } // namespace
+
+uint32_t GetGameId()
+{
+	uint32_t declared = 0;
+	bool hasDeclared = false;
+	bool hasUnrecognisedMod = false;
+	for (const ModIdentifier &mod : ActiveModIdentifiers) {
+		const std::string &programId = mod.manifest.programId;
+		const uint32_t candidate = programId.size() == 4 ? LoadBE32(programId.data()) : 0;
+		// A mod may not brand itself as DRTL/DSHR
+		if (candidate != 0 && candidate != GameIdDiabloFull && candidate != GameIdDiabloSpawn) {
+			declared = candidate; // last active mod that declares one wins
+			hasDeclared = true;
+		} else if (!mod.whitelisted) {
+			hasUnrecognisedMod = true;
+		}
+	}
+	if (hasDeclared)
+		return declared;
+	if (hasUnrecognisedMod)
+		return GameIdGenericMod;
+	return gbIsSpawn ? GameIdDiabloSpawn : GameIdDiabloFull;
+}
 
 void InitKeymapActions()
 {
@@ -2093,8 +2118,8 @@ void InitKeymapActions()
 	    N_("Displays game infos."),
 	    'V',
 	    [] {
-		    EventPlrMsg(fmt::format(
-		                    fmt::runtime(_(/* TRANSLATORS: {:s} means: Project Name, Game Version. */ "{:s} {:s}")),
+		    EventPlrMsg(FormatRuntime(
+		                    _(/* TRANSLATORS: {:s} means: Project Name, Game Version. */ "{:s} {:s}"),
 		                    PROJECT_NAME,
 		                    PROJECT_VERSION),
 		        UiFlags::ColorWhite);
@@ -2605,8 +2630,8 @@ void InitPadmapActions()
 	    N_("Displays game infos."),
 	    ControllerButton_NONE,
 	    [] {
-		    EventPlrMsg(fmt::format(
-		                    fmt::runtime(_(/* TRANSLATORS: {:s} means: Project Name, Game Version. */ "{:s} {:s}")),
+		    EventPlrMsg(FormatRuntime(
+		                    _(/* TRANSLATORS: {:s} means: Project Name, Game Version. */ "{:s} {:s}"),
 		                    PROJECT_NAME,
 		                    PROJECT_VERSION),
 		        UiFlags::ColorWhite);
@@ -2753,6 +2778,12 @@ int DiabloMain(int argc, char **argv)
 	LoadLanguageArchive();
 
 	ApplicationInit();
+
+	// Ensure the core archives are up to date before loading any assets from them,
+	// e.g. `lua\inspect.lua` is loaded during `LuaInitialize()` and would otherwise
+	// abort with a confusing "Asset not found" error on an out-of-date archive.
+	CheckArchivesUpToDate();
+
 	LuaInitialize();
 	if (!demo::IsRunning()) SaveOptions();
 
@@ -2824,6 +2855,7 @@ bool TryIconCurs()
 		else if (pcursstashitem != StashStruct::EmptyCell) {
 			Item &item = Stash.stashList[pcursstashitem];
 			item._iIdentified = true;
+			Stash.dirty = true;
 		}
 		NewCursor(CURSOR_HAND);
 		return true;
@@ -2838,6 +2870,7 @@ bool TryIconCurs()
 		} else if (pcursstashitem != StashStruct::EmptyCell) {
 			Item &item = Stash.stashList[pcursstashitem];
 			RepairItem(item, myPlayer.getCharacterLevel());
+			Stash.dirty = true;
 		}
 		NewCursor(CURSOR_HAND);
 		return true;
@@ -2849,6 +2882,7 @@ bool TryIconCurs()
 		else if (pcursstashitem != StashStruct::EmptyCell) {
 			Item &item = Stash.stashList[pcursstashitem];
 			RechargeItem(item, myPlayer);
+			Stash.dirty = true;
 		}
 		NewCursor(CURSOR_HAND);
 		return true;
@@ -2861,6 +2895,7 @@ bool TryIconCurs()
 		else if (pcursstashitem != StashStruct::EmptyCell) {
 			Item &item = Stash.stashList[pcursstashitem];
 			changeCursor = ApplyOilToItem(item, myPlayer);
+			Stash.dirty = true;
 		}
 		if (changeCursor)
 			NewCursor(CURSOR_HAND);
@@ -3114,7 +3149,7 @@ void LoadGameLevelStash()
 	gbIsHellfireSaveGame = isHellfireSaveGame;
 }
 
-tl::expected<void, std::string> LoadGameLevelDungeon(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
+std::expected<void, std::string> LoadGameLevelDungeon(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
 {
 	if (firstflag || lvldir == ENTRY_LOAD || !myPlayer._pLvlVisited[currlevel] || gbIsMultiplayer) {
 		HoldThemeRooms();
@@ -3210,7 +3245,7 @@ void LoadGameLevelSetVisited()
 	}
 }
 
-tl::expected<void, std::string> LoadGameLevelTown(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
+std::expected<void, std::string> LoadGameLevelTown(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
 {
 	for (int i = 0; i < MAXDUNX; i++) { // NOLINT(modernize-loop-convert)
 		for (int j = 0; j < MAXDUNY; j++) {
@@ -3239,9 +3274,9 @@ tl::expected<void, std::string> LoadGameLevelTown(bool firstflag, lvl_entry lvld
 	return {};
 }
 
-tl::expected<void, std::string> LoadGameLevelSetLevel(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
+std::expected<void, std::string> LoadGameLevelSetLevel(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
 {
-	LoadSetMap();
+	RETURN_IF_ERROR(LoadSetMap());
 	IncProgress();
 	RETURN_IF_ERROR(GetLevelMTypes());
 	IncProgress();
@@ -3291,7 +3326,7 @@ tl::expected<void, std::string> LoadGameLevelSetLevel(bool firstflag, lvl_entry 
 	return {};
 }
 
-tl::expected<void, std::string> LoadGameLevelStandardLevel(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
+std::expected<void, std::string> LoadGameLevelStandardLevel(bool firstflag, lvl_entry lvldir, const Player &myPlayer)
 {
 	CreateLevel(lvldir);
 
@@ -3340,9 +3375,9 @@ tl::expected<void, std::string> LoadGameLevelStandardLevel(bool firstflag, lvl_e
 	SetRndSeedForDungeonLevel();
 
 	if (leveltype == DTYPE_TOWN) {
-		LoadGameLevelTown(firstflag, lvldir, myPlayer);
+		RETURN_IF_ERROR(LoadGameLevelTown(firstflag, lvldir, myPlayer));
 	} else {
-		LoadGameLevelDungeon(firstflag, lvldir, myPlayer);
+		RETURN_IF_ERROR(LoadGameLevelDungeon(firstflag, lvldir, myPlayer));
 	}
 
 	PlayDungMsgs();
@@ -3374,7 +3409,7 @@ void LoadGameLevelCalculateCursor()
 	CheckCursMove();
 }
 
-tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
+std::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 {
 	const _music_id neededTrack = GetLevelMusic(leveltype);
 
@@ -3458,6 +3493,7 @@ tl::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir)
 
 	CompleteProgress();
 
+	MarkWalkabilityChanged();
 	LoadGameLevelCalculateCursor();
 	lua::OnLevelEnter(); // Lua mod support
 	return {};

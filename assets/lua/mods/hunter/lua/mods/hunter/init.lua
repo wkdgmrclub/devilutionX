@@ -1697,17 +1697,8 @@ events.OnShouldExcludeWirtItem.add(function(p, itemTypeName)
   return true
 end)
 
--- Partial potion heal: Hunter always gets 2x (same as Warrior/Barbarian).
-events.OnGetPotionHealAmount.add(function(p, l)
-  if not isMyPlayer(p) then return nil end
-  return l * 2
-end)
-
--- Partial potion mana: Hunter always gets 2x (same as Sorcerer in Hellfire).
-events.OnGetPotionManaAmount.add(function(p, l)
-  if not isMyPlayer(p) then return nil end
-  return l * 2
-end)
+-- Partial potion heal/mana: Hunter gets 2x of both (Warrior-life + Sorcerer-mana), set by
+-- itmRestoreLife / itmRestoreMana in txtdata/classes/hunter/attributes.tsv.
 
 -- Armor pierce in melee (Barbarian archetype).
 events.OnPlayerHasArmorPierce.add(function(p)

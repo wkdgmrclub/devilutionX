@@ -4,17 +4,19 @@
 #include <string>
 #include <vector>
 
-#include "lua/lua_event.hpp"
-
+#include "controls/control_mode.hpp"
 #include "engine/render/primitive_render.hpp"
 #include "inv.h"
 #include "levels/trigs.h"
+#include "lua/lua_event.hpp"
+#include "options.h"
 #include "panels/partypanel.hpp"
 #include "qol/stash.h"
 #include "qol/visual_store.h"
 #include "qol/xpbar.h"
 #include "towners.h"
 #include "utils/algorithm/container.hpp"
+#include "utils/format.hpp"
 #include "utils/format_int.hpp"
 #include "utils/log.hpp"
 #include "utils/screen_reader.hpp"
@@ -331,7 +333,7 @@ void CheckPanelInfo()
 					InfoString = _("Player attack");
 			}
 			if (PanBtnHotKey[i] != nullptr) {
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Hotkey: {:s}")), _(PanBtnHotKey[i])));
+				AddInfoBoxString(FormatRuntime(_("Hotkey: {:s}"), _(PanBtnHotKey[i])));
 			}
 			InfoColor = UiFlags::ColorWhite;
 			MainPanelFlag = true;
@@ -346,7 +348,12 @@ void CheckPanelInfo()
 		InfoString = _("Select current spell button");
 		InfoColor = UiFlags::ColorWhite;
 		MainPanelFlag = true;
-		AddInfoBoxString(_("Hotkey: 's'"));
+		std::string_view speedbookKeyName = ControlMode == ControlTypes::Gamepad
+		    ? GetOptions().Padmapper.InputNameForAction("DisplaySpells", true)
+		    : GetOptions().Keymapper.KeyNameForAction("DisplaySpells");
+		if (!speedbookKeyName.empty()) {
+			AddInfoBoxString(FormatRuntime(_("Hotkey: '{:s}'"), speedbookKeyName));
+		}
 		const Player &myPlayer = *MyPlayer;
 		const SpellID spellId = myPlayer._pRSpell;
 		if (IsValidSpell(spellId)) {
@@ -355,23 +362,23 @@ void CheckPanelInfo()
 			    &myPlayer, static_cast<int>(spellId), pgettext("spell", GetSpellData(spellId).sNameText));
 			switch (myPlayer._pRSplType) {
 			case SpellType::Skill:
-				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Skill")), spellDisplayName));
+				AddInfoBoxString(FormatRuntime(_("{:s} Skill"), spellDisplayName));
 				break;
 			case SpellType::Spell: {
-				AddInfoBoxString(fmt::format(fmt::runtime(_("{:s} Spell")), spellDisplayName));
+				AddInfoBoxString(FormatRuntime(_("{:s} Spell"), spellDisplayName));
 				const int spellLevel = myPlayer.GetSpellLevel(spellId);
-				AddInfoBoxString(spellLevel == 0 ? _("Spell Level 0 - Unusable") : fmt::format(fmt::runtime(_("Spell Level {:d}")), spellLevel));
+				AddInfoBoxString(spellLevel == 0 ? _("Spell Level 0 - Unusable") : FormatRuntime(_("Spell Level {:d}"), spellLevel));
 			} break;
 			case SpellType::Scroll: {
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Scroll of {:s}")), spellDisplayName));
+				AddInfoBoxString(FormatRuntime(_("Scroll of {:s}"), spellDisplayName));
 				const int scrollCount = c_count_if(InventoryAndBeltPlayerItemsRange { myPlayer }, [spellId](const Item &item) {
 					return item.isScrollOf(spellId);
 				});
-				AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount)), scrollCount));
+				AddInfoBoxString(FormatRuntime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount), scrollCount));
 			} break;
 			case SpellType::Charges:
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Staff of {:s}")), spellDisplayName));
-				AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Charge", "{:d} Charges", myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges)), myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges));
+				AddInfoBoxString(FormatRuntime(_("Staff of {:s}"), spellDisplayName));
+				AddInfoBoxString(FormatRuntime(ngettext("{:d} Charge", "{:d} Charges", myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges), myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges));
 				break;
 			case SpellType::Invalid:
 				break;
@@ -403,7 +410,7 @@ void DrawInfoBox(const Surface &out)
 	} else if (!myPlayer.HoldItem.isEmpty()) {
 		if (myPlayer.HoldItem._itype == ItemType::Gold) {
 			const int nGold = myPlayer.HoldItem._ivalue;
-			InfoString = fmt::format(fmt::runtime(ngettext("{:s} gold piece", "{:s} gold pieces", nGold)), FormatInteger(nGold));
+			InfoString = FormatRuntime(ngettext("{:s} gold piece", "{:s} gold pieces", nGold), FormatInteger(nGold));
 		} else if (!myPlayer.CanUseItem(myPlayer.HoldItem)) {
 			InfoString = _("Requirements not met");
 		} else {
@@ -439,8 +446,8 @@ void DrawInfoBox(const Surface &out)
 			InfoColor = UiFlags::ColorWhitegold;
 			const auto &target = *PlayerUnderCursor;
 			InfoString = std::string_view(target._pName);
-			AddInfoBoxString(fmt::format(fmt::runtime(_("{:s}, Level: {:d}")), target.getClassName(), target.getCharacterLevel()));
-			AddInfoBoxString(fmt::format(fmt::runtime(_("Hit Points {:d} of {:d}")), target._pHitPoints >> 6, target._pMaxHP >> 6));
+			AddInfoBoxString(FormatRuntime(_("{:s}, Level: {:d}"), target.getClassName(), target.getCharacterLevel()));
+			AddInfoBoxString(FormatRuntime(_("Hit Points {:d} of {:d}"), target._pHitPoints.whole(), target._pMaxHP.whole()));
 		}
 		if (PortraitIdUnderCursor != -1) {
 			InfoColor = UiFlags::ColorWhitegold;

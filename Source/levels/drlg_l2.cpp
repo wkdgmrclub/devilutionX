@@ -8,18 +8,23 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <expected>
 #include <list>
 #include <optional>
 
-#include "diablo.h"
+#include "engine/displacement.hpp"
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
 #include "engine/size.hpp"
+#include "engine/world_tile.hpp"
+#include "levels/drlg_quests.hpp"
+#include "levels/dun_tile_data.hpp"
 #include "levels/gendung.h"
-#include "levels/setmaps.h"
-#include "player.h"
-#include "quests.h"
+#include "levels/gendung_defs.hpp"
+#include "objects.h"
+#include "tables/questdat.hpp"
 #include "utils/is_of.hpp"
+#include "utils/status_macros.hpp"
 
 namespace devilution {
 
@@ -2841,13 +2846,14 @@ void LoadPreL2Dungeon(const char *path)
 	memcpy(pdungeon, dungeon, sizeof(pdungeon));
 }
 
-void LoadL2Dungeon(const char *path, Point spawn)
+std::expected<void, std::string> LoadL2Dungeon(const char *path, Point spawn)
 {
-	LoadDungeonBase(path, spawn, 3, 12);
+	RETURN_IF_ERROR(LoadDungeonBase(path, spawn, 3, 12));
 
 	Pass3();
 
 	AddL2Objs(0, 0, MAXDUNX, MAXDUNY);
+	return {};
 }
 
 } // namespace devilution

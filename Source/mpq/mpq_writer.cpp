@@ -1,6 +1,8 @@
 #include "mpq/mpq_writer.hpp"
 
+#include <cerrno>
 #include <cstring>
+#include <string>
 #include <utility>
 
 #include <mpqfs/mpqfs.h>
@@ -8,8 +10,24 @@
 #include "mpq/mpq_common.hpp"
 #include "utils/file_util.h"
 #include "utils/log.hpp"
+#include "utils/str_cat.hpp"
 
 namespace devilution {
+
+namespace {
+
+// mpqfs_error_message() only describes the general category of failure; for
+// I/O errors the specific OS error is only available via errno immediately
+// after the failing call, so it's folded in here for diagnostics.
+std::string FormatMpqfsError(mpqfs_error_code code)
+{
+	if (code == MPQFS_ERR_IO) {
+		return StrCat(mpqfs_error_message(code), ": ", std::strerror(errno));
+	}
+	return mpqfs_error_message(code);
+}
+
+} // namespace
 
 MpqWriter::MpqWriter(const char *path, bool carryForward)
     : path_(path)
@@ -26,18 +44,25 @@ MpqWriter::MpqWriter(const char *path, bool carryForward)
 	std::string tmpPath;
 	mpqfs_archive_t *oldArchive = nullptr;
 	if (carryForward && FileExists(path)) {
-		tmpPath = std::string(path) + ".tmp";
+		// Replace the extension with .tmp rather than appending it to stay 8.3 compliant.
+		tmpPath = std::string(path);
+		const size_t sep = tmpPath.find_last_of("/\\");
+		const size_t dot = tmpPath.find_last_of('.');
+		if (dot != std::string::npos && (sep == std::string::npos || dot > sep)) {
+			tmpPath.resize(dot);
+		}
+		tmpPath += ".tmp";
 		// Remove any stale temp file, then rename old → tmp.
 		::devilution::RemoveFile(tmpPath.c_str());
 		::devilution::RenameFile(path, tmpPath.c_str());
-		oldArchive = mpqfs_open(tmpPath.c_str());
 		// If it fails to open (e.g. corrupt), we proceed without
 		// carry-forward — the file will be recreated from scratch.
+		(void)mpqfs_open(tmpPath.c_str(), &oldArchive);
 	}
 
-	writer_ = mpqfs_writer_create(path, MpqWriterHashTableSize);
-	if (writer_ == nullptr) {
-		LogError("Failed to create MPQ archive: {}", mpqfs_last_error());
+	const mpqfs_error_code code = mpqfs_writer_create(path, MpqWriterHashTableSize, &writer_);
+	if (code != MPQFS_OK) {
+		LogError("Failed to write MPQ archive to {}: {}", path, FormatMpqfsError(code));
 		if (oldArchive != nullptr)
 			mpqfs_close(oldArchive);
 		if (!tmpPath.empty())
@@ -46,8 +71,9 @@ MpqWriter::MpqWriter(const char *path, bool carryForward)
 	}
 
 	if (oldArchive != nullptr) {
-		if (!mpqfs_writer_carry_forward_all(writer_, oldArchive)) {
-			LogError("Failed to carry forward files from existing archive: {}", mpqfs_last_error());
+		const mpqfs_error_code carryForwardCode = mpqfs_writer_carry_forward_all(writer_, oldArchive);
+		if (carryForwardCode != MPQFS_OK) {
+			LogError("Failed to carry forward files from existing archive {}: {}", path, FormatMpqfsError(carryForwardCode));
 		}
 		mpqfs_close(oldArchive);
 	}
@@ -82,8 +108,9 @@ MpqWriter::~MpqWriter()
 
 	LogVerbose("Closing {}", path_);
 
-	if (!mpqfs_writer_close(writer_)) {
-		LogError("Failed to close MPQ archive: {}", mpqfs_last_error());
+	const mpqfs_error_code code = mpqfs_writer_close(writer_);
+	if (code != MPQFS_OK) {
+		LogError("Failed to close MPQ archive {}: {}", path_, FormatMpqfsError(code));
 	}
 }
 
@@ -112,7 +139,8 @@ void MpqWriter::RemoveHashEntry(std::string_view filename)
 	std::memcpy(buf, filename.data(), filename.size());
 	buf[filename.size()] = '\0';
 
-	mpqfs_writer_remove_file(writer_, buf);
+	// Not found (or already removed) is not an error condition here.
+	(void)mpqfs_writer_remove_file(writer_, buf);
 }
 
 void MpqWriter::RemoveHashEntries(bool (*fnGetName)(uint8_t, char *))
@@ -136,10 +164,11 @@ bool MpqWriter::WriteFile(std::string_view filename, const std::byte *data, size
 
 	// Remove any previous entry with this name so that
 	// only the latest write is included in the archive.
-	mpqfs_writer_remove_file(writer_, buf);
+	(void)mpqfs_writer_remove_file(writer_, buf);
 
-	if (!mpqfs_writer_add_file(writer_, buf, data, size)) {
-		LogError("Failed to write file '{}' to MPQ: {}", filename, mpqfs_last_error());
+	const mpqfs_error_code code = mpqfs_writer_add_file(writer_, buf, data, size);
+	if (code != MPQFS_OK) {
+		LogError("Failed to write file '{}' to MPQ {}: {}", filename, path_, FormatMpqfsError(code));
 		return false;
 	}
 	return true;
@@ -159,7 +188,7 @@ void MpqWriter::RenameFile(std::string_view name, std::string_view newName)
 	std::memcpy(newBuf, newName.data(), newName.size());
 	newBuf[newName.size()] = '\0';
 
-	mpqfs_writer_rename_file(writer_, oldBuf, newBuf);
+	(void)mpqfs_writer_rename_file(writer_, oldBuf, newBuf);
 }
 
 } // namespace devilution

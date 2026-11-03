@@ -6,7 +6,6 @@
 #include <string>
 #include <string_view>
 
-#include <fmt/format.h>
 #include <sol/sol.hpp>
 
 #include "crawl.hpp"
@@ -142,7 +141,7 @@ void RemoveMonsterFromLevel(Monster &monster, bool markKilled)
 	// Zero hit points so an in-flight position sync (SyncMonster, keyed by slot index) skips this slot
 	// instead of re-occupying it after removal. delta_kill_monster sets the delta's hit points to 0
 	// explicitly, so this does not change what is persisted.
-	monster.hitPoints = 0;
+	monster.hitPoints = Fixed26_6::fromInt(0);
 	if (monster.lightId != NO_LIGHT) {
 		AddUnLight(monster.lightId);
 		monster.lightId = NO_LIGHT;
@@ -219,12 +218,12 @@ void InitMonsterUserType(sol::state_view &lua)
 	LuaSetDocReadonlyProperty(monsterType, "health", "integer",
 	    "Monster's current hit points (readonly)",
 	    [](const Monster &monster) {
-		    return monster.hitPoints >> 6;
+		    return monster.hitPoints.whole();
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "maxHealth", "integer",
 	    "Monster's maximum hit points (readonly)",
 	    [](const Monster &monster) {
-		    return monster.maxHitPoints >> 6;
+		    return monster.maxHitPoints.whole();
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "isUnique", "boolean",
 	    "Whether this is a named unique monster (readonly)",
@@ -270,13 +269,13 @@ void InitMonsterUserType(sol::state_view &lua)
 	    "Set this monster's current hit points (pass display value; stored as fixed-point internally).",
 	    [](const Monster &constMonster, int hp) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    monster.hitPoints = hp << 6;
+		    monster.hitPoints = Fixed26_6::fromInt(hp);
 	    });
 	LuaSetDocFn(monsterType, "setMaxHitPoints", "(hp: integer)",
 	    "Set this monster's maximum hit points (pass display value; stored as fixed-point internally). Use to restore a persisted max HP instead of the value re-rolled from the type's range at spawn. // Lua mod support",
 	    [](const Monster &constMonster, int hp) {
 		    Monster &monster = const_cast<Monster &>(constMonster);
-		    monster.maxHitPoints = hp << 6;
+		    monster.maxHitPoints = Fixed26_6::fromInt(hp);
 	    });
 	LuaSetDocReadonlyProperty(monsterType, "minDamage", "integer",
 	    "Monster's current minimum melee damage (readonly). // Lua mod support",

@@ -9,16 +9,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
 #include <numeric>
 #include <string>
 
 #include <ankerl/unordered_dense.h>
-#include <expected.hpp>
 
 #include "automap.h"
 #include "codec.h"
 #include "control/control.hpp"
 #include "cursor.h"
+#include "cursor_defs.hpp"
 #include "dead.h"
 #include "doom.h"
 #include "engine/point.hpp"
@@ -26,6 +27,7 @@
 #include "game_mode.hpp"
 #include "inv.h"
 #include "levels/dun_tile.hpp"
+#include "levels/town_data.h"
 #include "lighting.h"
 #include "menu.h"
 #include "missiles.h"
@@ -302,6 +304,11 @@ struct LevelConversionData {
 	item._iFlags = static_cast<ItemSpecialEffect>(file.NextLE<uint32_t>());
 	item._iMiscId = static_cast<item_misc_id>(file.NextLE<int32_t>());
 	item._iSpell = static_cast<SpellID>(file.NextLE<int32_t>());
+
+	if (!IsValidSpell(item._iSpell)) {
+		item._iSpell = SpellID::Null;
+	}
+
 	item._iCharges = file.NextLE<int32_t>();
 	item._iMaxCharges = file.NextLE<int32_t>();
 	item._iDurability = file.NextLE<int32_t>();
@@ -316,8 +323,8 @@ struct LevelConversionData {
 	item._iPLFR = file.NextLE<int32_t>();
 	item._iPLLR = file.NextLE<int32_t>();
 	item._iPLMR = file.NextLE<int32_t>();
-	item._iPLMana = file.NextLE<int32_t>();
-	item._iPLHP = file.NextLE<int32_t>();
+	item._iPLMana = Fixed10_6::fromRaw(static_cast<int16_t>(file.NextLE<int32_t>()));
+	item._iPLHP = Fixed10_6::fromRaw(static_cast<int16_t>(file.NextLE<int32_t>()));
 	item._iPLDamMod = file.NextLE<int32_t>();
 	item._iPLGetHit = file.NextLE<int32_t>();
 	item._iPLLight = file.NextLE<int32_t>();
@@ -488,7 +495,7 @@ void LoadPlayer(LoadHelper &file, Player &player)
 
 	file.NextBytes(player._pName, PlayerNameLength);
 	TerminateUtf8(player._pName, PlayerNameLength);
-	player._pClass = static_cast<HeroClass>(file.NextLE<int8_t>());
+	player._pClass = static_cast<HeroClass>(std::clamp<uint8_t>(file.NextLE<uint8_t>(), 0, static_cast<uint8_t>(GetNumPlayerClasses() - 1)));
 	file.Skip(3); // Alignment
 	player._pStrength = file.NextLE<int32_t>();
 	player._pBaseStr = file.NextLE<int32_t>();
@@ -501,15 +508,15 @@ void LoadPlayer(LoadHelper &file, Player &player)
 	player._pStatPts = file.NextLE<int32_t>();
 	player._pDamageMod = file.NextLE<int32_t>();
 	file.Skip<int32_t>(); // Skip _pBaseToBlk - always a copy of PlayerData.blockBonus
-	player._pHPBase = file.NextLE<int32_t>();
-	player._pMaxHPBase = file.NextLE<int32_t>();
-	player._pHitPoints = file.NextLE<int32_t>();
-	player._pMaxHP = file.NextLE<int32_t>();
+	player._pHPBase = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pMaxHPBase = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pHitPoints = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pMaxHP = Fixed26_6::fromRaw(file.NextLE<int32_t>());
 	file.Skip<int32_t>(); // Skip _pHPPer - always derived from hp and maxHP.
-	player._pManaBase = file.NextLE<int32_t>();
-	player._pMaxManaBase = file.NextLE<int32_t>();
-	player._pMana = file.NextLE<int32_t>();
-	player._pMaxMana = file.NextLE<int32_t>();
+	player._pManaBase = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pMaxManaBase = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pMana = Fixed26_6::fromRaw(file.NextLE<int32_t>());
+	player._pMaxMana = Fixed26_6::fromRaw(file.NextLE<int32_t>());
 	file.Skip<int32_t>(); // Skip _pManaPer - always derived from mana and maxMana
 	player.setCharacterLevel(file.NextLE<uint8_t>());
 	file.Skip<uint8_t>(); // Skip _pMaxLevel - unused
@@ -702,8 +709,8 @@ bool gbSkipSync = false;
 	monster.position.temp.y = file->NextLENarrow<int32_t, WorldTileCoord>();
 	file->Skip<int32_t>(2); // skip offset2;
 	file->Skip(4);          // Skip actionFrame
-	monster.maxHitPoints = file->NextLE<int32_t>();
-	monster.hitPoints = file->NextLE<int32_t>();
+	monster.maxHitPoints = Fixed26_6::fromRaw(file->NextLE<int32_t>());
+	monster.hitPoints = Fixed26_6::fromRaw(file->NextLE<int32_t>());
 
 	monster.ai = static_cast<MonsterAIID>(file->NextLE<uint8_t>());
 	monster.intelligence = file->NextLE<uint8_t>();
@@ -1217,8 +1224,8 @@ void SaveItem(SaveHelper &file, const Item &item)
 	file.WriteLE<int32_t>(item._iPLFR);
 	file.WriteLE<int32_t>(item._iPLLR);
 	file.WriteLE<int32_t>(item._iPLMR);
-	file.WriteLE<int32_t>(item._iPLMana);
-	file.WriteLE<int32_t>(item._iPLHP);
+	file.WriteLE<int32_t>(item._iPLMana.raw());
+	file.WriteLE<int32_t>(item._iPLHP.raw());
 	file.WriteLE<int32_t>(item._iPLDamMod);
 	file.WriteLE<int32_t>(item._iPLGetHit);
 	file.WriteLE<int32_t>(item._iPLLight);
@@ -1358,15 +1365,15 @@ void SavePlayer(SaveHelper &file, const Player &player)
 	file.WriteLE<int32_t>(player._pDamageMod);
 
 	file.WriteLE<int32_t>(player.getBaseToBlock()); // set _pBaseToBlk for backwards compatibility
-	file.WriteLE<int32_t>(player._pHPBase);
-	file.WriteLE<int32_t>(player._pMaxHPBase);
-	file.WriteLE<int32_t>(player._pHitPoints);
-	file.WriteLE<int32_t>(player._pMaxHP);
+	file.WriteLE<int32_t>(player._pHPBase.raw());
+	file.WriteLE<int32_t>(player._pMaxHPBase.raw());
+	file.WriteLE<int32_t>(player._pHitPoints.raw());
+	file.WriteLE<int32_t>(player._pMaxHP.raw());
 	file.Skip<int32_t>(); // Skip _pHPPer
-	file.WriteLE<int32_t>(player._pManaBase);
-	file.WriteLE<int32_t>(player._pMaxManaBase);
-	file.WriteLE<int32_t>(player._pMana);
-	file.WriteLE<int32_t>(player._pMaxMana);
+	file.WriteLE<int32_t>(player._pManaBase.raw());
+	file.WriteLE<int32_t>(player._pMaxManaBase.raw());
+	file.WriteLE<int32_t>(player._pMana.raw());
+	file.WriteLE<int32_t>(player._pMaxMana.raw());
 	file.Skip<int32_t>(); // Skip _pManaPer
 	file.WriteLE<uint8_t>(player.getCharacterLevel());
 	file.Skip<uint8_t>(); // skip _pMaxLevel, this value is uninitialised in most cases in Diablo/Hellfire so there's no point setting it.
@@ -1551,8 +1558,8 @@ void SaveMonster(SaveHelper *file, Monster &monster, MonsterConversionData *mons
 	file->WriteLE<int32_t>(offset2.deltaX);
 	file->WriteLE<int32_t>(offset2.deltaY);
 	file->Skip<int32_t>(); // Skip _mVar8
-	file->WriteLE<int32_t>(monster.maxHitPoints);
-	file->WriteLE<int32_t>(monster.hitPoints);
+	file->WriteLE<int32_t>(monster.maxHitPoints.raw());
+	file->WriteLE<int32_t>(monster.hitPoints.raw());
 
 	file->WriteLE<uint8_t>(static_cast<int8_t>(monster.ai));
 	file->WriteLE<uint8_t>(monster.intelligence);
@@ -2005,7 +2012,7 @@ void SaveLevel(SaveWriter &saveWriter, LevelConversionData *levelConversionData)
 		myPlayer._pSLvlVisited[setlvlnum] = true;
 }
 
-tl::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionData)
+std::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionData)
 {
 	char szName[MaxMpqPathSize];
 	std::optional<SaveReader> archive = OpenSaveArchive(gSaveNumber);
@@ -2014,7 +2021,7 @@ tl::expected<void, std::string> LoadLevel(LevelConversionData *levelConversionDa
 		GetPermLevelNames(szName);
 	LoadHelper file(std::move(archive), szName);
 	if (!file.IsValid())
-		return tl::make_unexpected(std::string(_("Unable to open save file archive")));
+		return std::unexpected(std::string(_("Unable to open save file archive")));
 
 	if (leveltype != DTYPE_TOWN) {
 		for (int j = 0; j < MAXDUNY; j++) {
@@ -2126,7 +2133,7 @@ bool IsStashSizeValid(size_t stashSize, uint32_t pages, uint32_t itemCount)
 
 } // namespace
 
-tl::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter)
+std::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter)
 {
 	// Backup current level state
 	const bool tmpSetlevel = setlevel;
@@ -2473,17 +2480,22 @@ void RemoveEmptyInventory(Player &player)
 	}
 }
 
-tl::expected<void, std::string> LoadGame(bool firstflag)
+std::expected<void, std::string> LoadGame(bool firstflag)
 {
 	FreeGameMem();
 
+	// Ensure Tristram is always registered before any level asset loading.
+	// For new games this is done by InitLevels() before RunGameLoop, but the
+	// load-game path skips that block, so we must initialize here.
+	InitializeTristram();
+
 	LoadHelper file(OpenSaveArchive(gSaveNumber), "game");
 	if (!file.IsValid()) {
-		return tl::make_unexpected(std::string(_("Unable to open save file archive")));
+		return std::unexpected(std::string(_("Unable to open save file archive")));
 	}
 
 	if (!IsHeaderValid(file.NextLE<uint32_t>())) {
-		return tl::make_unexpected(std::string(_("Invalid save file")));
+		return std::unexpected(std::string(_("Invalid save file")));
 	}
 
 	if (gbIsHellfireSaveGame) {
@@ -2515,7 +2527,7 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	const int tmpNobjects = file.NextBE<int32_t>();
 
 	if (!gbIsHellfire && IsAnyOf(leveltype, DTYPE_NEST, DTYPE_CRYPT)) {
-		return tl::make_unexpected(std::string(_("Player is on a Hellfire only level")));
+		return std::unexpected(std::string(_("Player is on a Hellfire only level")));
 	}
 
 	for (uint8_t i = 0; i < giNumberOfLevels; i++) {
@@ -2656,6 +2668,7 @@ tl::expected<void, std::string> LoadGame(bool firstflag)
 	} else {
 		memset(dLight, 0, sizeof(dLight));
 	}
+	MarkWalkabilityChanged();
 
 	PremiumItemCount = file.NextBE<int32_t>();
 	PremiumItemLevel = file.NextBE<int32_t>();
@@ -2947,7 +2960,7 @@ void SaveLevel(SaveWriter &saveWriter)
 	SaveLevel(saveWriter, nullptr);
 }
 
-tl::expected<void, std::string> LoadLevel()
+std::expected<void, std::string> LoadLevel()
 {
 	return LoadLevel(nullptr);
 }

@@ -56,6 +56,7 @@
 #include "panels/charpanel.hpp"
 #include "panels/console.hpp"
 #include "panels/partypanel.hpp"
+#include "panels/quest_log.hpp"
 #include "panels/spell_list.hpp"
 #include "plrmsg.h"
 #include "qol/chatlog.h"
@@ -72,6 +73,7 @@
 #include "utils/is_of.hpp"
 #include "utils/log.hpp"
 #include "utils/sdl_compat.h"
+#include "utils/sdl_thread.h"
 #include "utils/str_cat.hpp"
 
 #ifndef USE_SDL1
@@ -555,6 +557,7 @@ static void DrawDungeon(const Surface & /*out*/, const Lightmap & /*lightmap*/, 
 void DrawCell(const Surface &out, const Lightmap lightmap, Point tilePosition, Point targetBufferPosition, int lightTableIndex)
 {
 	const uint16_t levelPieceId = dPiece[tilePosition.x][tilePosition.y];
+	if (levelPieceId >= MAXTILES) return;
 	const MICROS *pMap = &DPieceMicros[levelPieceId];
 
 	const uint8_t *tbl = LightTables[lightTableIndex].data();
@@ -694,6 +697,7 @@ void DrawFloorTile(const Surface &out, const Lightmap &lightmap, Point tilePosit
 #endif
 
 	const uint16_t levelPieceId = dPiece[tilePosition.x][tilePosition.y];
+	if (levelPieceId >= MAXTILES) return;
 	{
 		const LevelCelBlock levelCelBlock { DPieceMicros[levelPieceId].mt[0] };
 		if (levelCelBlock.hasValue()) {
@@ -1528,7 +1532,7 @@ void DoBlitScreen(Rectangle area)
  */
 void DrawMain(int dwHgt, bool drawDesc, bool drawHp, bool drawMana, bool drawSbar, bool drawBtn)
 {
-	if (!gbActive || RenderDirectlyToOutputSurface) {
+	if (!gbActive) {
 		return;
 	}
 
@@ -1881,6 +1885,7 @@ void DrawAndBlit()
 
 	nthread_UpdateProgressToNextGameTick();
 
+	this_sdl_thread::yield();
 	DrawView(out, ViewPosition);
 	if (drawCtrlPan) {
 		DrawMainPanel(out);
@@ -1904,15 +1909,15 @@ void DrawAndBlit()
 	}
 	DrawXPBar(out);
 	if (*GetOptions().Gameplay.showHealthValues)
-		DrawFlaskValues(out, { mainPanel.position.x + 134, mainPanel.position.y + 28 }, MyPlayer->_pHitPoints >> 6, MyPlayer->_pMaxHP >> 6);
+		DrawFlaskValues(out, { mainPanel.position.x + 134, mainPanel.position.y + 28 }, MyPlayer->_pHitPoints.whole(), MyPlayer->_pMaxHP.whole());
 	if (*GetOptions().Gameplay.showManaValues)
 		DrawFlaskValues(out, { mainPanel.position.x + mainPanel.size.width - 138, mainPanel.position.y + 28 },
-		    (HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) || MyPlayer->hasNoMana()) ? 0 : MyPlayer->_pMana >> 6,
-		    HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) ? 0 : MyPlayer->_pMaxMana >> 6);
+		    (HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) || MyPlayer->hasNoMana()) ? 0 : MyPlayer->_pMana.whole(),
+		    HasAnyOf(InspectPlayer->_pIFlags, ItemSpecialEffect::NoMana) ? 0 : MyPlayer->_pMaxMana.whole());
 	if (*GetOptions().Gameplay.floatingInfoBox)
 		DrawFloatingInfoBox(out);
 
-	if (*GetOptions().Gameplay.showMultiplayerPartyInfo && PartySidePanelOpen)
+	if ((*GetOptions().Gameplay.showMultiplayerPartyInfo != PartyPortraits::Disabled) && PartySidePanelOpen)
 		DrawPartyMemberInfoPanel(out);
 
 	DrawCursor(out);
@@ -1921,6 +1926,7 @@ void DrawAndBlit()
 
 	lua::GameDrawComplete();
 
+	this_sdl_thread::yield();
 	DrawMain(hgt, drawInfoBox, drawHealth, drawMana, drawBelt, drawControlButtons);
 
 #ifdef _DEBUG

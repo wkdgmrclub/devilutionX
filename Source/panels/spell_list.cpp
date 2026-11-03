@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <string_view>
 
-#include <fmt/format.h>
-
 #include "control/control.hpp"
 #include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
@@ -19,6 +17,7 @@
 #include "player.h"
 #include "spells.h"
 #include "utils/algorithm/container.hpp"
+#include "utils/format.hpp"
 #include "utils/language.h"
 #include "utils/str_cat.hpp"
 #include "utils/utf8.hpp"
@@ -171,7 +170,7 @@ void DrawSpellList(const Surface &out)
 
 		// Lua mod support: allow overriding the spell display name in the speedbook info box.
 		const std::string spellDisplayName = lua::OnGetSpeedbookSpellName(
-		    &myPlayer, static_cast<int>(spellId), spellDataItem.sNameText);
+		    &myPlayer, static_cast<int>(spellId), pgettext("spell", spellDataItem.sNameText));
 
 		uint8_t spellColor = PAL16_GRAY + 5;
 
@@ -179,21 +178,21 @@ void DrawSpellList(const Surface &out)
 		case SpellType::Skill:
 			spellColor = PAL16_YELLOW - 46;
 			PrintSBookSpellType(out, spellListItem.location, _("Skill"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("{:s} Skill")), spellDisplayName);
+			InfoString = FormatRuntime(_("{:s} Skill"), spellDisplayName);
 			break;
 		case SpellType::Spell:
 			if (!myPlayer.isOnLevel(0)) {
 				spellColor = PAL16_BLUE + 5;
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Spell"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("{:s} Spell")), spellDisplayName);
+			InfoString = FormatRuntime(_("{:s} Spell"), spellDisplayName);
 			if (spellId == SpellID::HolyBolt) {
 				AddInfoBoxString(_("Damages undead only"));
 			}
 			if (spellLevel == 0)
 				AddInfoBoxString(_("Spell Level 0 - Unusable"));
 			else
-				AddInfoBoxString(fmt::format(fmt::runtime(_("Spell Level {:d}")), spellLevel));
+				AddInfoBoxString(FormatRuntime(_("Spell Level {:d}"), spellLevel));
 			break;
 		case SpellType::Scroll: {
 			if (!myPlayer.isOnLevel(0)) {
@@ -201,7 +200,7 @@ void DrawSpellList(const Surface &out)
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Scroll"), spellColor);
 			if (spellListItem.displayName.empty()) {
-				InfoString = fmt::format(fmt::runtime(_("Scroll of {:s}")), spellDisplayName);
+				InfoString = FormatRuntime(_("Scroll of {:s}"), spellDisplayName);
 			} else {
 				InfoString = spellListItem.displayName; // Lua mod support: custom label, no "Scroll of" prefix
 			}
@@ -210,23 +209,23 @@ void DrawSpellList(const Surface &out)
 			    : c_count_if(InventoryAndBeltPlayerItemsRange { myPlayer }, [spellId](const Item &item) {
 			          return item.isScrollOf(spellId);
 			      });
-			AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount)), scrollCount));
+			AddInfoBoxString(FormatRuntime(ngettext("{:d} Scroll", "{:d} Scrolls", scrollCount), scrollCount));
 		} break;
 		case SpellType::Charges: {
 			if (!myPlayer.isOnLevel(0)) {
 				spellColor = PAL16_ORANGE + 5;
 			}
 			PrintSBookSpellType(out, spellListItem.location, _("Staff"), spellColor);
-			InfoString = fmt::format(fmt::runtime(_("Staff of {:s}")), spellDisplayName);
+			InfoString = FormatRuntime(_("Staff of {:s}"), spellDisplayName);
 			int charges = myPlayer.InvBody[INVLOC_HAND_LEFT]._iCharges;
-			AddInfoBoxString(fmt::format(fmt::runtime(ngettext("{:d} Charge", "{:d} Charges", charges)), charges));
+			AddInfoBoxString(FormatRuntime(ngettext("{:d} Charge", "{:d} Charges", charges), charges));
 		} break;
 		case SpellType::Invalid:
 			break;
 		}
 		std::optional<std::string_view> fullHotkeyName = GetHotkeyName(spellId, spellListItem.type);
 		if (fullHotkeyName) {
-			AddInfoBoxString(fmt::format(fmt::runtime(_("Spell Hotkey {:s}")), *fullHotkeyName));
+			AddInfoBoxString(FormatRuntime(_("Spell Hotkey {:s}"), *fullHotkeyName));
 		}
 	}
 }

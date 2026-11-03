@@ -6,13 +6,12 @@
 #include "tables/spelldat.h"
 
 #include <algorithm>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
-
-#include <expected.hpp>
 
 #include "data/file.hpp"
 #include "data/iterators.hpp"
@@ -39,26 +38,26 @@ void AddNullSpell()
 }
 
 // A temporary solution for parsing soundID until we have a more general one.
-tl::expected<SfxID, std::string> ParseSpellSoundId(std::string_view value)
+std::expected<SfxID, std::string> ParseSpellSoundId(std::string_view value)
 {
 	if (value == "CastFire") return SfxID::CastFire;
 	if (value == "CastHealing") return SfxID::CastHealing;
 	if (value == "CastLightning") return SfxID::CastLightning;
 	if (value == "CastSkill") return SfxID::CastSkill;
-	return tl::make_unexpected("Unknown enum value (only a few are supported for now)");
+	return std::unexpected("Unknown enum value (only a few are supported for now)");
 }
 
-tl::expected<SpellDataFlags, std::string> ParseSpellDataFlag(std::string_view value)
+std::expected<SpellDataFlags, std::string> ParseSpellDataFlag(std::string_view value)
 {
 	if (value == "Fire") return SpellDataFlags::Fire;
 	if (value == "Lightning") return SpellDataFlags::Lightning;
 	if (value == "Magic") return SpellDataFlags::Magic;
 	if (value == "Targeted") return SpellDataFlags::Targeted;
 	if (value == "AllowedInTown") return SpellDataFlags::AllowedInTown;
-	return tl::make_unexpected("Unknown enum value");
+	return std::unexpected("Unknown enum value");
 }
 
-tl::expected<MissileID, std::string> ParseMissileId(std::string_view value)
+std::expected<MissileID, std::string> ParseMissileId(std::string_view value)
 {
 	if (value == "Arrow") return MissileID::Arrow;
 	if (value == "Firebolt") return MissileID::Firebolt;
@@ -168,7 +167,7 @@ tl::expected<MissileID, std::string> ParseMissileId(std::string_view value)
 	if (value == "BlueExplosion") return MissileID::BlueExplosion;
 	if (value == "BlueExplosion2") return MissileID::BlueExplosion2;
 	if (value == "OrangeExplosion") return MissileID::OrangeExplosion;
-	return tl::make_unexpected("Unknown enum value");
+	return std::unexpected("Unknown enum value");
 }
 
 } // namespace
@@ -184,7 +183,7 @@ void LuaRegisterDynamicSpellId(std::string_view name, SpellID id)
 	LuaDynamicSpellIds.emplace(std::string(name), id);
 }
 
-tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
+std::expected<SpellID, std::string> ParseSpellId(std::string_view value)
 {
 	if (value == "Null") return SpellID::Null;
 	if (value == "Firebolt") return SpellID::Firebolt;
@@ -240,7 +239,7 @@ tl::expected<SpellID, std::string> ParseSpellId(std::string_view value)
 	if (value == "RuneOfStone") return SpellID::RuneOfStone;
 	const auto it = LuaDynamicSpellIds.find(std::string(value)); // Lua mod support: dynamic spell names registered by mods
 	if (it != LuaDynamicSpellIds.end()) return it->second;
-	return tl::make_unexpected("Unknown enum value");
+	return std::unexpected("Unknown enum value");
 }
 
 namespace {

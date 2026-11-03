@@ -69,8 +69,6 @@ int OnGetBowDamageMod(const Player *player, int fullMod, int defaultValue);
 int OnGetArrowVelocityBonus(const Player *player, int defaultValue);
 bool OnPlayerCanBlockWithoutShield(const Player *player, bool isHoldingStaff, bool isUnarmed, bool defaultValue);
 int OnGetArmorLevelBonus(const Player *player, std::string_view armorType, bool isUnique, int defaultValue);
-int OnGetPotionHealAmount(const Player *player, int l, int defaultValue);
-int OnGetPotionManaAmount(const Player *player, int l, int defaultValue);
 bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue);
 bool OnPlayerCanCleave(const Player *player, bool isHoldingAxe, bool isHoldingTwoHandedHeavy, bool isHoldingStaff, bool defaultValue);
 int OnGetHitRecoveryThreshold(const Player *player, int defaultThreshold);

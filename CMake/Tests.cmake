@@ -1,6 +1,16 @@
 include(GoogleTest)
 include(functions/copy_files)
 
+# With vcpkg on Windows, every executable and DLL gets a post-link step that
+# copies its DLL dependencies next to it. All the test binaries share the build
+# directory, so rather than running one such step after each of them is linked,
+# deploy the DLLs for all of them in a single step at the end (see below).
+set(_deploy_test_dlls OFF)
+if(WIN32 AND VCPKG_APPLOCAL_DEPS AND Z_VCPKG_EXECUTABLE)
+  set(_deploy_test_dlls ON)
+  set(VCPKG_APPLOCAL_DEPS OFF)
+endif()
+
 add_library(libdevilutionx_so SHARED)
 set_target_properties(libdevilutionx_so PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
@@ -13,6 +23,7 @@ target_link_dependencies(test_main PUBLIC libdevilutionx_so GTest::gtest GTest::
 set(tests
   animationinfo_test
   appfat_test
+  assets_test
   automap_test
   cursor_test
   dead_test
@@ -31,10 +42,12 @@ set(tests
   pack_test
   player_test
   quests_test
+  reencode_dun_cels_test
   scrollrt_test
   stores_test
   tile_properties_test
   timedemo_test
+  town_registry_test
   townerdat_test
   writehero_test
   vendor_test
@@ -48,24 +61,31 @@ set(tests
   game_menu_test
 )
 set(standalone_tests
+  cl2_to_clx_test
   codec_test
   crawl_test
   data_file_test
   file_util_test
+  fixed_point_test
   format_int_test
   ini_test
+  mod_identity_test
   palette_blending_test
   parse_int_test
   path_test
   vision_test
   random_test
   rectangle_test
+  sheen_bidi_test
   static_vector_test
   str_cat_test
   utf8_test
 )
 if(NOT USE_SDL1)
   list(APPEND standalone_tests text_render_integration_test)
+endif()
+if(NOT UNPACKED_MPQS)
+  list(APPEND standalone_tests pcx_to_clx_test)
 endif()
 set(benchmarks
   clx_render_benchmark
@@ -86,8 +106,30 @@ foreach(test_target ${tests} ${standalone_tests} ${benchmarks})
   endif()
 endforeach()
 
+if(_deploy_test_dlls)
+  unset(VCPKG_APPLOCAL_DEPS)
+  set(_deploy_test_dlls_commands)
+  foreach(target libdevilutionx_so ${tests} ${standalone_tests} ${benchmarks})
+    list(APPEND _deploy_test_dlls_commands
+      COMMAND "${Z_VCPKG_EXECUTABLE}" z-applocal
+        "--target-binary=$<TARGET_FILE:${target}>"
+        "--installed-bin-dir=${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}$<$<CONFIG:Debug>:/debug>/bin"
+    )
+  endforeach()
+  add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test_dlls.stamp"
+    ${_deploy_test_dlls_commands}
+    COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/test_dlls.stamp"
+    DEPENDS libdevilutionx_so ${tests} ${standalone_tests} ${benchmarks}
+    VERBATIM
+  )
+  add_custom_target(test_dlls ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/test_dlls.stamp")
+endif()
+
+# Discover the tests when they are run, not right after each one is linked:
+# a test cannot run before its DLLs are deployed.
 foreach(test_target ${tests} ${standalone_tests})
-  gtest_discover_tests(${test_target})
+  gtest_discover_tests(${test_target} DISCOVERY_MODE PRE_TEST)
 endforeach()
 
 foreach(test_target ${tests})
@@ -110,7 +152,37 @@ target_sources(app_fatal_for_testing INTERFACE $<TARGET_OBJECTS:app_fatal_for_te
 add_library(language_for_testing OBJECT test/language_for_testing.cpp)
 target_sources(language_for_testing INTERFACE $<TARGET_OBJECTS:language_for_testing>)
 
+target_link_dependencies(cl2_to_clx_test
+  PRIVATE
+  DevilutionX::SDL
+  app_fatal_for_testing
+  language_for_testing
+  libdevilutionx_cl2_to_clx
+  libdevilutionx_clx_render
+  libdevilutionx_log
+  libdevilutionx_surface
+)
 target_link_dependencies(codec_test PRIVATE libdevilutionx_codec app_fatal_for_testing)
+if(NOT UNPACKED_MPQS)
+  target_link_dependencies(pcx_to_clx_test
+    PRIVATE
+    DevilutionX::SDL
+    app_fatal_for_testing
+    language_for_testing
+    libdevilutionx_clx_render
+    libdevilutionx_log
+    libdevilutionx_pcx_to_clx
+    libdevilutionx_surface
+    libdevilutionx_surface_to_pcx
+  )
+endif()
+
+add_custom_target(clx_render_benchmark_resources
+  DEPENDS
+  "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}/data/resistance.clx"
+  "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}/ui_art/dvl_lrpopup.clx"
+)
+add_dependencies(clx_render_benchmark clx_render_benchmark_resources)
 target_link_dependencies(clx_render_benchmark
   PRIVATE
   DevilutionX::SDL
@@ -125,10 +197,23 @@ target_link_dependencies(clx_render_benchmark
 target_link_dependencies(crawl_test PRIVATE libdevilutionx_crawl)
 target_link_dependencies(crawl_benchmark PRIVATE libdevilutionx_crawl)
 target_link_dependencies(data_file_test PRIVATE libdevilutionx_txtdata app_fatal_for_testing language_for_testing)
-target_link_dependencies(dun_render_benchmark PRIVATE libdevilutionx_so)
+target_link_dependencies(dun_render_benchmark
+  PRIVATE
+  libdevilutionx_assets
+  libdevilutionx_dun_tile_data
+  libdevilutionx_light_tables
+  libdevilutionx_dun_render
+  libdevilutionx_options
+  app_fatal_for_testing
+  language_for_testing
+  tl
+  unordered_dense::unordered_dense
+)
 target_link_dependencies(file_util_test PRIVATE libdevilutionx_file_util app_fatal_for_testing)
 target_link_dependencies(format_int_test PRIVATE libdevilutionx_format_int language_for_testing)
 target_link_dependencies(ini_test PRIVATE libdevilutionx_ini app_fatal_for_testing)
+target_link_dependencies(mod_identity_test PRIVATE libdevilutionx_mod_identity app_fatal_for_testing)
+target_include_directories(mod_identity_test PRIVATE "${PROJECT_SOURCE_DIR}/3rdParty/PicoSHA2")
 target_link_dependencies(light_render_benchmark PRIVATE libdevilutionx_light_render DevilutionX::SDL libdevilutionx_surface libdevilutionx_paths app_fatal_for_testing)
 target_link_dependencies(palette_blending_test PRIVATE libdevilutionx_palette_blending DevilutionX::SDL libdevilutionx_strings GTest::gmock app_fatal_for_testing)
 target_link_dependencies(palette_blending_benchmark
@@ -151,7 +236,6 @@ if(DEVILUTIONX_SCREENSHOT_FORMAT STREQUAL DEVILUTIONX_SCREENSHOT_FORMAT_PNG AND 
     DevilutionX::SDL
     GTest::gmock
     GTest::gtest
-    fmt::fmt
     tl
     app_fatal_for_testing
     language_for_testing
@@ -204,6 +288,7 @@ if(DEVILUTIONX_SCREENSHOT_FORMAT STREQUAL DEVILUTIONX_SCREENSHOT_FORMAT_PNG AND 
   )
   add_dependencies(text_render_integration_test text_render_integration_test_resources)
 endif()
+target_link_dependencies(sheen_bidi_test PRIVATE libdevilutionx_sheen_bidi)
 target_link_dependencies(utf8_test PRIVATE libdevilutionx_utf8)
 
 target_include_directories(writehero_test PRIVATE 3rdParty/PicoSHA2)

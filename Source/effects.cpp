@@ -6,9 +6,9 @@
 #include "effects.h"
 
 #include <cstdint>
+#include <expected>
 #include <string_view>
 
-#include <expected.hpp>
 #include <magic_enum/magic_enum.hpp>
 
 #include "data/file.hpp"
@@ -126,7 +126,7 @@ SfxID RndSFX(SfxID psfx)
 	}
 }
 
-tl::expected<sfx_flag, std::string> ParseSfxFlag(std::string_view value)
+std::expected<sfx_flag, std::string> ParseSfxFlag(std::string_view value)
 {
 	if (value == "Stream") return sfx_STREAM;
 	if (value == "Misc") return sfx_MISC;
@@ -135,7 +135,7 @@ tl::expected<sfx_flag, std::string> ParseSfxFlag(std::string_view value)
 	if (value == "Rogue") return sfx_ROGUE;
 	if (value == "Warrior") return sfx_WARRIOR;
 	if (value == "Sorcerer") return sfx_SORCERER;
-	return tl::make_unexpected("Unknown enum value");
+	return std::unexpected("Unknown enum value");
 }
 
 void LoadEffectsData()
@@ -322,29 +322,24 @@ void effects_play_sound(SfxID id)
 
 int GetSFXLength(SfxID nSFX)
 {
+	// The SFX table is not loaded without audio
+	if (sgSFX.empty())
+		return 0;
 	TSFX &sfx = sgSFX[static_cast<int16_t>(nSFX)];
 	if (sfx.pSnd == nullptr)
 		sfx.pSnd = sound_file_load(sfx.pszName.c_str(),
 		    /*stream=*/AllowStreaming && (sfx.bFlags & sfx_STREAM) != 0);
+	if (sfx.pSnd == nullptr)
+		return 0;
 	return sfx.pSnd->DSB.GetLength();
 }
 
-tl::expected<HeroSpeech, std::string> ParseHeroSpeech(std::string_view value)
+std::expected<HeroSpeech, std::string> ParseHeroSpeech(std::string_view value)
 {
 	const std::optional<HeroSpeech> enumValueOpt = magic_enum::enum_cast<HeroSpeech>(value);
 	if (enumValueOpt.has_value()) {
 		return enumValueOpt.value();
 	}
-	return tl::make_unexpected("Unknown enum value.");
+	return std::unexpected("Unknown enum value.");
 }
-
-tl::expected<SfxID, std::string> ParseSfxId(std::string_view value)
-{
-	const std::optional<SfxID> enumValueOpt = magic_enum::enum_cast<SfxID>(value);
-	if (enumValueOpt.has_value()) {
-		return enumValueOpt.value();
-	}
-	return tl::make_unexpected("Unknown enum value.");
-}
-
 } // namespace devilution

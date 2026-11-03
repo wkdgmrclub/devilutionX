@@ -30,7 +30,7 @@ if (Gettext_FOUND)
 
     if(APPLE)
       set_source_files_properties("${_gmo_file}" PROPERTIES
-        MACOSX_PACKAGE_LOCATION Resources
+        MACOSX_PACKAGE_LOCATION "Resources/assets"
         XCODE_EXPLICIT_FILE_TYPE compiled)
       add_dependencies(libdevilutionx "${_lang_target}")
       add_dependencies(${BIN_TARGET} "${_lang_target}")
@@ -242,10 +242,19 @@ if(APPLE)
     set(src "${CMAKE_CURRENT_SOURCE_DIR}/assets/${asset_file}")
     get_filename_component(_asset_dir "${asset_file}" DIRECTORY)
     set_source_files_properties("${src}" PROPERTIES
-      MACOSX_PACKAGE_LOCATION "Resources/${_asset_dir}"
+      MACOSX_PACKAGE_LOCATION "Resources/assets/${_asset_dir}"
       XCODE_EXPLICIT_FILE_TYPE compiled)
     target_sources(${BIN_TARGET} PRIVATE "${src}")
   endforeach()
+
+  if(BUILD_TESTING)
+    # Tests aren't bundled, so they need the assets copied here too.
+    copy_files(
+      FILES ${devilutionx_assets}
+      SRC_PREFIX "assets/"
+      OUTPUT_DIR "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}"
+      OUTPUT_VARIABLE DEVILUTIONX_OUTPUT_ASSETS_FILES)
+  endif()
 else()
   # Copy assets to the build assets subdirectory. This serves two purposes:
   # - If smpq is installed, devilutionx.mpq is built from these files.

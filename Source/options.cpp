@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <expected>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -26,8 +27,6 @@
 #include <SDL_version.h>
 #endif
 
-#include <expected.hpp>
-#include <fmt/format.h>
 #include <function_ref.hpp>
 
 #include "appfat.h"
@@ -39,6 +38,7 @@
 #include "quick_messages.hpp"
 #include "utils/algorithm/container.hpp"
 #include "utils/file_util.h"
+#include "utils/format.hpp"
 #include "utils/ini.hpp"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -75,7 +75,7 @@ void DiscoverMods()
 	std::unordered_set<std::string> modNames = { "clock", "adria_refills_mana", "Floating Numbers - Damage", "Floating Numbers - XP" };
 
 	if (HaveHellfire()) {
-		modNames.insert("Hellfire");
+		modNames.insert("hf");
 	}
 
 	// Check if the mods directory exists.
@@ -118,7 +118,7 @@ void DiscoverMods()
 
 std::optional<Ini> ini;
 
-#if defined(__ANDROID__) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
+#if (defined(__ANDROID__) && !defined(TERMUX)) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
 constexpr OptionEntryFlags OnlyIfSupportsWindowed = OptionEntryFlags::Invisible;
 #else
 constexpr OptionEntryFlags OnlyIfSupportsWindowed = OptionEntryFlags::None;
@@ -157,7 +157,7 @@ void LoadIni()
 		}
 		std::fclose(file);
 	}
-	tl::expected<Ini, std::string> result = Ini::parse(std::string_view(buffer.data(), buffer.size()));
+	std::expected<Ini, std::string> result = Ini::parse(std::string_view(buffer.data(), buffer.size()));
 	if (!result.has_value()) app_fatal(result.error());
 	ini.emplace(std::move(result).value());
 }
@@ -851,10 +851,15 @@ GameplayOptions::GameplayOptions()
     , testBard("Test Bard", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::OnlyHellfire, N_("Test Bard"), N_("Force the Bard character type to appear in the hero selection menu."), false)
     , testBarbarian("Test Barbarian", OptionEntryFlags::CantChangeInGame | OptionEntryFlags::OnlyHellfire, N_("Test Barbarian"), N_("Force the Barbarian character type to appear in the hero selection menu."), false)
     , experienceBar("Experience Bar", OptionEntryFlags::None, N_("Experience Bar"), N_("Experience Bar is added to the UI at the bottom of the screen."), false)
-    , showItemGraphicsInStores("Show Item Graphics in Stores", OptionEntryFlags::None, N_("Show Item Graphics in Stores"), N_("Show item graphics to the left of item descriptions in store menus."), false)
     , showHealthValues("Show health values", OptionEntryFlags::None, N_("Show health values"), N_("Displays current / max health value on health globe."), false)
     , showManaValues("Show mana values", OptionEntryFlags::None, N_("Show mana values"), N_("Displays current / max mana value on mana globe."), false)
-    , showMultiplayerPartyInfo("Show Multiplayer Party Information", OptionEntryFlags::CantChangeInMultiPlayer, N_("Show Party Information"), N_("Displays the health and mana of all connected multiplayer party members."), false)
+    , showMultiplayerPartyInfo("Show Multiplayer Party Information", OptionEntryFlags::CantChangeInMultiPlayer, N_("Show Party Information"), N_("Displays the health and mana of all connected multiplayer party members."), PartyPortraits::Disabled,
+          {
+              { PartyPortraits::Disabled, N_("Disabled") },
+              { PartyPortraits::Players, N_("Players") },
+              { PartyPortraits::Summons, N_("Summons") },
+              { PartyPortraits::PlayersAndSummons, N_("Players and summons") },
+          })
     , enemyHealthBar("Enemy Health Bar", OptionEntryFlags::None, N_("Enemy Health Bar"), N_("Enemy Health Bar is displayed at the top of the screen."), false)
     , floatingInfoBox("Floating Item Info Box", OptionEntryFlags::None, N_("Floating Item Info Box"), N_("Displays item info in a floating box when hovering over an item."), false)
     , autoGoldPickup("Auto Gold Pickup", OptionEntryFlags::None, N_("Auto Gold Pickup"), N_("Gold is automatically collected when in close proximity to the player."), false)
@@ -878,7 +883,12 @@ GameplayOptions::GameplayOptions()
     , numFullManaPotionPickup("Full Mana Potion Pickup", OptionEntryFlags::None, N_("Full Mana Potion Pickup"), N_("Number of Full Mana potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
     , numRejuPotionPickup("Rejuvenation Potion Pickup", OptionEntryFlags::None, N_("Rejuvenation Potion Pickup"), N_("Number of Rejuvenation potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
     , numFullRejuPotionPickup("Full Rejuvenation Potion Pickup", OptionEntryFlags::None, N_("Full Rejuvenation Potion Pickup"), N_("Number of Full Rejuvenation potions to pick up automatically."), 0, { 0, 1, 2, 4, 8, 16 })
-    , visualStoreUI("Visual Store UI", OptionEntryFlags::None, N_("Visual Store UI"), N_("Use visual grid-based store interface instead of text-based menus. Both store and inventory panels open together."), false)
+    , storeUi("Store UI", OptionEntryFlags::None, N_("Store UI"), N_("User interface for stores"), StoreUi::Text,
+          {
+              { StoreUi::Text, N_("Text-only list") },
+              { StoreUi::ListWithItemGraphics, N_("List with item graphics") },
+              { StoreUi::VisualGrid, N_("Visual grid") },
+          })
     , skipLoadingScreenThresholdMs("Skip loading screen threshold, ms", OptionEntryFlags::Invisible, "", "", 0)
 {
 }
@@ -897,13 +907,12 @@ std::vector<OptionEntryBase *> GameplayOptions::GetEntries()
 		&testBard,
 		&testBarbarian,
 		&experienceBar,
-		&showItemGraphicsInStores,
-		&visualStoreUI,
+		&floatingInfoBox,
+		&storeUi,
 		&showHealthValues,
 		&showManaValues,
 		&showMultiplayerPartyInfo,
 		&enemyHealthBar,
-		&floatingInfoBox,
 		&showMonsterType,
 		&showItemLabels,
 		&autoRefillBelt,
@@ -991,7 +1000,14 @@ void OptionEntryLanguageCode::LoadFromIni(std::string_view category)
 		}
 	}
 
-	LogVerbose("Found user preferred locales: {}", fmt::join(locales, ", "));
+	if (IsLogLevel(defaultCategory, SDL_LOG_PRIORITY_VERBOSE)) {
+		std::string joinedLocales;
+		for (const std::string &locale : locales) {
+			if (!joinedLocales.empty()) joinedLocales.append(", ");
+			joinedLocales.append(locale);
+		}
+		LogVerbose("Found user preferred locales: {}", joinedLocales);
+	}
 
 	for (const auto &locale : locales) {
 		LogVerbose("Trying to load translation: {}", locale);
@@ -1032,6 +1048,7 @@ void OptionEntryLanguageCode::CheckLanguagesAreInitialized() const
 	languages.emplace_back("fi", "Suomi");
 	languages.emplace_back("sv", "Svenska");
 	languages.emplace_back("tr", "Türkçe");
+	languages.emplace_back("tt", "Татарча");
 	languages.emplace_back("cs", "Čeština");
 	languages.emplace_back("el", "Ελληνικά");
 	languages.emplace_back("be", "беларуская");
@@ -1177,7 +1194,7 @@ KeymapperOptions::Action::Action(std::string_view key, const char *name, const c
     , dynamicIndex(index)
 {
 	if (index != 0) {
-		dynamicKey = fmt::format(fmt::runtime(std::string_view(key.data(), key.size())), index);
+		dynamicKey = FormatRuntime(std::string_view(key.data(), key.size()), index);
 		this->key = dynamicKey;
 	}
 }
@@ -1186,7 +1203,7 @@ std::string_view KeymapperOptions::Action::GetName() const
 {
 	if (dynamicIndex == 0)
 		return _(name);
-	dynamicName = fmt::format(fmt::runtime(_(name)), dynamicIndex);
+	dynamicName = FormatRuntime(_(name), dynamicIndex);
 	return dynamicName;
 }
 
@@ -1355,7 +1372,7 @@ PadmapperOptions::Action::Action(std::string_view key, const char *name, const c
     , dynamicIndex(index)
 {
 	if (index != 0) {
-		dynamicKey = fmt::format(fmt::runtime(std::string_view(key.data(), key.size())), index);
+		dynamicKey = FormatRuntime(std::string_view(key.data(), key.size()), index);
 		this->key = dynamicKey;
 	}
 }
@@ -1364,7 +1381,7 @@ std::string_view PadmapperOptions::Action::GetName() const
 {
 	if (dynamicIndex == 0)
 		return _(name);
-	dynamicName = fmt::format(fmt::runtime(_(name)), dynamicIndex);
+	dynamicName = FormatRuntime(_(name), dynamicIndex);
 	return dynamicName;
 }
 
@@ -1460,16 +1477,10 @@ void PadmapperOptions::Action::UpdateValueDescription() const
 
 std::string_view PadmapperOptions::Action::Shorten(std::string_view buttonName) const
 {
-	size_t index = 0;
-	size_t chars = 0;
-	while (index < buttonName.size()) {
-		if (!IsTrailUtf8CodeUnit(buttonName[index]))
-			chars++;
-		if (chars == 3)
-			break;
-		index++;
-	}
-	return std::string_view(buttonName.data(), index);
+	auto it = Utf8CodePoints(buttonName).begin();
+	const auto end = Utf8CodePoints(buttonName).end();
+	for (int i = 0; i < 3 && it != end; ++i, ++it) { }
+	return { buttonName.data(), static_cast<size_t>(it.data() - buttonName.data()) };
 }
 
 std::string_view PadmapperOptions::Action::GetValueDescription() const
@@ -1614,7 +1625,7 @@ void ModOptions::RemoveModEntry(const std::string &modName)
 void ModOptions::SetHellfireEnabled(bool enableHellfire)
 {
 	for (auto &modEntry : GetModEntries()) {
-		if (modEntry.name == "Hellfire") {
+		if (modEntry.name == "hf") {
 			modEntry.enabled.SetValue(enableHellfire);
 			break;
 		}
@@ -1636,9 +1647,35 @@ std::forward_list<ModOptions::ModEntry> &ModOptions::GetModEntries()
 	return newModEntries;
 }
 
+namespace {
+// The description shown in the mod settings panel. Prefer the manifest's own description;
+// otherwise synthesise one from whatever metadata the manifest provides (version, author).
+std::string BuildModDescription(const ModManifest &manifest)
+{
+	if (!manifest.description.empty())
+		return manifest.description;
+	const bool hasVersion = !manifest.version.empty();
+	const bool hasAuthor = !manifest.author.empty();
+	if (hasVersion && hasAuthor)
+		return FormatRuntime(_("Version {:s} by {:s}"), manifest.version, manifest.author);
+	if (hasVersion)
+		return FormatRuntime(_("Version {:s}"), manifest.version);
+	if (hasAuthor)
+		return FormatRuntime(_("By {:s}"), manifest.author);
+	return {};
+}
+} // namespace
+
 ModOptions::ModEntry::ModEntry(std::string_view name)
+    : ModEntry(name, ReadModManifestByName(name))
+{
+}
+
+ModOptions::ModEntry::ModEntry(std::string_view name, const ModManifest &manifest)
     : name(name)
-    , enabled(this->name, OptionEntryFlags::RecreateUI, this->name.c_str(), "", false)
+    , displayName(manifest.name.empty() ? std::string(name) : manifest.name)
+    , description(BuildModDescription(manifest))
+    , enabled(this->name, OptionEntryFlags::RecreateUI, this->displayName.c_str(), this->description.c_str(), false)
 {
 }
 

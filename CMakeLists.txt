@@ -73,6 +73,14 @@ if(NOT VERSION_SUFFIX)
   endif()
 endif()
 
+# The iOS toolchain file reads DEPLOYMENT_TARGET when it is processed by
+# `project()`, so the default must be set before that.
+# libc++'s <format> requires the floating-point std::to_chars symbols,
+# which are only available in the iOS 16.3+ system libc++.
+if(CMAKE_TOOLCHAIN_FILE MATCHES "ios\\.toolchain\\.cmake" AND NOT DEFINED DEPLOYMENT_TARGET)
+  set(DEPLOYMENT_TARGET "16.3")
+endif()
+
 project(DevilutionX
   VERSION ${VERSION_NUM}
   LANGUAGES C CXX)
@@ -181,11 +189,11 @@ else()
   set(SUPPORTS_MPQ ON)
 endif()
 
-# By default, devilutionx.mpq and mods/Hellfire.mpq are built only if smpq is installed and MPQ support is enabled.
+# By default, devilutionx.mpq and mods/hf.mpq are built only if smpq is installed and MPQ support is enabled.
 if(SUPPORTS_MPQ AND NOT UNPACKED_MPQS)
-  if(BUILD_ASSETS_MPQ OR (CPACK STREQUAL "ON" AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")))
+  if(BUILD_ASSETS_MPQ OR BUILD_MOD_MPQS OR (CPACK STREQUAL "ON" AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NOT SRC_DIST))
     find_program(SMPQ smpq REQUIRED)
-  elseif(NOT DEFINED BUILD_ASSETS_MPQ AND NOT SRC_DIST)
+  elseif((NOT DEFINED BUILD_ASSETS_MPQ OR NOT DEFINED BUILD_MOD_MPQS) AND NOT SRC_DIST)
     find_program(SMPQ smpq)
   endif()
   if(SMPQ)
@@ -193,9 +201,11 @@ if(SUPPORTS_MPQ AND NOT UNPACKED_MPQS)
   else()
     set(_has_smpq OFF)
   endif()
-  option(BUILD_ASSETS_MPQ "If true, assets are packaged into devilutionx.mpq and mods/Hellfire to Hellfire.mpq." ${_has_smpq})
+  option(BUILD_ASSETS_MPQ "If true, assets are packaged into devilutionx.mpq." ${_has_smpq})
+  option(BUILD_MOD_MPQS "If true, mods/hf assets are packaged into to hf.mpq." ${_has_smpq})
 else()
-  set(BUILD_ASSETS_MPQS OFF)
+  set(BUILD_ASSETS_MPQ OFF)
+  set(BUILD_MOD_MPQS OFF)
 endif()
 
 # === Option overrides ===
@@ -266,7 +276,11 @@ endif()
 #
 # PS4 toolchain crashes in `create-fself` when linking with these flags, so we exclude it:
 # https://github.com/PacBrew/ps4-openorbis/issues/8
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT PS4)
+# On m68k-amigaos, `--gc-sections` discards static constexpr data that is still
+# referenced (magic_enum's per-enum name tables are the visible casualty: the
+# string_views survive with correct lengths but point at collected storage, so
+# every enum name reads as garbage). Excluded here for the same reason as PS4.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT PS4 AND NOT AMIGA)
   add_compile_options("$<$<NOT:$<CONFIG:Debug>>:-ffunction-sections;-fdata-sections>")
   if(APPLE)
     add_link_options("$<$<NOT:$<CONFIG:Debug>>:LINKER:-dead_strip>")
@@ -333,20 +347,18 @@ if(GPERF)
   endif()
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 
 # On some platforms, such as DJGPP,
-# `-std=c++20` defines `__STRICT_ANSI__` which disables
-# all POSIX extensions, so we need to use `-std=gnu++20` instead.
+# `-std=c++23` defines `__STRICT_ANSI__` which disables
+# all POSIX extensions, so we need to use `-std=gnu++23` instead.
 set(CMAKE_CXX_EXTENSIONS ON)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON) # for clang-tidy
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-if(NOT TARGET_PLATFORM STREQUAL "dos")
-  find_package(Threads REQUIRED)
-endif()
+find_package(Threads REQUIRED)
 
 # Dependencies must be included after Platforms.
 include(Dependencies)
@@ -355,7 +367,7 @@ include(Dependencies)
 # Mixing `-static-libstdc++` with a dynamic C++ dependency causes both copies
 # to initialize, which is UB and can cause crashes, e.g. in
 # `std::ios_base_library_init()`.
-if(NOT DEVILUTIONX_STATIC_LIBFMT)
+if(NOT NOSOUND AND NOT DEVILUTIONX_STATIC_SDL_AUDIOLIB)
   set(DEVILUTIONX_STATIC_CXX_STDLIB OFF)
 endif()
 
@@ -368,7 +380,7 @@ elseif(TARGET_PLATFORM STREQUAL "dos")
   set(BIN_TARGET devx)
 endif()
 
-if(ANDROID)
+if(ANDROID AND NOT TERMUX)
   add_library(${BIN_TARGET} SHARED Source/main.cpp)
 elseif(UWP_LIB)
   set(BIN_TARGET libdevilutionx)
@@ -411,13 +423,16 @@ include(Mods)
 
 if(EMSCRIPTEN)
   target_link_options(${BIN_TARGET} PRIVATE
-    --preload-file assets
+    "SHELL:--preload-file assets"
+    "SHELL:--preload-file mods"
     -sFORCE_FILESYSTEM=1
     -sALLOW_MEMORY_GROWTH=1
     -sASYNCIFY
     -lidbfs.js
     --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/Packaging/emscripten/index.html
   )
+
+  add_dependencies(${BIN_TARGET} hellfire_copied_assets)
   # Add JavaScript to load MPQ files from the server directory at runtime
   target_link_options(${BIN_TARGET} PRIVATE --pre-js ${CMAKE_CURRENT_SOURCE_DIR}/Packaging/emscripten/emscripten_pre.js)
 endif()
@@ -445,10 +460,14 @@ if(APPLE)
   if(IOS)
     set(MACOSX_BUNDLE_REQUIRED_PLATFORM IPhoneOS)
     set_target_properties(${BIN_TARGET} PROPERTIES XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2")
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "9.0")
+    # libc++'s <format> requires the floating-point std::to_chars symbols,
+    # which are only available in the iOS 16.3+ system libc++.
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3")
   elseif(DARWIN_MAJOR_VERSION GREATER_EQUAL 17)
     set(MACOSX_BUNDLE_REQUIRED_PLATFORM Carbon)
-    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13.0")
+    # libc++'s <format> requires the floating-point std::to_chars symbols,
+    # which are only available in the macOS 13.3+ system libc++.
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3")
   endif()
   if(DARWIN_MAJOR_VERSION VERSION_LESS 9)
     # Finder on OSX Tiger can only handle icns files with up to 128x128 icons.
@@ -467,6 +486,8 @@ if(APPLE)
       install(CODE "
         include(BundleUtilities)
         fixup_bundle(${CMAKE_BINARY_DIR}/${MACOSX_BUNDLE_BUNDLE_NAME}.app \"\" \"\")
+        # fixup_bundle invalidates any existing code signature, so re-sign.
+        execute_process(COMMAND codesign --force --deep --sign - ${CMAKE_BINARY_DIR}/${MACOSX_BUNDLE_BUNDLE_NAME}.app)
         "
         COMPONENT Runtime)
   endif()
@@ -488,11 +509,12 @@ if(NINTENDO_SWITCH)
     VERSION "${PROJECT_VERSION}"
   )
 
-  file(MAKE_DIRECTORY "${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}")
+  set(SWITCH_ROMFS_DIRECTORY "${CMAKE_BINARY_DIR}/romfs")
+  file(MAKE_DIRECTORY "${SWITCH_ROMFS_DIRECTORY}")
   nx_create_nro(${BIN_TARGET}
     NACP  ${BIN_TARGET}.nacp
     ICON  "${PROJECT_SOURCE_DIR}/Packaging/switch/icon.jpg"
-    ROMFS ${DEVILUTIONX_ASSETS_OUTPUT_DIRECTORY}
+    ROMFS ${SWITCH_ROMFS_DIRECTORY}
   )
 endif()
 
@@ -509,7 +531,7 @@ if(VITA)
       NAME ${VITA_APP_NAME}
       FILE Packaging/vita/sce_sys sce_sys
       FILE ${DEVILUTIONX_MPQ} devilutionx.mpq
-      FILE ${HELLFIRE_MPQ} mods/Hellfire.mpq
+      FILE ${HELLFIRE_MPQ} mods/hf.mpq
     )
   else()
     vita_create_vpk(devilutionx.vpk ${VITA_TITLEID} devilutionx.self
@@ -650,7 +672,13 @@ if(CPACK AND (APPLE OR BUILD_ASSETS_MPQ OR SRC_DIST))
   elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     string(TOLOWER ${PROJECT_NAME} project_name)
     set(CPACK_PACKAGE_NAME ${project_name})
+    set(CPACK_PACKAGE_VENDOR "DevilutionX contributors")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Open-source Diablo and Hellfire engine")
+    set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/diasurgical/DevilutionX")
     set(CPACK_GENERATOR "7Z")
+    set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
+    set(CPACK_PROJECT_CONFIG_FILE "${CMAKE_BINARY_DIR}/CPackProjectConfig.cmake")
+    configure_file("${PROJECT_SOURCE_DIR}/CMake/CPackProjectConfig.cmake.in" "${CPACK_PROJECT_CONFIG_FILE}" @ONLY)
     # Common *nix files
     set(CPACK_STRIP_FILES TRUE)
     install(TARGETS ${BIN_TARGET} DESTINATION bin)
@@ -693,7 +721,18 @@ if(CPACK AND (APPLE OR BUILD_ASSETS_MPQ OR SRC_DIST))
       RENAME "${project_name}.metainfo.xml"
     )
     if(DISCORD_SHARED_LIB)
-      install(FILES "${DISCORD_SHARED_LIB}" DESTINATION "lib")
+      include(CPackComponent)
+      cpack_add_component(DISCORD_SHARED_LIB HIDDEN)
+      cpack_add_component(DISCORD_SHARED_LIB64 HIDDEN DISABLED)
+
+      install(FILES "${DISCORD_SHARED_LIB}"
+        DESTINATION "lib"
+        COMPONENT DISCORD_SHARED_LIB)
+
+      install(FILES "${DISCORD_SHARED_LIB}"
+        DESTINATION "lib64"
+        COMPONENT DISCORD_SHARED_LIB64
+        EXCLUDE_FROM_ALL)
     endif()
 
     # -G DEB
@@ -707,10 +746,26 @@ if(CPACK AND (APPLE OR BUILD_ASSETS_MPQ OR SRC_DIST))
 
     # -G RPM
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+    set(CPACK_RPM_PACKAGE_SUMMARY "Open-source implementation of the Diablo and Hellfire game engine")
+    if(DISCORD_INTEGRATION)
+      set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-Sustainable-Use AND LicenseRef-Discord-Game-SDK")
+      set(_rpm_package_discord_notice " Discord Game SDK terms also apply.")
+    else()
+      set(CPACK_RPM_PACKAGE_LICENSE "LicenseRef-Sustainable-Use")
+      set(_rpm_package_discord_notice "")
+    endif()
+    set(CPACK_RPM_PACKAGE_DESCRIPTION
+      "DevilutionX is an open-source implementation of the Diablo and Hellfire game engine. The project is licensed under the Sustainable Use License, which restricts use and distribution to non-commercial purposes.${_rpm_package_discord_notice} Original commercial game data is not included."
+    )
+    set(CPACK_RPM_PACKAGE_GROUP "Amusements/Games")
+    set(CPACK_RPM_PACKAGE_URL "https://github.com/diasurgical/DevilutionX")
+    set(CPACK_RPM_PACKAGE_RELEASE 1)
+    set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
 
     find_program(RPMBUILD rpmbuild)
     if(RPMBUILD)
       list(APPEND CPACK_GENERATOR "RPM")
+      set(CPACK_RPM_COMPONENT_INSTALL ON)
     endif()
     find_program(DPKG dpkg)
     if(DPKG)

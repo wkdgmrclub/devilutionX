@@ -18,6 +18,7 @@
 #include "control/control.hpp"
 #include "inv.h"
 #include "options.h"
+#include "panels/quest_log.hpp"
 #include "panels/spell_list.hpp"
 #include "qol/stash.h"
 #include "qol/visual_store.h"
@@ -108,6 +109,8 @@ protected:
 	void SetUp() override
 	{
 		UITest::SetUp();
+		if (IsSkipped())
+			return;
 
 		// Initialise quests so StartQuestlog() doesn't crash.
 		InitQuests();

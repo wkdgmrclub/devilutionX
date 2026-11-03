@@ -5,16 +5,20 @@
  */
 #include "levels/drlg_l4.h"
 
+#include <cstddef>
 #include <cstdint>
+#include <expected>
 
 #include "engine/load_file.hpp"
 #include "engine/random.hpp"
+#include "engine/world_tile.hpp"
+#include "levels/drlg_quests.hpp"
+#include "levels/dun_tile_data.hpp"
 #include "levels/gendung.h"
-#include "monster.h"
-#include "multi.h"
-#include "player.h"
-#include "tables/objdat.h"
+#include "levels/gendung_defs.hpp"
+#include "tables/questdat.hpp"
 #include "utils/is_of.hpp"
+#include "utils/status_macros.hpp"
 
 namespace devilution {
 
@@ -1240,11 +1244,12 @@ void LoadPreL4Dungeon(const char *path)
 	memcpy(pdungeon, dungeon, sizeof(pdungeon));
 }
 
-void LoadL4Dungeon(const char *path, Point spawn)
+std::expected<void, std::string> LoadL4Dungeon(const char *path, Point spawn)
 {
-	LoadDungeonBase(path, spawn, 6, 30);
+	RETURN_IF_ERROR(LoadDungeonBase(path, spawn, 6, 30));
 
 	Pass3();
+	return {};
 }
 
 } // namespace devilution

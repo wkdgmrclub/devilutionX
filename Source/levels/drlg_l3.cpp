@@ -2,19 +2,20 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <expected>
 
 #include "engine/load_file.hpp"
+#include "engine/point.hpp"
 #include "engine/points_in_rectangle_range.hpp"
 #include "engine/random.hpp"
+#include "levels/dun_tile_data.hpp"
 #include "levels/gendung.h"
-#include "levels/setmaps.h"
+#include "levels/gendung_defs.hpp"
 #include "lighting.h"
-#include "monster.h"
 #include "objects.h"
-#include "player.h"
-#include "quests.h"
-#include "tables/objdat.h"
+#include "tables/questdat.hpp"
 #include "utils/is_of.hpp"
+#include "utils/status_macros.hpp"
 
 namespace devilution {
 
@@ -2201,15 +2202,16 @@ void LoadPreL3Dungeon(const char *path)
 	memcpy(pdungeon, dungeon, sizeof(pdungeon));
 }
 
-void LoadL3Dungeon(const char *path, Point spawn)
+std::expected<void, std::string> LoadL3Dungeon(const char *path, Point spawn)
 {
-	LoadDungeonBase(path, spawn, 7, 8);
+	RETURN_IF_ERROR(LoadDungeonBase(path, spawn, 7, 8));
 
 	Pass3();
 	PlaceLights();
 
 	if (leveltype == DTYPE_CAVES)
 		AddL3Objs(0, 0, MAXDUNX, MAXDUNY);
+	return {};
 }
 
 } // namespace devilution

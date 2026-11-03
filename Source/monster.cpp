@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <expected>
 #include <iterator>
 #include <limits>
 #include <memory>
@@ -29,9 +30,6 @@
 #else
 #include <SDL.h>
 #endif
-
-#include <expected.hpp>
-#include <fmt/core.h>
 
 #include "automap.h"
 #include "control/control.hpp"
@@ -95,6 +93,7 @@
 #include "utils/endian_swap.hpp"
 #include "utils/enum_traits.h"
 #include "utils/file_name_generator.hpp"
+#include "utils/format.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -187,7 +186,7 @@ void InitMonsterTRN(CMonster &monst)
 		AnimStruct &anim = monst.anims[i];
 		if (anim.sprites->isSheet()) {
 			ClxApplyTrans(ClxSpriteSheet { anim.sprites->sheet() }, colorTranslations.data());
-		} else {
+		} else if (anim.sprites.has_value()) {
 			ClxApplyTrans(ClxSpriteList { anim.sprites->list() }, colorTranslations.data());
 		}
 	}
@@ -207,10 +206,10 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	monster.animInfo.currentFrame = GenerateRnd(monster.animInfo.numberOfFrames - 1);
 
 	const int maxhp = RandomIntBetween(monster.data().hitPointsMinimum, monster.data().hitPointsMaximum);
-	monster.maxHitPoints = maxhp << 6;
+	monster.maxHitPoints = Fixed26_6::fromInt(maxhp);
 
 	if (!gbIsMultiplayer)
-		monster.maxHitPoints = std::max(monster.maxHitPoints / 2, 64);
+		monster.maxHitPoints = std::max(monster.maxHitPoints / 2, Fixed26_6::fromInt(1));
 
 	monster.hitPoints = monster.maxHitPoints;
 	monster.ai = monster.data().ai;
@@ -255,9 +254,9 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
 		monster.maxHitPoints = 3 * monster.maxHitPoints;
 		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 100 : 50) << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(gbIsMultiplayer ? 100 : 50);
 		else
-			monster.maxHitPoints += 100 << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(100);
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
@@ -267,9 +266,9 @@ void InitMonster(Monster &monster, Direction rd, size_t typeIndex, Point positio
 	} else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
 		monster.maxHitPoints = 4 * monster.maxHitPoints;
 		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 200 : 100) << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(gbIsMultiplayer ? 200 : 100);
 		else
-			monster.maxHitPoints += 200 << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(200);
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
@@ -465,7 +464,7 @@ Point GetUniqueMonstPosition(UniqueMonsterType uniqindex)
 	return position;
 }
 
-tl::expected<void, std::string> PlaceUniqueMonst(UniqueMonsterType uniqindex, size_t minionType, int bosspacksize)
+std::expected<void, std::string> PlaceUniqueMonst(UniqueMonsterType uniqindex, size_t minionType, int bosspacksize)
 {
 	const auto &uniqueMonsterData = UniqueMonstersData[static_cast<size_t>(uniqindex)];
 	const size_t typeIndex = GetMonsterTypeIndex(uniqueMonsterData.mtype);
@@ -506,7 +505,7 @@ void ClrAllMonsters()
 	}
 }
 
-tl::expected<void, std::string> PlaceUniqueMonsters()
+std::expected<void, std::string> PlaceUniqueMonsters()
 {
 	for (size_t u = 0; u < UniqueMonstersData.size(); ++u) {
 		if (UniqueMonstersData[u].mlevel != currlevel)
@@ -533,7 +532,7 @@ tl::expected<void, std::string> PlaceUniqueMonsters()
 	return {};
 }
 
-tl::expected<void, std::string> PlaceQuestMonsters()
+std::expected<void, std::string> PlaceQuestMonsters()
 {
 	if (!setlevel) {
 		if (Quests[Q_BUTCHER].IsAvailable()) {
@@ -615,7 +614,7 @@ tl::expected<void, std::string> PlaceQuestMonsters()
 	return {};
 }
 
-tl::expected<void, std::string> LoadDiabMonsts()
+std::expected<void, std::string> LoadDiabMonsts()
 {
 	{
 		ASSIGN_OR_RETURN(auto dunData, LoadFileInMemWithStatus<uint16_t>("levels\\l4data\\diab1.dun"));
@@ -1000,6 +999,7 @@ void Teleport(Monster &monster)
 
 	M_ClearSquares(monster);
 	dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+	MarkWalkabilityChanged();
 	monster.occupyTile(*position, false);
 	monster.position.old = *position;
 	monster.direction = GetMonsterDirection(monster);
@@ -1078,7 +1078,7 @@ void StartHeal(Monster &monster)
 	monster.animInfo.currentFrame = monster.type().getAnimData(MonsterGraphic::Special).frames - 1;
 	monster.flags |= MFLAG_LOCK_ANIMATION;
 	monster.mode = MonsterMode::Heal;
-	monster.var1 = monster.maxHitPoints / (16 * (GenerateRnd(5) + 4));
+	monster.var1 = (monster.maxHitPoints / (16 * (GenerateRnd(5) + 4))).raw();
 }
 
 void SyncLightPosition(Monster &monster)
@@ -1113,6 +1113,7 @@ bool MonsterWalk(Monster &monster)
 	const bool isAnimationEnd = monster.animInfo.isLastFrame();
 	if (isAnimationEnd) {
 		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		MarkWalkabilityChanged();
 		monster.position.tile.x += monster.var1;
 		monster.position.tile.y += monster.var2;
 		// dMonster is set here for backwards compatibility; without it, the monster would be invisible if loaded from a vanilla save.
@@ -1149,7 +1150,7 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 		return;
 
 	const int dam = RandomIntBetween(mind, maxd) << 6;
-	ApplyMonsterDamage(DamageType::Physical, target, dam);
+	ApplyMonsterDamage(DamageType::Physical, target, Fixed26_6::fromRaw(dam));
 
 	if (attacker.isPlayerMinion()) {
 		const auto playerId = static_cast<size_t>(attacker.goalVar3);
@@ -1169,18 +1170,18 @@ void MonsterAttackMonster(Monster &attacker, Monster &target, int hper, int mind
 	}
 }
 
-int CheckReflect(Monster &monster, Player &player, int dam)
+Fixed26_6 CheckReflect(Monster &monster, Player &player, Fixed26_6 dam)
 {
 	player.wReflections--;
 	if (player.wReflections <= 0)
 		NetSendCmdParam1(true, CMD_SETREFLECT, 0);
 	// reflects 20-30% damage
-	const int mdam = dam * RandomIntBetween(20, 30, true) / 100;
+	const Fixed26_6 mdam = dam * RandomIntBetween(20, 30, true) / 100;
 	ApplyMonsterDamage(DamageType::Physical, monster, mdam);
 	if (monster.hasNoLife())
 		M_StartKill(monster, player);
 	else
-		M_StartHit(monster, player, mdam);
+		M_StartHit(monster, player, mdam.raw());
 
 	return mdam;
 }
@@ -1233,8 +1234,8 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 		const Direction dir = GetDirection(player.position.tile, monster.position.tile);
 		StartPlrBlock(player, dir);
 		if (&player == MyPlayer && player.wReflections > 0) {
-			int dam = GenerateRnd(((maxDam - minDam) << 6) + 1) + (minDam << 6);
-			dam = std::max(dam + (player._pIGetHit << 6), 64);
+			Fixed26_6 dam = Fixed26_6::fromRaw(GenerateRnd(((maxDam - minDam) << 6) + 1) + (minDam << 6));
+			dam = std::max(dam + Fixed26_6::fromInt(player._pIGetHit), Fixed26_6::fromInt(1));
 			CheckReflect(monster, player, dam);
 		}
 		return;
@@ -1243,22 +1244,22 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 	MonsterReducePlayerAttribute(monster, player);
 
 	// New method fixes a bug which caused the maximum possible damage value to be 63/64ths too low.
-	int dam = RandomIntBetween(minDam << 6, maxDam << 6);
-	dam = std::max(dam + (player._pIGetHit << 6), 64);
+	Fixed26_6 dam = Fixed26_6::fromRaw(RandomIntBetween(minDam << 6, maxDam << 6));
+	dam = std::max(dam + Fixed26_6::fromInt(player._pIGetHit), Fixed26_6::fromInt(1));
 	if (&player == MyPlayer) {
 		if (player.wReflections > 0) {
-			const int reflectedDamage = CheckReflect(monster, player, dam);
-			dam = std::max(dam - reflectedDamage, 0);
+			const Fixed26_6 reflectedDamage = CheckReflect(monster, player, dam);
+			dam = std::max(dam - reflectedDamage, Fixed26_6::fromInt(0));
 		}
 		// Lua mod support: a player-minion source may classify the death (default = vanilla monster/trap)
 		const DeathReason deathReason = ((monster.flags & MFLAG_GOLEM) != 0 && lua::OnGolemKillIsPlayerKill(&monster, &player, false)) ? DeathReason::Player : DeathReason::MonsterOrTrap;
-		ApplyPlrDamage(DamageType::Physical, player, 0, 0, dam, deathReason);
+		ApplyPlrDamage(DamageType::Physical, player, dam, 0, deathReason);
 	}
 
 	// Reflect can also kill a monster, so make sure the monster is still alive
 	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::Thorns) && monster.mode != MonsterMode::Death) {
 		const int mdam = (GenerateRnd(3) + 1) << 6;
-		ApplyMonsterDamage(DamageType::Physical, monster, mdam);
+		ApplyMonsterDamage(DamageType::Physical, monster, Fixed26_6::fromRaw(mdam));
 		if (monster.hasNoLife())
 			M_StartKill(monster, player);
 		else
@@ -1275,7 +1276,7 @@ void MonsterAttackPlayer(Monster &monster, Player &player, int hit, int minDam, 
 	StartPlrHit(player, dam, false);
 	if ((monster.flags & MFLAG_KNOCKBACK) != 0) {
 		if (player._pmode != PM_GOTHIT)
-			StartPlrHit(player, 0, true);
+			StartPlrHit(player, Fixed26_6::fromInt(0), true);
 
 		const Point newPosition = player.position.tile + monster.direction;
 		if (PosOkPlayer(player, newPosition)) {
@@ -1444,8 +1445,8 @@ void MonsterHeal(Monster &monster)
 	if (monster.animInfo.currentFrame == 0) {
 		monster.flags &= ~MFLAG_LOCK_ANIMATION;
 		monster.flags |= MFLAG_ALLOW_SPECIAL;
-		if (monster.var1 + monster.hitPoints < monster.maxHitPoints) {
-			monster.hitPoints = monster.var1 + monster.hitPoints;
+		if (Fixed26_6::fromRaw(monster.var1) + monster.hitPoints < monster.maxHitPoints) {
+			monster.hitPoints = Fixed26_6::fromRaw(monster.var1) + monster.hitPoints;
 		} else {
 			monster.hitPoints = monster.maxHitPoints;
 			monster.flags &= ~MFLAG_ALLOW_SPECIAL;
@@ -1556,6 +1557,7 @@ void MonsterDeath(Monster &monster)
 		}
 
 		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		MarkWalkabilityChanged();
 		monster.isInvalid = true;
 
 		M_UpdateRelations(monster);
@@ -1597,6 +1599,7 @@ void MonsterPetrified(Monster &monster)
 {
 	if (monster.hitPoints <= 0) {
 		dMonster[monster.position.tile.x][monster.position.tile.y] = 0;
+		MarkWalkabilityChanged();
 		monster.isInvalid = true;
 	}
 }
@@ -2200,15 +2203,15 @@ void ScavengerAi(Monster &monster)
 		if (dCorpse[monster.position.tile.x][monster.position.tile.y] != 0) {
 			StartEating(monster);
 			if (gbIsHellfire) {
-				const int mMaxHP = monster.maxHitPoints;
+				const Fixed26_6 mMaxHP = monster.maxHitPoints;
 				monster.hitPoints += mMaxHP / 8;
 				monster.hitPoints = std::min(monster.hitPoints, monster.maxHitPoints);
 				if (monster.goalVar3 <= 0 || monster.hitPoints == monster.maxHitPoints)
 					dCorpse[monster.position.tile.x][monster.position.tile.y] = 0;
 			} else {
-				monster.hitPoints += 64;
+				monster.hitPoints += Fixed26_6::fromInt(1);
 			}
-			int targetHealth = monster.maxHitPoints;
+			Fixed26_6 targetHealth = monster.maxHitPoints;
 			if (!gbIsHellfire)
 				targetHealth = (monster.maxHitPoints / 2) + (monster.maxHitPoints / 4);
 			if (monster.hitPoints >= targetHealth) {
@@ -2319,8 +2322,8 @@ void FallenAi(Monster &monster)
 			return;
 		}
 		StartSpecialStand(monster, monster.direction);
-		if (monster.maxHitPoints - (2 * monster.intelligence + 2) >= monster.hitPoints)
-			monster.hitPoints += 2 * monster.intelligence + 2;
+		if (monster.maxHitPoints - Fixed26_6::fromRaw(2 * monster.intelligence + 2) >= monster.hitPoints)
+			monster.hitPoints += Fixed26_6::fromRaw(2 * monster.intelligence + 2);
 		else
 			monster.hitPoints = monster.maxHitPoints;
 		const int rad = (2 * monster.intelligence) + 4;
@@ -3249,7 +3252,7 @@ void InitGolem(devilution::Monster &monster, uint8_t golemOwnerPlayerId, int16_t
 	monster.flags |= MFLAG_GOLEM;
 	monster.goalVar3 = static_cast<int8_t>(golemOwnerPlayerId);
 	const Player &player = Players[golemOwnerPlayerId];
-	monster.maxHitPoints = 2 * (320 * golemSpellLevel + player._pMaxMana / 3);
+	monster.maxHitPoints = Fixed26_6::fromRaw(2 * (320 * golemSpellLevel + player._pMaxMana.raw() / 3));
 	monster.hitPoints = monster.maxHitPoints;
 	monster.armorClass = 25;
 	monster.golemToHit = 5 * (golemSpellLevel + 8) + 2 * player.getCharacterLevel();
@@ -3359,7 +3362,7 @@ void LuaChangeMonsterToGolem(Monster &monster, uint8_t ownerPlayerId)
 	UpdateEnemy(monster);
 }
 
-tl::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag placeflag)
+std::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag placeflag)
 {
 	const size_t typeIndex = GetMonsterTypeIndex(type);
 	CMonster &monsterType = LevelMonsterTypes[typeIndex];
@@ -3387,7 +3390,7 @@ tl::expected<size_t, std::string> AddMonsterType(_monster_id type, placeflag pla
 	return typeIndex;
 }
 
-tl::expected<void, std::string> InitTRNForUniqueMonster(Monster &monster)
+std::expected<void, std::string> InitTRNForUniqueMonster(Monster &monster)
 {
 	char filestr[64];
 	*BufCopy(filestr, R"(monsters\monsters\)", UniqueMonstersData[static_cast<size_t>(monster.uniqueType)].mTrnName, ".trn") = '\0';
@@ -3395,13 +3398,13 @@ tl::expected<void, std::string> InitTRNForUniqueMonster(Monster &monster)
 	return {};
 }
 
-tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonsterType monsterType, size_t minionType, int bosspacksize, const UniqueMonsterData &uniqueMonsterData)
+std::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonsterType monsterType, size_t minionType, int bosspacksize, const UniqueMonsterData &uniqueMonsterData)
 {
 	monster.uniqueType = monsterType;
-	monster.maxHitPoints = uniqueMonsterData.mmaxhp << 6;
+	monster.maxHitPoints = Fixed26_6::fromInt(uniqueMonsterData.mmaxhp);
 
 	if (!gbIsMultiplayer)
-		monster.maxHitPoints = std::max(monster.maxHitPoints / 2, 64);
+		monster.maxHitPoints = std::max(monster.maxHitPoints / 2, Fixed26_6::fromInt(1));
 
 	monster.hitPoints = monster.maxHitPoints;
 	monster.ai = uniqueMonsterData.mAi;
@@ -3438,9 +3441,9 @@ tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonst
 	if (sgGameInitInfo.nDifficulty == DIFF_NIGHTMARE) {
 		monster.maxHitPoints = 3 * monster.maxHitPoints;
 		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 100 : 50) << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(gbIsMultiplayer ? 100 : 50);
 		else
-			monster.maxHitPoints += 100 << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(100);
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 2 * (monster.minDamage + 2);
 		monster.maxDamage = 2 * (monster.maxDamage + 2);
@@ -3449,9 +3452,9 @@ tl::expected<void, std::string> PrepareUniqueMonst(Monster &monster, UniqueMonst
 	} else if (sgGameInitInfo.nDifficulty == DIFF_HELL) {
 		monster.maxHitPoints = 4 * monster.maxHitPoints;
 		if (gbIsHellfire)
-			monster.maxHitPoints += (gbIsMultiplayer ? 200 : 100) << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(gbIsMultiplayer ? 200 : 100);
 		else
-			monster.maxHitPoints += 200 << 6;
+			monster.maxHitPoints += Fixed26_6::fromInt(200);
 		monster.hitPoints = monster.maxHitPoints;
 		monster.minDamage = 4 * monster.minDamage + 6;
 		monster.maxDamage = 4 * monster.maxDamage + 6;
@@ -3534,7 +3537,7 @@ void InitLevelMonsters()
 	uniquetrans = 0;
 }
 
-tl::expected<void, std::string> GetLevelMTypes()
+std::expected<void, std::string> GetLevelMTypes()
 {
 	RETURN_IF_ERROR(AddMonsterType(MT_GOLEM, PLACE_SPECIAL));
 	if (currlevel == 16) {
@@ -3620,7 +3623,7 @@ tl::expected<void, std::string> GetLevelMTypes()
 	return {};
 }
 
-tl::expected<void, std::string> InitMonsterSND(CMonster &monsterType)
+std::expected<void, std::string> InitMonsterSND(CMonster &monsterType)
 {
 	if (!gbSndInited)
 		return {};
@@ -3649,7 +3652,7 @@ tl::expected<void, std::string> InitMonsterSND(CMonster &monsterType)
 	return {};
 }
 
-tl::expected<void, std::string> InitMonsterGFX(CMonster &monsterType, MonsterSpritesData &&spritesData)
+std::expected<void, std::string> InitMonsterGFX(CMonster &monsterType, MonsterSpritesData &&spritesData)
 {
 	if (HeadlessMode)
 		return {};
@@ -3723,7 +3726,7 @@ tl::expected<void, std::string> InitMonsterGFX(CMonster &monsterType, MonsterSpr
 	return {};
 }
 
-tl::expected<void, std::string> InitAllMonsterGFX()
+std::expected<void, std::string> InitAllMonsterGFX()
 {
 	if (HeadlessMode)
 		return {};
@@ -3774,7 +3777,7 @@ void WeakenNaKrul()
 	Monster &monster = Monsters[UberDiabloMonsterIndex];
 	PlayEffect(monster, MonsterSound::Death);
 	monster.armorClass -= 50;
-	const int hp = monster.maxHitPoints / 2;
+	const Fixed26_6 hp = monster.maxHitPoints / 2;
 	monster.resistance = 0;
 	monster.hitPoints = hp;
 	monster.maxHitPoints = hp;
@@ -3788,10 +3791,11 @@ void InitGolems()
 	}
 }
 
-tl::expected<void, std::string> InitMonsters()
+std::expected<void, std::string> InitMonsters()
 {
-	if (!gbIsSpawn && !setlevel && currlevel == 16)
-		LoadDiabMonsts();
+	if (!gbIsSpawn && !setlevel && currlevel == 16) {
+		RETURN_IF_ERROR(LoadDiabMonsts());
+	}
 
 	int nt = numtrigs;
 	if (currlevel == 15)
@@ -3851,7 +3855,7 @@ tl::expected<void, std::string> InitMonsters()
 	return InitAllMonsterGFX();
 }
 
-tl::expected<void, std::string> SetMapMonsters(const uint16_t *dunData, Point startPosition)
+std::expected<void, std::string> SetMapMonsters(const uint16_t *dunData, Point startPosition)
 {
 	RETURN_IF_ERROR(AddMonsterType(MT_GOLEM, PLACE_SPECIAL));
 	if (setlevel)
@@ -3973,20 +3977,22 @@ void AddDoppelganger(Monster &monster)
 	}
 }
 
-void ApplyMonsterDamage(DamageType damageType, Monster &monster, int damage)
+void ApplyMonsterDamage(DamageType damageType, Monster &monster, Fixed26_6 damage)
 {
-	lua::OnMonsterTakeDamage(&monster, damage, static_cast<int>(damageType));
+	lua::OnMonsterTakeDamage(&monster, damage.raw(), static_cast<int>(damageType));
 
 	monster.hitPoints -= damage;
 
 	if (monster.hasNoLife()) {
+		// A monster without life no longer blocks the tile it stands on.
+		MarkWalkabilityChanged();
 		delta_kill_monster(monster, monster.position.tile, *MyPlayer);
 		NetSendCmdLocParam1(false, CMD_MONSTDEATH, monster.position.tile, static_cast<uint16_t>(monster.getId()));
 		return;
 	}
 
 	delta_monster_hp(monster, *MyPlayer);
-	NetSendCmdMonDmg(false, static_cast<uint16_t>(monster.getId()), damage);
+	NetSendCmdMonDmg(false, static_cast<uint16_t>(monster.getId()), damage.raw());
 }
 
 void MonsterReducePlayerAttribute(Monster &monster, Player &player)
@@ -4007,8 +4013,8 @@ void MonsterReducePlayerAttribute(Monster &monster, Player &player)
 		ModifyPlrVit(player, -static_cast<int>(monster.reducePlayerVitality));
 	}
 	if (monster.reducePlayerMaxHP > 0) {
-		const int reduceAmount = std::min(player._pMaxHPBase - 64, monster.reducePlayerMaxHP * 64);
-		player._pMaxHP = std::max(64, player._pMaxHP - reduceAmount);
+		const Fixed26_6 reduceAmount = std::min(player._pMaxHPBase - Fixed26_6::fromInt(1), Fixed26_6::fromInt(monster.reducePlayerMaxHP));
+		player._pMaxHP = std::max(Fixed26_6::fromInt(1), player._pMaxHP - reduceAmount);
 		player._pHitPoints = std::min(player._pHitPoints, player._pMaxHP);
 		player._pMaxHPBase -= reduceAmount;
 		player._pHPBase = std::min(player._pHPBase, player._pMaxHPBase);
@@ -4016,8 +4022,8 @@ void MonsterReducePlayerAttribute(Monster &monster, Player &player)
 		RedrawComponent(PanelDrawComponent::Health);
 	}
 	if (monster.reducePlayerMaxMana > 0) {
-		const int reduceAmount = std::min(player._pMaxManaBase, monster.reducePlayerMaxMana * 64);
-		player._pMaxMana = std::max(0, player._pMaxMana - reduceAmount);
+		const Fixed26_6 reduceAmount = std::min(player._pMaxManaBase, Fixed26_6::fromInt(monster.reducePlayerMaxMana));
+		player._pMaxMana = std::max(Fixed26_6::fromInt(0), player._pMaxMana - reduceAmount);
 		player._pMana = std::min(player._pMana, player._pMaxMana);
 		player._pMaxManaBase -= reduceAmount;
 		player._pManaBase = std::min(player._pManaBase, player._pMaxManaBase);
@@ -4052,6 +4058,7 @@ void M_ClearSquares(const Monster &monster)
 		if (FindMonsterAtPosition(searchTile) == &monster)
 			dMonster[searchTile.x][searchTile.y] = 0;
 	}
+	MarkWalkabilityChanged();
 }
 
 void M_GetKnockback(Monster &monster, WorldTilePosition attackerStartPos)
@@ -4108,7 +4115,9 @@ void MonsterDeath(Monster &monster, Direction md, bool sendmsg)
 		AddPlrMonstExper(monster.level(sgGameInitInfo.nDifficulty), monster.exp(sgGameInitInfo.nDifficulty), monster.whoHit);
 
 	MonsterKillCounts[monster.type().type]++;
-	monster.hitPoints = 0;
+	monster.hitPoints = Fixed26_6::fromInt(0);
+	// A monster without life no longer blocks the tile it stands on.
+	MarkWalkabilityChanged();
 	monster.flags &= ~MFLAG_HIDDEN;
 	SetRndSeed(monster.rndItemSeed);
 
@@ -4248,9 +4257,9 @@ void PrepDoEnding()
 		player._pInvincible = true;
 		if (gbIsMultiplayer) {
 			if (player.hasNoLife())
-				player._pHitPoints = 64;
+				player._pHitPoints = Fixed26_6::fromInt(1);
 			if (player.hasNoMana())
-				player._pMana = 64;
+				player._pMana = Fixed26_6::fromInt(1);
 		}
 	}
 }
@@ -4509,9 +4518,9 @@ void ProcessMonsters()
 		}
 		if (monster.hitPoints < monster.maxHitPoints && !monster.hasNoLife()) {
 			if (monster.level(sgGameInitInfo.nDifficulty) > 1) {
-				monster.hitPoints += monster.level(sgGameInitInfo.nDifficulty) / 2;
+				monster.hitPoints += Fixed26_6::fromRaw(monster.level(sgGameInitInfo.nDifficulty) / 2);
 			} else {
-				monster.hitPoints += monster.level(sgGameInitInfo.nDifficulty);
+				monster.hitPoints += Fixed26_6::fromRaw(monster.level(sgGameInitInfo.nDifficulty));
 			}
 			monster.hitPoints = std::min(monster.hitPoints, monster.maxHitPoints); // prevent going over max HP with part of a single regen tick
 		}
@@ -4639,7 +4648,7 @@ bool LineClearMovingMissile(Point startPoint, Point endPoint)
 	return LineClear(PosOkMovingMissile, startPoint, endPoint);
 }
 
-tl::expected<void, std::string> SyncMonsterAnim(Monster &monster)
+std::expected<void, std::string> SyncMonsterAnim(Monster &monster)
 {
 #ifdef _DEBUG
 	// fix for saves with debug monsters having type originally not on the level
@@ -4718,9 +4727,9 @@ void M_FallenFear(Point position)
 void PrintMonstHistory(int mt)
 {
 	if (*GetOptions().Gameplay.showMonsterType) {
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Type: {:s}  Kills: {:d}")), GetMonsterTypeText(MonstersData[mt]), MonsterKillCounts[mt]));
+		AddInfoBoxString(FormatRuntime(_("Type: {:s}  Kills: {:d}"), GetMonsterTypeText(MonstersData[mt]), MonsterKillCounts[mt]));
 	} else {
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Total kills: {:d}")), MonsterKillCounts[mt]));
+		AddInfoBoxString(FormatRuntime(_("Total kills: {:d}"), MonsterKillCounts[mt]));
 	}
 
 	if (MonsterKillCounts[mt] >= 30) {
@@ -4746,7 +4755,7 @@ void PrintMonstHistory(int mt)
 			minHP = 4 * minHP + hpBonusHell;
 			maxHP = 4 * maxHP + hpBonusHell;
 		}
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Hit Points: {:d}-{:d}")), minHP, maxHP));
+		AddInfoBoxString(FormatRuntime(_("Hit Points: {:d}-{:d}"), minHP, maxHP));
 	}
 	if (MonsterKillCounts[mt] >= 15) {
 		const int res = (sgGameInitInfo.nDifficulty != DIFF_HELL) ? MonstersData[mt].resistance : MonstersData[mt].resistanceHell;
@@ -4781,7 +4790,7 @@ void PrintUniqueHistory()
 {
 	const Monster &monster = Monsters[pcursmonst];
 	if (*GetOptions().Gameplay.showMonsterType) {
-		AddInfoBoxString(fmt::format(fmt::runtime(_("Type: {:s}")), GetMonsterTypeText(monster.data())));
+		AddInfoBoxString(FormatRuntime(_("Type: {:s}"), GetMonsterTypeText(monster.data())));
 	}
 
 	const int res = monster.resistance & (RESIST_MAGIC | RESIST_FIRE | RESIST_LIGHTNING | IMMUNE_MAGIC | IMMUNE_FIRE | IMMUNE_LIGHTNING);
@@ -4851,7 +4860,7 @@ void MissToMonst(Missile &missile, Point position)
 			return;
 
 		if (player->_pmode != PM_GOTHIT && player->_pmode != PM_DEATH)
-			StartPlrHit(*player, 0, true);
+			StartPlrHit(*player, Fixed26_6::fromInt(0), true);
 		const Point newPosition = oldPosition + GetDirection(missile.position.start, oldPosition);
 		if (PosOkPlayer(*player, newPosition)) {
 			player->position.tile = newPosition;
@@ -4877,6 +4886,7 @@ void MissToMonst(Missile &missile, Point position)
 	if (IsTileAvailable(*target, newPosition)) {
 		monster.occupyTile(newPosition, false);
 		dMonster[oldPosition.x][oldPosition.y] = 0;
+		MarkWalkabilityChanged();
 		monster.position.tile = newPosition;
 		monster.position.future = newPosition;
 	}
@@ -5284,6 +5294,7 @@ void Monster::occupyTile(Point tile, bool isMoving) const
 {
 	const auto id = static_cast<int16_t>(this->getId() + 1);
 	dMonster[tile.x][tile.y] = isMoving ? -id : id;
+	MarkWalkabilityChanged();
 }
 
 } // namespace devilution

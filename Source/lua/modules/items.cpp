@@ -1,8 +1,8 @@
 #include "lua/modules/items.hpp"
 
+#include <format>
 #include <string_view>
 
-#include <fmt/format.h>
 #include <sol/sol.hpp>
 
 #include "appfat.h"
@@ -67,8 +67,8 @@ void InitItemUserType(sol::state_view &lua)
 	LuaSetDocProperty(itemType, "PLFR", "number", "Fire resistance bonus", &Item::_iPLFR);
 	LuaSetDocProperty(itemType, "PLLR", "number", "Lightning resistance bonus", &Item::_iPLLR);
 	LuaSetDocProperty(itemType, "PLMR", "number", "Magic resistance bonus", &Item::_iPLMR);
-	LuaSetDocProperty(itemType, "PLMana", "number", "Mana bonus", &Item::_iPLMana);
-	LuaSetDocProperty(itemType, "PLHP", "number", "Life bonus", &Item::_iPLHP);
+	LuaSetDocProperty(itemType, "PLMana", "number", "Mana bonus", [](const Item &i) { return i._iPLMana.raw(); }, [](Item &i, int16_t val) { i._iPLMana = Fixed10_6::fromRaw(val); });
+	LuaSetDocProperty(itemType, "PLHP", "number", "Life bonus", [](const Item &i) { return i._iPLHP.raw(); }, [](Item &i, int16_t val) { i._iPLHP = Fixed10_6::fromRaw(val); });
 	LuaSetDocProperty(itemType, "PLDamMod", "number", "Damage modifier bonus", &Item::_iPLDamMod);
 	LuaSetDocProperty(itemType, "PLGetHit", "number", "Damage from enemies bonus", &Item::_iPLGetHit);
 	LuaSetDocProperty(itemType, "PLLight", "number", "Light bonus", &Item::_iPLLight);
@@ -538,7 +538,7 @@ void AddItemData(sol::table itemData, const int32_t baseMappingId)
 	for (size_t i = 1; i <= numItems; ++i) {
 		sol::optional<sol::table> itemTable = itemData[i];
 		if (!itemTable) {
-			app_fatal(fmt::format("Expected item data table at index {}.", i));
+			app_fatal(std::format("Expected item data table at index {}.", i));
 		}
 		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
 		ItemData item = ParseItemDataTable(*itemTable);
@@ -546,7 +546,7 @@ void AddItemData(sol::table itemData, const int32_t baseMappingId)
 		AllItemsList.push_back(std::move(item));
 		const auto [it, inserted] = ItemMappingIdsToIndices.emplace(mappingId, static_cast<int16_t>(AllItemsList.size()) - 1);
 		if (!inserted) {
-			app_fatal(fmt::format("An item already exists for mapping ID {}.", mappingId));
+			app_fatal(std::format("An item already exists for mapping ID {}.", mappingId));
 		}
 	}
 }
@@ -558,7 +558,7 @@ void AddUniqueItemData(sol::table itemData, const int32_t baseMappingId)
 	for (size_t i = 1; i <= numItems; ++i) {
 		sol::optional<sol::table> itemTable = itemData[i];
 		if (!itemTable) {
-			app_fatal(fmt::format("Expected unique item data table at index {}.", i));
+			app_fatal(std::format("Expected unique item data table at index {}.", i));
 		}
 		const int32_t mappingId = baseMappingId + static_cast<int32_t>(i - 1);
 		UniqueItem item = ParseUniqueItemDataTable(*itemTable);
@@ -566,7 +566,7 @@ void AddUniqueItemData(sol::table itemData, const int32_t baseMappingId)
 		UniqueItems.push_back(std::move(item));
 		const auto [it, inserted] = UniqueItemMappingIdsToIndices.emplace(mappingId, static_cast<int32_t>(UniqueItems.size()) - 1);
 		if (!inserted) {
-			app_fatal(fmt::format("A unique item already exists for mapping ID {}.", mappingId));
+			app_fatal(std::format("A unique item already exists for mapping ID {}.", mappingId));
 		}
 	}
 }

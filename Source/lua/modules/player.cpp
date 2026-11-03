@@ -123,16 +123,16 @@ void InitPlayerUserType(sol::state_view &lua)
 	    });
 	LuaSetDocReadonlyProperty(playerType, "mana", "number",
 	    "Current mana (readonly)",
-	    [](Player &player) { return player._pMana >> 6; });
+	    [](Player &player) { return player._pMana.whole(); });
 	LuaSetDocReadonlyProperty(playerType, "maxMana", "number",
 	    "Maximum mana (readonly)",
-	    [](Player &player) { return player._pMaxMana >> 6; });
+	    [](Player &player) { return player._pMaxMana.whole(); });
 	LuaSetDocReadonlyProperty(playerType, "health", "integer",
 	    "Current hit points (readonly)",
-	    [](const Player &player) { return player._pHitPoints >> 6; });
+	    [](const Player &player) { return player._pHitPoints.whole(); });
 	LuaSetDocReadonlyProperty(playerType, "maxHealth", "integer",
 	    "Maximum hit points (readonly)",
-	    [](const Player &player) { return player._pMaxHP >> 6; });
+	    [](const Player &player) { return player._pMaxHP.whole(); });
 	LuaSetDocReadonlyProperty(playerType, "lightRadius", "integer",
 	    "Player's light radius in tiles (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pLightRad); });
@@ -331,11 +331,11 @@ void InitPlayerUserType(sol::state_view &lua)
 
 		    // Recompute HP/mana bases from the class formula so drift (Black Death,
 		    // shrine side-effects) is corrected rather than carried forward.
-		    const int32_t correctHPBase = player.calculateBaseLife();
+		    const Fixed26_6 correctHPBase = player.calculateBaseLife();
 		    player._pMaxHPBase = correctHPBase;
 		    player._pHPBase = std::min(player._pHPBase, correctHPBase);
 
-		    const int32_t correctManaBase = player.calculateBaseMana();
+		    const Fixed26_6 correctManaBase = player.calculateBaseMana();
 		    player._pMaxManaBase = correctManaBase;
 		    player._pManaBase = std::min(player._pManaBase, correctManaBase);
 

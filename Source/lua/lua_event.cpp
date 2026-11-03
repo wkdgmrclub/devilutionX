@@ -401,16 +401,6 @@ int OnGetArmorLevelBonus(const Player *player, std::string_view armorType, bool 
 	return CallLuaEventReturn<int>(defaultValue, "OnGetArmorLevelBonus", player, std::string(armorType), isUnique);
 }
 
-int OnGetPotionHealAmount(const Player *player, int l, int defaultValue)
-{
-	return CallLuaEventReturn<int>(defaultValue, "OnGetPotionHealAmount", player, l);
-}
-
-int OnGetPotionManaAmount(const Player *player, int l, int defaultValue)
-{
-	return CallLuaEventReturn<int>(defaultValue, "OnGetPotionManaAmount", player, l);
-}
-
 bool OnPlayerHasArmorPierce(const Player *player, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerHasArmorPierce", player);

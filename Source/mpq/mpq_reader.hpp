@@ -2,8 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <memory>
-#include <optional>
 #include <string>
 #include <string_view>
 
@@ -15,9 +15,9 @@ namespace devilution {
 
 class MpqArchive {
 public:
-	static std::optional<MpqArchive> Open(const char *path, int32_t &error);
-	std::optional<MpqArchive> Clone(int32_t &error);
-	static const char *ErrorMessage();
+	static std::expected<MpqArchive, std::string> Open(const char *path);
+	static std::expected<MpqArchive, std::string> OpenWithSDL(const char *path);
+	std::expected<MpqArchive, std::string> Clone();
 
 	MpqArchive(MpqArchive &&other) noexcept;
 	MpqArchive &operator=(MpqArchive &&other) noexcept;

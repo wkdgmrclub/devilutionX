@@ -12,7 +12,7 @@ Note that ```pkg-config``` is an optional dependency for finding libsodium, alth
 ### Installing dependencies on Debian and Ubuntu
 
 ```
-sudo apt-get install cmake g++ libsdl2-dev libsodium-dev libpng-dev libbz2-dev libgtest-dev libgmock-dev libbenchmark-dev libsdl2-image-dev libfmt-dev
+sudo apt-get install cmake g++ libsdl2-dev libsodium-dev libpng-dev libbz2-dev libgtest-dev libgmock-dev libbenchmark-dev libsdl2-image-dev
 ```
 
 ### If you want to build the translations (optional)
@@ -30,7 +30,7 @@ sudo apt-get install smpq
 ### Installing dependencies on Fedora
 
 ```
-sudo dnf install cmake gcc-c++ glibc-devel libstdc++-static SDL2-devel SDL2_image-devel libsodium-devel libpng-devel bzip2-devel gmock-devel gtest-devel google-benchmark-devel libasan libubsan fmt-devel
+sudo dnf install cmake gcc-c++ glibc-devel libstdc++-static SDL2-devel SDL2_image-devel libsodium-devel libpng-devel bzip2-devel gmock-devel gtest-devel google-benchmark-devel libasan libubsan libpfm-devel
 ```
 
 ### Compiling
@@ -54,7 +54,6 @@ Then, build DevilutionX using the cross-compilation CMake toolchain file:
 cmake -S. -Bbuild-aarch64-rel \
   -DCMAKE_TOOLCHAIN_FILE=../CMake/platforms/aarch64-linux-gnu.toolchain.cmake \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DCPACK=ON \
-  -DDEVILUTIONX_SYSTEM_LIBFMT=OFF
 cmake --build build-aarch64-rel -j $(getconf _NPROCESSORS_ONLN) --target package
 ```
 
@@ -269,18 +268,23 @@ cmake --build build -j $(getconf _NPROCESSORS_ONLN) --target package
 Make sure to install the workload `Desktop development with C++` and the individual components `C++ CMake tools for Windows` and `Windows SDK` for Visual Studio.
 *Note: `Windows SDK` component should match your Windows build version.*
 
-Install [Git for Windows](https://gitforwindows.org/)
+Install [Git for Windows](https://gitforwindows.org/).
 
-Run the following commands in Command Prompt or Powershell
+Run the following commands in Powershell
 
-~~~ bat
+~~~ powershell
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
-bootstrap-vcpkg.bat
-vcpkg integrate install
+.\bootstrap-vcpkg.bat
+[Environment]::SetEnvironmentVariable("VCPKG_ROOT", $PWD.Path, "User")
+$env:VCPKG_ROOT = $PWD.Path
 ~~~
 
-If you need additional instructions for vcpkg you can find the documentation [here](https://github.com/microsoft/vcpkg#quick-start-windows).
+If you need additional instructions for vcpkg you can find the documentation [here](https://learn.microsoft.com/vcpkg/get_started/get-started).
+
+### If you want to build via clang (optional)
+
+In the Visual Studio installer, install the individual component `C++ Clang Compiler for Windows`.
 
 ### If you want to build the devilutionX.mpq File (optional)
 
@@ -292,13 +296,13 @@ The location of this tool will need to be [added to the system's PATH environmen
 * **Through Open->CMake in Visual Studio**
 
 1. Go to `File -> Open -> CMake`, select `CMakeLists.txt` from the project root.
-2. Select the `x64-Release` configuration (or `x86` for 32 bit builds, `-Debug` for debug builds).
+2. Select the `msvc-x64-Release` configuration (or `x86` for 32 bit builds, `-Debug` for debug builds).
 3. Select `Build devilution.exe` from the `Build` menu.
 
 * **Through GCC/WSL in Visual Studio**
 
 1. Ensure the WSL environment has the build pre-requisites for both devilutionX (see "Installing Dependencies on Debian and Ubuntu" under the "Linux" section above) and [WSL remote development](https://docs.microsoft.com/en-us/cpp/linux/connect-to-your-remote-linux-computer?view=msvc-160#connect-to-wsl).
-2. Select the `WSL-GCC-x64-Debug` configuration.
+2. Select the `gcc-x64-Debug` configuration.
 3. Select `Build devilution` from the `Build` menu.
 
 * **Through cmake-gui**
@@ -327,6 +331,28 @@ Click "Open Existing Project" and choose "android-project" folder in DevilutionX
 Wait until Gradle sync is completed.
 In Android Studio, go to "Build -> Make Project" or use the shortcut Ctrl+F9
 You can find the compiled APK in `/android-project/app/build/outputs/apk/`
+</details>
+
+<details><summary>Android Termux</summary>
+
+### Installing dependencies on Debian and Ubuntu
+
+```
+pkg i which getconf cmake gettext libsodium sdl2 sdl2-image zlib bzip2
+```
+
+### If you want to build the devilutionX.mpq File (optional)
+
+```
+NOSUDO=1 tools/build_and_install_smpq.sh
+```
+
+### Compiling
+
+```bash
+cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release -DDEVILUTIONX_SYSTEM_BENCHMARK=OFF
+cmake --build build -j $(nproc)
+```
 </details>
 
 <details><summary>Nintendo Switch</summary>
@@ -546,13 +572,13 @@ emrun index.html
 
 ### Dependencies
 
-* Windows 10
+* Windows 10+
 * CMake
 * Git
-* Visual Studio 2022 with the following packages installed:
-    * C++ (v143) Universal Windows Platform tools
+* Visual Studio 2026 with the following packages installed:
+    * C++ (v145) Universal Windows Platform tools
     * Windows 11 SDK (10.0.26100.0)
-    * MSVC v143 - VS 2022 C++ x64/x86 build tools
+    * MSVC v145 - VS 2026 C++ x64/x86 build tools
 
 _Note: Visual Studio Community Edition can be used._
 
@@ -600,8 +626,7 @@ sudo port install curl curl-ca-bundle gcc14 cmake \
 sudo port select --set gcc mp-gcc14
 ~~~
 
-<!-- The following packages have issues so we use the vendored versions:
-     libfmt11 google-benchmark gtest -->
+<!-- The following packages have issues so we use the vendored versions: google-benchmark gtest -->
 
 Then, build DevilutionX:
 
@@ -625,21 +650,51 @@ sudo port select --set python3 python312
 
 <details><summary>DOS</summary>
 
-You can build for DOS from Linux using DJGPP.
+Cross-compile for DOS from Linux using DJGPP GCC 14.2.0. The build uses SDL3-dos
+(a DOS port of SDL3) with VESA video and Sound Blaster 16 audio.
 
-First, install / compile the dependencies (only needs to be done once):
+#### Installing the DJGPP toolchain (once)
 
 ~~~ bash
 Packaging/windows/dos-prep.sh
 ~~~
 
-Then, build DevilutionX:
+This builds and installs the DJGPP cross-compiler. After installation, make sure
+`i586-pc-msdosdjgpp-gcc` (or `i386-pc-msdosdjgpp-gcc`) is on your `PATH`.
+
+#### Compiling
 
 ~~~ bash
-cmake -S. -Bbuild-dos -DCMAKE_TOOLCHAIN_FILE=CMake/platforms/djcpp.toolchain.cmake -DTARGET_PLATFORM="dos" \
-  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+cmake -S. -Bbuild-dos \
+  -DCMAKE_TOOLCHAIN_FILE=CMake/platforms/djcpp.toolchain.cmake \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_TESTING=OFF
 cmake --build build-dos -j $(getconf _NPROCESSORS_ONLN)
 ~~~
+
+Output: `build-dos/devx.exe` (≈ 5 MB DJGPP executable).
+
+#### Running in DOSBox
+
+1. Copy the CWSDPMI DPMI host next to the executable:
+   ~~~ bash
+   cp /path/to/CWSDPMI.EXE build-dos/
+   ~~~
+
+2. Place `spawn.mpq` (shareware) or `DIABDAT.MPQ` (full game) in `build-dos/`.
+
+3. Run:
+   ~~~ bash
+   dosbox -c "MOUNT C build-dos" -c "C:" -c "devx.exe"
+   ~~~
+
+Useful flags:
+- `devx.exe --verbose --log-to-file DEBUG.LOG` to write verbose log to a file
+
+#### Known limitations
+
+- **MP3 too slow for real-time:** dr_mp3 compiles but real-time stream-decoding
+  drops the game to ~4.5 fps. Use WAV-only MPQ files on DOS.
 
 </details>
 

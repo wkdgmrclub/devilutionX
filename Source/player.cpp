@@ -14,8 +14,6 @@
 #include <SDL.h>
 #endif
 
-#include <fmt/core.h>
-
 #include "control/control.hpp"
 #include "controls/control_mode.hpp"
 #include "controls/plrctrls.h"
@@ -55,6 +53,7 @@
 #include "stores.h"
 #include "tables/itemdat.h"
 #include "towners.h"
+#include "utils/format.hpp"
 #include "utils/is_of.hpp"
 #include "utils/language.h"
 #include "utils/log.hpp"
@@ -422,6 +421,7 @@ bool DoWalk(Player &player)
 
 	// We reached the new tile -> update the player's tile position
 	dPlayer[player.position.tile.x][player.position.tile.y] = 0;
+	MarkWalkabilityChanged();
 	player.position.tile = player.position.temp;
 	// dPlayer is set here for backwards compatibility; without it, the player would be invisible if loaded from a vanilla save.
 	player.occupyTile(player.position.tile, false);
@@ -635,26 +635,26 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 		if (HasAnyOf(player.pDamAcFlags, ItemSpecialEffectHf::Peril)) {
 			dam2 += player._pIGetHit << 6;
 			if (dam2 >= 0) {
-				ApplyPlrDamage(DamageType::Physical, player, 0, 1, dam2);
+				ApplyPlrDamage(DamageType::Physical, player, Fixed26_6::fromRaw(dam2), 1);
 			}
 			dam *= 2;
 		}
 #ifdef _DEBUG
 		if (DebugGodMode) {
-			dam = monster.hitPoints; /* ensure monster is killed with one hit */
+			dam = monster.hitPoints.raw(); /* ensure monster is killed with one hit */
 		}
 #endif
-		ApplyMonsterDamage(DamageType::Physical, monster, dam);
+		ApplyMonsterDamage(DamageType::Physical, monster, Fixed26_6::fromRaw(dam));
 	}
 
 	int skdam = 0;
 	if (HasAnyOf(player._pIFlags, ItemSpecialEffect::RandomStealLife)) {
 		skdam = GenerateRnd(dam / 8);
-		player._pHitPoints += skdam;
+		player._pHitPoints += Fixed26_6::fromRaw(skdam);
 		if (player._pHitPoints > player._pMaxHP) {
 			player._pHitPoints = player._pMaxHP;
 		}
-		player._pHPBase += skdam;
+		player._pHPBase += Fixed26_6::fromRaw(skdam);
 		if (player._pHPBase > player._pMaxHPBase) {
 			player._pHPBase = player._pMaxHPBase;
 		}
@@ -667,11 +667,11 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::StealMana5)) {
 			skdam = 5 * dam / 100;
 		}
-		player._pMana += skdam;
+		player._pMana += Fixed26_6::fromRaw(skdam);
 		if (player._pMana > player._pMaxMana) {
 			player._pMana = player._pMaxMana;
 		}
-		player._pManaBase += skdam;
+		player._pManaBase += Fixed26_6::fromRaw(skdam);
 		if (player._pManaBase > player._pMaxManaBase) {
 			player._pManaBase = player._pMaxManaBase;
 		}
@@ -684,11 +684,11 @@ bool PlrHitMonst(Player &player, Monster &monster, bool adjacentDamage = false)
 		if (HasAnyOf(player._pIFlags, ItemSpecialEffect::StealLife5)) {
 			skdam = 5 * dam / 100;
 		}
-		player._pHitPoints += skdam;
+		player._pHitPoints += Fixed26_6::fromRaw(skdam);
 		if (player._pHitPoints > player._pMaxHP) {
 			player._pHitPoints = player._pMaxHP;
 		}
-		player._pHPBase += skdam;
+		player._pHPBase += Fixed26_6::fromRaw(skdam);
 		if (player._pHPBase > player._pMaxHPBase) {
 			player._pHPBase = player._pMaxHPBase;
 		}
@@ -750,21 +750,21 @@ bool PlrHitPlr(Player &attacker, Player &target)
 			dam *= 2;
 		}
 	}
-	const int skdam = dam << 6;
+	const Fixed26_6 skdam = Fixed26_6::fromInt(dam);
 	if (HasAnyOf(attacker._pIFlags, ItemSpecialEffect::RandomStealLife)) {
-		const int tac = GenerateRnd(skdam / 8);
-		attacker._pHitPoints += tac;
+		const int tac = GenerateRnd((skdam / 8).raw());
+		attacker._pHitPoints += Fixed26_6::fromRaw(tac);
 		if (attacker._pHitPoints > attacker._pMaxHP) {
 			attacker._pHitPoints = attacker._pMaxHP;
 		}
-		attacker._pHPBase += tac;
+		attacker._pHPBase += Fixed26_6::fromRaw(tac);
 		if (attacker._pHPBase > attacker._pMaxHPBase) {
 			attacker._pHPBase = attacker._pMaxHPBase;
 		}
 		RedrawComponent(PanelDrawComponent::Health);
 	}
 	if (&attacker == MyPlayer) {
-		NetSendCmdDamage(true, target, skdam, DamageType::Physical);
+		NetSendCmdDamage(true, target, skdam.raw(), DamageType::Physical);
 	}
 	StartPlrHit(target, skdam, false);
 
@@ -800,15 +800,6 @@ bool DoAttack(Player &player)
 			}
 		}
 
-		if (!gbIsHellfire || !HasAllOf(player._pIFlags, ItemSpecialEffect::FireDamage | ItemSpecialEffect::LightningDamage)) {
-			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FireDamage)) {
-				AddMissile(position, { 1, 0 }, Direction::South, MissileID::WeaponExplosion, TARGET_MONSTERS, player, 0, 0);
-			}
-			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::LightningDamage)) {
-				AddMissile(position, { 2, 0 }, Direction::South, MissileID::WeaponExplosion, TARGET_MONSTERS, player, 0, 0);
-			}
-		}
-
 		if (monster != nullptr) {
 			didhit = PlrHitMonst(player, *monster);
 		} else if (PlayerAtPosition(position) != nullptr && !player.friendlyMode) {
@@ -819,6 +810,18 @@ bool DoAttack(Player &player)
 				didhit = PlrHitObj(player, *object);
 			}
 		}
+
+		if (!gbIsHellfire || !HasAllOf(player._pIFlags, ItemSpecialEffect::FireDamage | ItemSpecialEffect::LightningDamage)) {
+			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::FireDamage)) {
+				int elementalDamage = didhit ? RandomIntBetween(player._pIFMinDam, player._pIFMaxDam) : 0;
+				AddMissile(position, { 1, 0 }, Direction::South, MissileID::WeaponExplosion, TARGET_MONSTERS, player, elementalDamage, 0);
+			}
+			if (HasAnyOf(player._pIFlags, ItemSpecialEffect::LightningDamage)) {
+				int elementalDamage = didhit ? RandomIntBetween(player._pILMinDam, player._pILMaxDam) : 0;
+				AddMissile(position, { 2, 0 }, Direction::South, MissileID::WeaponExplosion, TARGET_MONSTERS, player, elementalDamage, 0);
+			}
+		}
+
 		if (player.CanCleave()) {
 			// playing as a class/weapon with cleave
 			position = player.position.tile + Right(player._pdir);
@@ -922,29 +925,31 @@ bool DoRangeAttack(Player &player)
 	return false;
 }
 
-void DamageParryItem(Player &player)
+void DamageParryItem(Player &player, unsigned damageFrequency, int numDurLost)
 {
-	if (&player != MyPlayer) {
+	if (&player != MyPlayer)
 		return;
-	}
 
-	if (player.InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Shield || player.InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Staff) {
-		if (player.InvBody[INVLOC_HAND_LEFT]._iDurability == DUR_INDESTRUCTIBLE) {
-			return;
-		}
+	if (!FlipCoin(damageFrequency))
+		return;
 
-		player.InvBody[INVLOC_HAND_LEFT]._iDurability--;
-		if (player.InvBody[INVLOC_HAND_LEFT]._iDurability == 0) {
-			RemoveEquipment(player, INVLOC_HAND_LEFT, true);
-			CalcPlrInv(player, true);
-		}
-	}
+	const int minHandSlot = INVLOC_HAND_LEFT;
+	const int maxHandSlot = INVLOC_HAND_RIGHT;
 
-	if (player.InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Shield) {
-		if (player.InvBody[INVLOC_HAND_RIGHT]._iDurability != DUR_INDESTRUCTIBLE) {
-			player.InvBody[INVLOC_HAND_RIGHT]._iDurability--;
-			if (player.InvBody[INVLOC_HAND_RIGHT]._iDurability == 0) {
-				RemoveEquipment(player, INVLOC_HAND_RIGHT, true);
+	for (int slot = minHandSlot; slot <= maxHandSlot; slot++) {
+		Item &item = player.InvBody[slot];
+
+		if (item.isEmpty())
+			continue;
+
+		if (IsNoneOf(item._itype, ItemType::Shield, ItemType::Staff))
+			continue;
+
+		if (item._iMaxDur != DUR_INDESTRUCTIBLE) {
+			item._iDurability -= numDurLost;
+
+			if (item._iDurability <= 0) {
+				RemoveEquipment(player, static_cast<inv_body_loc>(slot), true);
 				CalcPlrInv(player, true);
 			}
 		}
@@ -956,55 +961,39 @@ bool DoBlock(Player &player)
 	if (player.AnimInfo.isLastFrame()) {
 		StartStand(player, player._pdir);
 		ClearStateVariables(player);
-
-		if (FlipCoin(10)) {
-			DamageParryItem(player);
-		}
+		DamageParryItem(player, 10, 1);
 		return true;
 	}
 
 	return false;
 }
 
-void DamageArmor(Player &player)
+void DamageArmor(Player &player, int numDurLost)
 {
-	if (&player != MyPlayer) {
+	if (&player != MyPlayer)
 		return;
-	}
 
-	if (player.InvBody[INVLOC_CHEST].isEmpty() && player.InvBody[INVLOC_HEAD].isEmpty()) {
+	Item &armor = player.InvBody[INVLOC_CHEST];
+	Item &helmet = player.InvBody[INVLOC_HEAD];
+
+	if (armor.isEmpty() && helmet.isEmpty())
 		return;
-	}
 
-	bool targetHead = FlipCoin(3);
-	if (!player.InvBody[INVLOC_CHEST].isEmpty() && player.InvBody[INVLOC_HEAD].isEmpty()) {
-		targetHead = false;
-	}
-	if (player.InvBody[INVLOC_CHEST].isEmpty() && !player.InvBody[INVLOC_HEAD].isEmpty()) {
-		targetHead = true;
-	}
+	const bool coin = FlipCoin(3);
+	const bool targetHelmet = armor.isEmpty() ? true : helmet.isEmpty() ? false
+	                                                                    : coin;
+	int slot = targetHelmet ? INVLOC_HEAD : INVLOC_CHEST;
+	Item &item = player.InvBody[slot];
 
-	Item *pi;
-	if (targetHead) {
-		pi = &player.InvBody[INVLOC_HEAD];
-	} else {
-		pi = &player.InvBody[INVLOC_CHEST];
-	}
-	if (pi->_iDurability == DUR_INDESTRUCTIBLE) {
+	if (item._iMaxDur == DUR_INDESTRUCTIBLE)
 		return;
-	}
 
-	pi->_iDurability--;
-	if (pi->_iDurability != 0) {
-		return;
-	}
+	item._iDurability -= numDurLost;
 
-	if (targetHead) {
-		RemoveEquipment(player, INVLOC_HEAD, true);
-	} else {
-		RemoveEquipment(player, INVLOC_CHEST, true);
+	if (item._iDurability <= 0) {
+		RemoveEquipment(player, static_cast<inv_body_loc>(slot), true);
+		CalcPlrInv(player, true);
 	}
-	CalcPlrInv(player, true);
 }
 
 bool DoSpell(Player &player)
@@ -1038,7 +1027,7 @@ bool DoGotHit(Player &player)
 		StartStand(player, player._pdir);
 		ClearStateVariables(player);
 		if (!FlipCoin(4)) {
-			DamageArmor(player);
+			DamageArmor(player, 1);
 		}
 
 		return true;
@@ -1059,17 +1048,6 @@ bool DoDeath(Player &player)
 	}
 
 	return false;
-}
-
-bool IsPlayerAdjacentToObject(Player &player, Object &object)
-{
-	const int x = std::abs(player.position.tile.x - object.position.x);
-	int y = std::abs(player.position.tile.y - object.position.y);
-	if (y > 1 && object.position.y >= 1 && FindObjectAtPosition(object.position + Direction::NorthEast) == &object) {
-		// special case for activating a large object from the north-east side
-		y = std::abs(player.position.tile.y - object.position.y + 1);
-	}
-	return x <= 1 && y <= 1;
 }
 
 void TryDisarm(const Player &player, Object &object)
@@ -1826,28 +1804,20 @@ int Player::GetManaShieldDamageReduction()
 
 void Player::RestorePartialLife()
 {
-	const int wholeHitpoints = _pMaxHP >> 6;
-	int l = ((wholeHitpoints / 8) + GenerateRnd(wholeHitpoints / 4)) << 6;
-	if (IsAnyOf(_pClass, HeroClass::Warrior, HeroClass::Barbarian))
-		l *= 2;
-	else if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
-		l += l / 2;
-	else
-		l = lua::OnGetPotionHealAmount(this, l, l); // Lua mod support
+	const int wholeHitpoints = _pMaxHP.whole();
+	Fixed26_6 l = Fixed26_6::fromInt((wholeHitpoints / 8) + GenerateRnd(wholeHitpoints / 4));
+	const ClassAttributes &classAttributes = GetClassAttributes(_pClass);
+	l = l * classAttributes.itmRestoreLife;
 	_pHitPoints = std::min(_pHitPoints + l, _pMaxHP);
 	_pHPBase = std::min(_pHPBase + l, _pMaxHPBase);
 }
 
 void Player::RestorePartialMana()
 {
-	const int wholeManaPoints = _pMaxMana >> 6;
-	int l = ((wholeManaPoints / 8) + GenerateRnd(wholeManaPoints / 4)) << 6;
-	if (_pClass == HeroClass::Sorcerer)
-		l *= 2;
-	else if (IsAnyOf(_pClass, HeroClass::Rogue, HeroClass::Monk, HeroClass::Bard))
-		l += l / 2;
-	else
-		l = lua::OnGetPotionManaAmount(this, l, l); // Lua mod support
+	const int wholeManaPoints = _pMaxMana.whole();
+	Fixed26_6 l = Fixed26_6::fromInt((wholeManaPoints / 8) + GenerateRnd(wholeManaPoints / 4));
+	const ClassAttributes &classAttributes = GetClassAttributes(_pClass);
+	l = l * classAttributes.itmRestoreMana;
 	if (HasNoneOf(_pIFlags, ItemSpecialEffect::NoMana)) {
 		_pMana = std::min(_pMana + l, _pMaxMana);
 		_pManaBase = std::min(_pManaBase + l, _pMaxManaBase);
@@ -2088,16 +2058,16 @@ uint32_t Player::getNextExperienceThreshold() const
 	return GetNextExperienceThresholdForLevel(this->getCharacterLevel());
 }
 
-int32_t Player::calculateBaseLife() const
+Fixed26_6 Player::calculateBaseLife() const
 {
 	const ClassAttributes &attr = getClassAttributes();
-	return attr.adjLife + (attr.lvlLife * getCharacterLevel()) + (attr.chrLife * _pBaseVit);
+	return attr.adjLife + attr.lvlLife * getCharacterLevel() + attr.chrLife * _pBaseVit;
 }
 
-int32_t Player::calculateBaseMana() const
+Fixed26_6 Player::calculateBaseMana() const
 {
 	const ClassAttributes &attr = getClassAttributes();
-	return attr.adjMana + (attr.lvlMana * getCharacterLevel()) + (attr.chrMana * _pBaseMag);
+	return attr.adjMana + attr.lvlMana * getCharacterLevel() + attr.chrMana * _pBaseMag;
 }
 
 void Player::occupyTile(Point tilePosition, bool isMoving) const
@@ -2105,6 +2075,7 @@ void Player::occupyTile(Point tilePosition, bool isMoving) const
 	int16_t id = this->getId();
 	id += 1;
 	dPlayer[tilePosition.x][tilePosition.y] = isMoving ? -id : id;
+	MarkWalkabilityChanged();
 }
 
 bool Player::isLevelOwnedByLocalClient() const
@@ -2175,6 +2146,12 @@ ClxSprite GetPlayerPortraitSprite(Player &player)
 		// And now load the new sprite and store it
 		const uint16_t animationWidth = GetPlayerSpriteWidth(cls, graphic, animWeaponId);
 		player.PartyInfoSprites[inDungeon] = LoadCl2Sheet(pszName, animationWidth);
+
+		// Apply class TRN to the stored portrait sprite
+		std::optional<std::array<uint8_t, 256>> classTRN = GetClassTRN(player);
+		if (classTRN) {
+			ClxApplyTrans(*player.PartyInfoSprites[inDungeon], classTRN->data());
+		}
 	}
 
 	const ClxSpriteList spriteList = (*player.PartyInfoSprites[inDungeon])[static_cast<size_t>(Direction::South)];
@@ -2486,7 +2463,7 @@ void NextPlrLevel(Player &player)
 	} else {
 		player._pStatPts += 5;
 	}
-	const int hp = player.getClassAttributes().lvlLife;
+	const Fixed26_6 hp { player.getClassAttributes().lvlLife };
 
 	player._pMaxHP += hp;
 	player._pHitPoints = player._pMaxHP;
@@ -2497,7 +2474,7 @@ void NextPlrLevel(Player &player)
 		RedrawComponent(PanelDrawComponent::Health);
 	}
 
-	const int mana = player.getClassAttributes().lvlMana;
+	const Fixed26_6 mana { player.getClassAttributes().lvlMana };
 
 	player._pMaxMana += mana;
 	player._pMaxManaBase += mana;
@@ -2729,9 +2706,10 @@ void FixPlrWalkTags(const Player &player)
 				dPlayer[x][y] = 0;
 		}
 	}
+	MarkWalkabilityChanged();
 }
 
-void StartPlrHit(Player &player, int dam, bool forcehit)
+void StartPlrHit(Player &player, Fixed26_6 dam, bool forcehit)
 {
 	if (player._pInvincible && player.hasNoLife() && &player == MyPlayer) {
 		SyncPlrKill(player, DeathReason::Unknown);
@@ -2746,7 +2724,7 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 		if (player._pClass == HeroClass::Barbarian)
 			threshold += threshold / 4;
 		threshold = lua::OnGetHitRecoveryThreshold(&player, threshold); // Lua mod support
-		if (dam >> 6 < threshold && !forcehit) {
+		if (dam.whole() < threshold && !forcehit) {
 			return;
 		}
 	}
@@ -2774,11 +2752,7 @@ void StartPlrHit(Player &player, int dam, bool forcehit)
 	SetPlayerOld(player);
 }
 
-#if defined(__clang__) || defined(__GNUC__)
-__attribute__((no_sanitize("shift-base")))
-#endif
-void
-StartPlayerKill(Player &player, DeathReason deathReason)
+void StartPlayerKill(Player &player, DeathReason deathReason)
 {
 	if (player.hasNoLife() && player._pmode == PM_DEATH) {
 		return;
@@ -2813,7 +2787,7 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 	player._pBlockFlag = false;
 	player._pmode = PM_DEATH;
 	player._pInvincible = true;
-	SetPlayerHitPoints(player, 0);
+	SetPlayerHitPoints(player, Fixed26_6::fromInt(0));
 
 	if (&player != MyPlayer && dropItems) {
 		// Ensure that items are removed for remote players
@@ -2845,7 +2819,7 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 			if (dropEar) {
 				Item ear;
 				InitializeItem(ear, IDI_EAR);
-				CopyUtf8(ear._iName, fmt::format(fmt::runtime("Ear of {:s}"), player._pName), sizeof(ear._iName));
+				CopyUtf8(ear._iName, FormatRuntime("Ear of {:s}", player._pName), sizeof(ear._iName));
 				CopyUtf8(ear._iIName, player._pName, ItemNameLength);
 				switch (player._pClass) {
 				case HeroClass::Sorcerer:
@@ -2864,8 +2838,20 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 					break;
 				}
 
-				ear._iCreateInfo = player._pName[0] << 8 | player._pName[1];
-				ear._iSeed = player._pName[2] << 24 | player._pName[3] << 16 | player._pName[4] << 8 | player._pName[5];
+				auto toUint8 = [](char c) {
+					return static_cast<uint8_t>(c);
+				};
+
+				const uint32_t b0 = toUint8(player._pName[0]);
+				const uint32_t b1 = toUint8(player._pName[1]);
+				const uint32_t b2 = toUint8(player._pName[2]);
+				const uint32_t b3 = toUint8(player._pName[3]);
+				const uint32_t b4 = toUint8(player._pName[4]);
+				const uint32_t b5 = toUint8(player._pName[5]);
+
+				ear._iCreateInfo = (b0 << 8) | b1;
+				ear._iSeed = (b2 << 24) | (b3 << 16) | (b4 << 8) | b5;
+
 				ear._ivalue = player.getCharacterLevel();
 
 				if (FindGetItem(ear._iSeed, IDI_EAR, ear._iCreateInfo) == -1) {
@@ -2883,7 +2869,7 @@ StartPlayerKill(Player &player, DeathReason deathReason)
 			}
 		}
 	}
-	SetPlayerHitPoints(player, 0);
+	SetPlayerHitPoints(player, Fixed26_6::fromInt(0));
 }
 
 void StripTopGold(Player &player)
@@ -2920,11 +2906,11 @@ void StripTopGold(Player &player)
 	NewCursor(CURSOR_HAND);
 }
 
-void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP /*= 0*/, int frac /*= 0*/, DeathReason deathReason /*= DeathReason::MonsterOrTrap*/)
+void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int minHP /*= 0*/, DeathReason deathReason /*= DeathReason::MonsterOrTrap*/)
 {
-	int totalDamage = (dam << 6) + frac;
+	Fixed26_6 totalDamage = dam;
 	if (&player == MyPlayer && !player.hasNoLife()) {
-		lua::OnPlayerTakeDamage(&player, totalDamage, static_cast<int>(damageType));
+		lua::OnPlayerTakeDamage(&player, totalDamage.raw(), static_cast<int>(damageType));
 	}
 	if (totalDamage > 0 && player.pManaShield && HasNoneOf(player._pIFlags, ItemSpecialEffect::NoMana)) {
 		const uint8_t manaShieldLevel = player._pSplLvl[static_cast<int8_t>(SpellID::ManaShield)];
@@ -2936,13 +2922,13 @@ void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP /*
 		if (player._pMana >= totalDamage) {
 			player._pMana -= totalDamage;
 			player._pManaBase -= totalDamage;
-			totalDamage = 0;
+			totalDamage = Fixed26_6::fromInt(0);
 		} else {
 			totalDamage -= player._pMana;
 			if (manaShieldLevel > 0) {
 				totalDamage += totalDamage / (player.GetManaShieldDamageReduction() - 1);
 			}
-			player._pMana = 0;
+			player._pMana = Fixed26_6::fromInt(0);
 			player._pManaBase = player._pMaxManaBase - player._pMaxMana;
 			if (&player == MyPlayer)
 				NetSendCmd(true, CMD_REMSHIELD);
@@ -2959,7 +2945,7 @@ void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP /*
 		player._pHitPoints = player._pMaxHP;
 		player._pHPBase = player._pMaxHPBase;
 	}
-	const int minHitPoints = minHP << 6;
+	const Fixed26_6 minHitPoints = Fixed26_6::fromInt(minHP);
 	if (player._pHitPoints < minHitPoints) {
 		SetPlayerHitPoints(player, minHitPoints);
 	}
@@ -2970,7 +2956,7 @@ void ApplyPlrDamage(DamageType damageType, Player &player, int dam, int minHP /*
 
 void SyncPlrKill(Player &player, DeathReason deathReason)
 {
-	SetPlayerHitPoints(player, 0);
+	SetPlayerHitPoints(player, Fixed26_6::fromInt(0));
 	StartPlayerKill(player, deathReason);
 }
 
@@ -3039,9 +3025,9 @@ void RestartTownLvl(Player &player)
 	player.setLevel(0);
 	player._pInvincible = false;
 
-	SetPlayerHitPoints(player, 64);
+	SetPlayerHitPoints(player, Fixed26_6::fromInt(1));
 
-	player._pMana = 0;
+	player._pMana = Fixed26_6::fromInt(0);
 	player._pManaBase = player._pMana - (player._pMaxMana - player._pMaxManaBase);
 
 	CalcPlrInv(player, false);
@@ -3122,7 +3108,7 @@ void ProcessPlayers()
 
 			if (&player == MyPlayer) {
 				if (HasAnyOf(player._pIFlags, ItemSpecialEffect::DrainLife) && leveltype != DTYPE_TOWN) {
-					ApplyPlrDamage(DamageType::Physical, player, 0, 0, 4);
+					ApplyPlrDamage(DamageType::Physical, player, Fixed26_6::fromRaw(4));
 				}
 				if (player.pManaShield && HasAnyOf(player._pIFlags, ItemSpecialEffect::NoMana)) {
 					NetSendCmd(true, CMD_REMSHIELD);
@@ -3169,6 +3155,17 @@ void ProcessPlayers()
 				player.AnimInfo.processAnimation();
 		}
 	}
+}
+
+bool IsPlayerAdjacentToObject(const Player &player, const Object &object)
+{
+	const int x = std::abs(player.position.tile.x - object.position.x);
+	int y = std::abs(player.position.tile.y - object.position.y);
+	if (y > 1 && object.position.y >= 1 && FindObjectAtPosition(object.position + Direction::NorthEast) == &object) {
+		// special case for activating a large object from the north-east side
+		y = std::abs(player.position.tile.y - object.position.y + 1);
+	}
+	return x <= 1 && y <= 1;
 }
 
 void ClrPlrPath(Player &player)
@@ -3435,8 +3432,7 @@ void ModifyPlrMag(Player &player, int l)
 	player._pMagic += l;
 	player._pBaseMag += l;
 
-	int ms = l;
-	ms *= player.getClassAttributes().chrMana;
+	const Fixed26_6 ms = player.getClassAttributes().chrMana * l;
 
 	player._pMaxManaBase += ms;
 	player._pMaxMana += ms;
@@ -3472,8 +3468,7 @@ void ModifyPlrVit(Player &player, int l)
 	player._pVitality += l;
 	player._pBaseVit += l;
 
-	int ms = l;
-	ms *= player.getClassAttributes().chrLife;
+	const Fixed26_6 ms = player.getClassAttributes().chrLife * l;
 
 	player._pHPBase += ms;
 	player._pMaxHPBase += ms;
@@ -3487,7 +3482,7 @@ void ModifyPlrVit(Player &player, int l)
 	}
 }
 
-void SetPlayerHitPoints(Player &player, int val)
+void SetPlayerHitPoints(Player &player, Fixed26_6 val)
 {
 	player._pHitPoints = val;
 	player._pHPBase = val + player._pMaxHPBase - player._pMaxHP;
@@ -3507,8 +3502,7 @@ void SetPlrMag(Player &player, int v)
 {
 	player._pBaseMag = v;
 
-	int m = v;
-	m *= player.getClassAttributes().chrMana;
+	const Fixed26_6 m = player.getClassAttributes().chrMana * v;
 
 	player._pMaxManaBase = m;
 	player._pMaxMana = m;
@@ -3525,8 +3519,7 @@ void SetPlrVit(Player &player, int v)
 {
 	player._pBaseVit = v;
 
-	int hp = v;
-	hp *= player.getClassAttributes().chrLife;
+	const Fixed26_6 hp = player.getClassAttributes().chrLife * v;
 
 	player._pHPBase = hp;
 	player._pMaxHPBase = hp;

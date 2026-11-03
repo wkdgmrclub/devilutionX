@@ -11,10 +11,9 @@
 #include <bitset>
 #include <charconv>
 #include <cstdint>
+#include <expected>
 #include <vector>
 
-#include <expected.hpp>
-#include <fmt/format.h>
 #include <magic_enum/magic_enum_utility.hpp>
 
 #include "data/file.hpp"
@@ -23,7 +22,9 @@
 #include "data/value_reader.hpp"
 #include "items.h"
 #include "player.h"
+#include "sound_effect_enums.h"
 #include "tables/textdat.h"
+#include "utils/format.hpp"
 #include "utils/language.h"
 #include "utils/static_vector.hpp"
 #include "utils/str_cat.hpp"
@@ -75,7 +76,7 @@ enum class ExperienceColumn {
 	LAST = Experience
 };
 
-tl::expected<ExperienceColumn, ColumnDefinition::Error> mapExperienceColumnFromName(std::string_view name)
+std::expected<ExperienceColumn, ColumnDefinition::Error> mapExperienceColumnFromName(std::string_view name)
 {
 	if (name == "Level") {
 		return ExperienceColumn::Level;
@@ -83,7 +84,7 @@ tl::expected<ExperienceColumn, ColumnDefinition::Error> mapExperienceColumnFromN
 	if (name == "Experience") {
 		return ExperienceColumn::Experience;
 	}
-	return tl::unexpected { ColumnDefinition::Error::UnknownColumn };
+	return std::unexpected { ColumnDefinition::Error::UnknownColumn };
 }
 
 void ReloadExperienceData()
@@ -157,19 +158,19 @@ void ReloadExperienceData()
 	}
 }
 
-tl::expected<PlayerClassFlag, std::string> ParsePlayerClassFlag(std::string_view value)
+std::expected<PlayerClassFlag, std::string> ParsePlayerClassFlag(std::string_view value)
 {
 	const std::optional<PlayerClassFlag> enumValueOpt = magic_enum::enum_cast<PlayerClassFlag>(value);
 	if (enumValueOpt.has_value()) {
 		return enumValueOpt.value();
 	}
-	return tl::make_unexpected("Unknown enum value");
+	return std::unexpected("Unknown enum value");
 }
 
 void LoadClassData(std::string_view classPath, ClassAttributes &attributes, PlayerCombatData &combat)
 {
 	const std::string filename = StrCat("txtdata\\classes\\", classPath, "\\attributes.tsv");
-	tl::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
+	std::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
 	DataFile &dataFile = dataFileResult.value();
 	dataFile.skipHeaderOrDie(filename);
 
@@ -193,6 +194,12 @@ void LoadClassData(std::string_view classPath, ClassAttributes &attributes, Play
 	reader.readDecimal("chrMana", attributes.chrMana);
 	reader.readDecimal("itmLife", attributes.itmLife);
 	reader.readDecimal("itmMana", attributes.itmMana);
+	reader.readDecimal("manaCost", attributes.manaCost);
+	reader.readDecimal("itmRestoreLife", attributes.itmRestoreLife);
+	reader.readDecimal("itmRestoreMana", attributes.itmRestoreMana);
+	reader.readDecimal("splRestoreLife", attributes.splRestoreLife);
+	reader.readDecimal("splRestoreMana", attributes.splRestoreMana);
+	reader.readDecimal("healOtherRestoreLife", attributes.healOtherRestoreLife);
 	reader.readInt("baseMagicToHit", combat.baseMagicToHit);
 	reader.readInt("baseMeleeToHit", combat.baseMeleeToHit);
 	reader.readInt("baseRangedToHit", combat.baseRangedToHit);
@@ -201,7 +208,7 @@ void LoadClassData(std::string_view classPath, ClassAttributes &attributes, Play
 void LoadClassStartingLoadoutData(std::string_view classPath, PlayerStartingLoadoutData &startingLoadoutData)
 {
 	const std::string filename = StrCat("txtdata\\classes\\", classPath, "\\starting_loadout.tsv");
-	tl::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
+	std::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
 	DataFile &dataFile = dataFileResult.value();
 	dataFile.skipHeaderOrDie(filename);
 
@@ -219,7 +226,7 @@ void LoadClassStartingLoadoutData(std::string_view classPath, PlayerStartingLoad
 void LoadClassSpriteData(std::string_view classPath, PlayerSpriteData &spriteData)
 {
 	const std::string filename = StrCat("txtdata\\classes\\", classPath, "\\sprites.tsv");
-	tl::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
+	std::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
 	DataFile &dataFile = dataFileResult.value();
 	dataFile.skipHeaderOrDie(filename);
 
@@ -228,6 +235,12 @@ void LoadClassSpriteData(std::string_view classPath, PlayerSpriteData &spriteDat
 	reader.readString("classPath", spriteData.classPath);
 	reader.readChar("classChar", spriteData.classChar);
 	reader.readString("trn", spriteData.trn);
+	reader.readInt("partyOffsetTownX", spriteData.partyOffsetTown.x);
+	reader.readInt("partyOffsetTownY", spriteData.partyOffsetTown.y);
+	reader.readInt("partyOffsetDungeonX", spriteData.partyOffsetDungeon.x);
+	reader.readInt("partyOffsetDungeonY", spriteData.partyOffsetDungeon.y);
+	reader.readInt("partyOffsetDeadX", spriteData.partyOffsetDead.x);
+	reader.readInt("partyOffsetDeadY", spriteData.partyOffsetDead.y);
 	reader.readInt("stand", spriteData.stand);
 	reader.readInt("walk", spriteData.walk);
 	reader.readInt("attack", spriteData.attack);
@@ -243,7 +256,7 @@ void LoadClassSpriteData(std::string_view classPath, PlayerSpriteData &spriteDat
 void LoadClassAnimData(std::string_view classPath, PlayerAnimData &animData)
 {
 	const std::string filename = StrCat("txtdata\\classes\\", classPath, "\\animations.tsv");
-	tl::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
+	std::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
 	DataFile &dataFile = dataFileResult.value();
 	dataFile.skipHeaderOrDie(filename);
 
@@ -281,7 +294,7 @@ void LoadClassAnimData(std::string_view classPath, PlayerAnimData &animData)
 void LoadClassSounds(std::string_view classPath, ankerl::unordered_dense::map<HeroSpeech, SfxID> &sounds)
 {
 	const std::string filename = StrCat("txtdata\\classes\\", classPath, "\\sounds.tsv");
-	tl::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
+	std::expected<DataFile, DataFile::Error> dataFileResult = DataFile::loadOrDie(filename);
 	DataFile &dataFile = dataFileResult.value();
 	dataFile.skipHeaderOrDie(filename);
 
@@ -318,7 +331,7 @@ void LoadClassDatFromFile(DataFile &dataFile, const std::string_view filename)
 
 	for (DataFileRecord record : dataFile) {
 		if (PlayersData.size() >= static_cast<size_t>(HeroClass::NUM_MAX_CLASSES)) {
-			DisplayFatalErrorAndExit(_("Loading Class Data Failed"), fmt::format(fmt::runtime(_("Could not add a class, since the maximum class number of {} has already been reached.")), static_cast<size_t>(HeroClass::NUM_MAX_CLASSES)));
+			DisplayFatalErrorAndExit(_("Loading Class Data Failed"), FormatRuntime(_("Could not add a class, since the maximum class number of {} has already been reached."), static_cast<size_t>(HeroClass::NUM_MAX_CLASSES)));
 		}
 
 		RecordReader reader { record, filename };
