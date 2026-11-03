@@ -272,14 +272,10 @@ inline const SpellData &GetSpellData(SpellID spellId)
 	return SpellsData[static_cast<std::underlying_type<SpellID>::type>(spellId)];
 }
 
-void LoadSpellDatFromFile(DataFile &dataFile, std::string_view filename); // Lua mod support
-void LuaRegisterDynamicSpellId(std::string_view name, SpellID id); // Lua mod support
-// Lua mod support: deterministic dynamic-spell registry. Spells queued during the SpellDataLoaded
-// event are assigned IDs after the base table loads — sorted by name from a fixed base
-// (SpellID::LAST + 1) so a given name resolves to the same ID regardless of game mode or load order.
-void LuaQueueDynamicSpell(std::string_view name, std::string_view path, std::string_view iconName);
-void LuaClearPendingDynamicSpells();
-void LuaFinalizeDynamicSpells();
+// Lua mod support: add the spells in a spelldat-format file. Call during the SpellDataLoaded event; the
+// spells are assigned IDs after every mod has added its own — sorted by their `id` column from a fixed
+// base (SpellID::LAST + 1) so a given id resolves to the same SpellID regardless of game mode or load order.
+void LuaAddSpellDatFromFile(DataFile &dataFile, std::string_view filename);
 void LoadSpellData();
 
 } // namespace devilution

@@ -7,6 +7,19 @@
 
 ---
 
+## Spell API matches upstream: `spells.addSpellDataFromTsv` (BUILT 2026-11-03, awaiting compile + check)
+
+`spells.registerSpell(name, path, icon)` is replaced by upstream's shape: `spells.addSpellDataFromTsv(path)`,
+where each row's `id` column is the spell name. The Hunter's three spells now live in one
+`txtdata/spells/spelldat_hunter.tsv` (ids `hunter:tame` / `hunter:sharepotion` / `hunter:forgetpotion`; the
+three single-spell TSVs are deleted). Icons are set in `SpellsAssigned` via `spells.setSpellIcon`. A
+duplicate id or too many mod spells is now a fatal load error. **Recompile:** `tables/spelldat.cpp/.h`,
+`lua/modules/spells.cpp`, `msg.cpp` (comment only). Refresh `events.lua`; copy `init.lua` **and the new
+TSV** (and delete the three old TSVs from the installed mod). **Check:** a Hunter starts with Tame;
+Tame / Share Potion show their Golem / Heal Other icons; Forget Potion still works.
+
+---
+
 ## Scroll-seed validation + follower session reset (BUILT 2026-11-03, awaiting compile + playtest)
 
 The two High bugs in `bugs.md` ("Hunter's Bow" scrolls; town follower stall). **Recompile:**

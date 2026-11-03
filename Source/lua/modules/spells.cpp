@@ -12,16 +12,26 @@
 
 namespace devilution {
 
+namespace {
+
+void AddSpellDataFromTsv(const std::string_view path)
+{
+	DataFile dataFile = DataFile::loadOrDie(path);
+	LuaAddSpellDatFromFile(dataFile, path);
+}
+
+} // namespace
+
 sol::table LuaSpellsModule(sol::state_view &lua)
 {
 	sol::table table = lua.create_table();
-	LuaSetDocFn(table, "registerSpell", "(name: string, path: string, iconName?: string)",
-	    "Queue a dynamic spell for registration, loading its data from a TSV file. Call inside a SpellDataLoaded handler. IDs are assigned deterministically (sorted by name, from a fixed base) after every mod has registered, so the same name resolves to the same ID across game modes and load order; read the assigned ID with getSpellId(name) in a SpellsAssigned handler. Optional iconName sets the speedbook icon (e.g. \"Golem\").",
-	    [](std::string_view name, std::string_view path, sol::optional<std::string_view> iconName) {
-		    LuaQueueDynamicSpell(name, path, iconName.value_or(std::string_view {}));
-	    });
+	LuaSetDocFn(table, "addSpellDataFromTsv", "(path: string)",
+	    "Add the spells in a spelldat-format TSV file. Call inside a SpellDataLoaded handler. Each spell's `id` column is its name. "
+	    "SpellIDs are assigned once every mod has added its spells, sorted by id from a fixed base, so an id resolves to the same "
+	    "SpellID in every game mode and mod load order; read it with getSpellId(id) from the SpellsAssigned event onward.",
+	    AddSpellDataFromTsv);
 	LuaSetDocFn(table, "getSpellId", "(name: string)",
-	    "Return the runtime SpellID integer assigned to a dynamic spell name, or nil if not registered. Valid from the SpellsAssigned event onward.",
+	    "Return the SpellID integer for a spell id (base or mod-added), or nil if unknown. Mod-added ids resolve from the SpellsAssigned event onward.",
 	    [](std::string_view name) -> sol::optional<int> {
 		    auto id = ParseSpellId(name);
 		    if (id.has_value() && *id != SpellID::Null)

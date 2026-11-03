@@ -2,9 +2,11 @@
 
 ## Lua dynamic spell registration with stable IDs — status: ready (in-game verified 2026-06-25; PR description not finalized)
 
-**One-liner:** A Lua API for mods to register custom spells from TSV (`spells.registerSpell` /
+**One-liner:** A Lua API for mods to add spells from TSV (`spells.addSpellDataFromTsv` /
 `spells.getSpellId` + the `SpellsAssigned` event), assigning each a **stable, deterministic runtime
-SpellID** so custom spells are castable in both game modes and survive save round-trips.
+SpellID** so mod spells are castable in both game modes and survive save round-trips. Same shape as
+upstream's `monsters.addMonsterDataFromTsv` / `items.addItemDataFromTsv`: a `SpellDataLoaded` event, the
+`id` column names each row, and a full table is a fatal load error (as in `LoadMonstDatFromFile`).
 
 **What upstream has today:** *nothing for this.* The Lua **event framework** (`lua_event.*`,
 `events.lua`) is upstream, but there is **no** dynamic spell registration — `spelldat.cpp` in the
@@ -12,11 +14,15 @@ merge-base has zero Lua/`SpellDataLoaded` references, and `Source/lua/modules/sp
 there. So this introduces a feature, it does not modify an existing one.
 
 **Files (engine):**
-- `Source/lua/modules/spells.cpp` — **ours** (new module). `registerSpell` (queues), `getSpellId`, `setSpellIcon`.
+- `Source/lua/modules/spells.cpp` — **ours** (new module). `addSpellDataFromTsv`, `getSpellId`, `setSpellIcon`.
 - `Source/tables/spelldat.cpp/.h` — **upstream file**; our additions: `ReadSpellRecord` (refactor),
-  `MakeInertSpell` (save-stable padding), the pending-queue + `LuaQueueDynamicSpell` /
-  `LuaClearPendingDynamicSpells` / `LuaFinalizeDynamicSpells`, and the `SpellDataLoaded`→finalize→
-  `SpellsAssigned` sequence inside `LoadSpellData`.
+  `MakeInertSpell` (save-stable padding), the pending queue of parsed records + `LuaAddSpellDatFromFile` /
+  `LuaClearPendingDynamicSpells` / `LuaFinalizeDynamicSpells` (sort by id, duplicate/ceiling fatal
+  errors), and the `SpellDataLoaded`→finalize→`SpellsAssigned` sequence inside `LoadSpellData`.
+- `Source/panels/spell_icons.cpp/.hpp` — **upstream file**; mod spell icon map consulted by
+  `GetSpellIconFrame` (+ bounds-safe fallback for IDs past the static table).
+- `Source/lua/lua_global.cpp` — **upstream file**; registers the module, and loads player data **after**
+  spell data so class TSVs (`starting_loadout.tsv`) can name a mod spell.
 - `Source/lua/lua_event.cpp/.hpp` — **upstream file**; our addition: the `SpellsAssigned` callout.
 - `assets/lua/devilutionx/events.lua` — **upstream file**; our addition: the `SpellsAssigned` event entry.
 - `Source/msg.cpp` — **upstream file**; one vanilla-logic line changed (below).
@@ -31,7 +37,7 @@ there. So this introduces a feature, it does not modify an existing one.
 guards reject the identical input set. The change only matters once `SpellsData` legitimately extends
 past `LAST` — i.e. only when a mod has registered a spell.
 
-**No-op-when-unused invariant:** no mod registers → `PendingDynamicSpells` empty →
+**No-op-when-unused invariant:** no mod adds spells → `PendingDynamicSpells` empty →
 `LuaFinalizeDynamicSpells` returns immediately → `SpellsAssigned` fires into zero handlers →
 `SpellsData` untouched → save format unchanged → `msg.cpp` guard behaves as before. Vanilla Diablo
 **and** Hellfire are byte-for-byte identical.

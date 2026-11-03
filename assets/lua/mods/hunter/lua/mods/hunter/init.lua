@@ -56,7 +56,7 @@ HORK_MAX_MINIONS        = 3                                           -- cap of 
 monsters.requestExtraTypes(MAX_HUNTERS * MAX_DEPLOYED_PER_HUNTER + 2) -- +2: skeleton + hork-spawn minion species, shared across hunters
 monsters.requestExtraMonsters(MAX_HUNTERS * (MAX_DEPLOYED_PER_HUNTER + SKELKING_MAX_MINIONS + HORK_MAX_MINIONS))
 
--- Queued in SpellDataLoaded, resolved in SpellsAssigned (see spells.registerSpell below).
+-- Added in SpellDataLoaded, resolved in SpellsAssigned (see spells.addSpellDataFromTsv below).
 TAME_ID              = nil
 SHARE_POTION_ID      = nil
 FORGET_POTION_ID     = nil
@@ -1318,11 +1318,9 @@ end
 
 -- Data registration
 
--- Queue our spells. IDs are assigned by the engine after every mod registers (deterministic, by name). Names namespaced "hunter:".
+-- Add our spells. IDs are assigned by the engine after every mod adds its own (deterministic, by id). Ids namespaced "hunter:".
 events.SpellDataLoaded.add(function()
-  spells.registerSpell("hunter:tame", "txtdata\\spells\\tame.tsv", "Golem")
-  spells.registerSpell("hunter:sharepotion", "txtdata\\spells\\sharepotion.tsv", "HealOther")
-  spells.registerSpell("hunter:forgetpotion", "txtdata\\spells\\forgetpotion.tsv", "Null")
+  spells.addSpellDataFromTsv("txtdata\\spells\\spelldat_hunter.tsv")
 end)
 
 -- SpellsAssigned fires after assignment, before ItemDataLoaded / PlayerDataLoaded, so these ids resolve in time.
@@ -1330,6 +1328,8 @@ events.SpellsAssigned.add(function()
   TAME_ID          = spells.getSpellId("hunter:tame")
   SHARE_POTION_ID  = spells.getSpellId("hunter:sharepotion")
   FORGET_POTION_ID = spells.getSpellId("hunter:forgetpotion")
+  spells.setSpellIcon(TAME_ID, "Golem")
+  spells.setSpellIcon(SHARE_POTION_ID, "HealOther")
 end)
 
 events.PlayerDataLoaded.add(function()

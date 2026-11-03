@@ -34,12 +34,37 @@ branches move.
     "mod stashes save each item's `modData`" (an extra `sp/mpstashmoddata` entry in the mod stash file —
     on `MonsterTamer` already, cut from this branch because master has no `_iModData`). When splitting
     `lua-mod-hooks`, drop its copies of `OnItemAllowedInStash` + `CreateQueryEvent` (or stack on this branch).
-  - **`lua-mod-hooks`** — every other engine change (predates the stash work and the gamemode-lock hook
-    `OnPlayerCanCutInvItem`; neither is on it yet). To be split into smaller **stacked** PRs (each
-    based on the previous, since nearly all touch `lua_event.hpp/.cpp` + `events.lua`). Proposed order:
-    dynamic spells → item modData / persistence → monster extensibility → golem / player-minion hooks →
-    class mechanics (prefer proposing new class-TSV attributes over hooks where it fits, matching
-    upstream's direction) → UI / display → item / inventory behaviour.
+  - **`lua-mod-hooks`** — the old single catch-all branch; **superseded** by the split below. Kept
+    only as a reference until every piece has its own branch.
+- **The split (decided 2026-11-03).** Each branch lives in its own worktree under
+  `C:\Users\ndw19\source\Repos\devx-prs\<branch>`. A branch goes straight onto `master` unless it
+  needs code from another open PR. Branches that depend on an unmerged PR are **held** (not cut)
+  until that PR is merged. Every API follows upstream's current conventions (e.g.
+  `XDataLoaded` + `addXDataFromTsv(path)` with the `id` column naming rows).
+  - **Cut, ready to push** (independent of `master`):
+    - `lua-text-prompt` — `system.promptText` + `control_text_prompt`.
+    - `lua-spell-registry` — `SpellDataLoaded`/`SpellsAssigned`, `spells.addSpellDataFromTsv`,
+      deterministic IDs, mod spell icons, the `InitNewSpell` bound, spell-before-player reload order.
+    - `lua-class-registration` — `PlayerDataLoaded` + `player.addClassDataFromTsv`.
+  - **Held: stack on `lua-stash-hooks`** (they need its `CreateQueryEvent`):
+    - `lua-item-rules` — `OnCanPlayerUseItem`, `OnPlayerCanPickUpItem`, `OnPlayerCanCutInvItem`,
+      `OnCanAutoRefillBeltItem`, `OnVendorWillBuyItem`, `OnShouldExcludeWirtItem`, `OnOilyShrine`.
+    - `lua-monster-display` — monster display name / info / outline / TRN / show-resistances.
+    - `lua-speedbook-casting` — mod speedbook entries, scroll-slot resolution, cast gates,
+      `OnSpellCast`/`OnSpellActionFrame` (these also want `lua-spell-registry`).
+    - `lua-item-moddata` — `item.modData`, delta/save persistence, mod stashes saving modData.
+  - **Needs a design pass first:** `lua-monster-spawning`. (1) Our `monster.id` redefines
+    upstream's existing pointer-based `id` as the `Monsters[]` index. Don't change an existing binding;
+    add a new property (e.g. `index`) and move the Hunter mod onto it. (2) Upstream already spawns
+    through the level owner (`SpawnMonster` → `CMD_SPAWNMONSTER`); route our spawn bindings through it
+    where possible.
+  - **Held: stack on `lua-monster-spawning`:** `lua-monsters-in-town` (nothing on `master` can put a
+    monster in town), `lua-player-minions` → `lua-minion-combat`.
+  - **Class mechanics:** propose as new class-TSV attributes (upstream's direction), not hooks.
+    Builds on `lua-class-registration`; needs its own design pass against current `playerdat`.
+  - **Parked:** hooks layered on the yuripourre custom-items framework (`OnCustomItemRecreated`,
+    custom unique infobox, `OnGetMiscItemDescription`, `OnItemUsed`) until that framework's upstream
+    status is known.
 - Building a PR branch: take `MonsterTamer`'s versions of the engine files onto a branch from `master`,
   then strip what belongs elsewhere. Formatting churn (e.g. `[] {}` → `[] { }` from a different
   clang-format) never goes into a PR branch.

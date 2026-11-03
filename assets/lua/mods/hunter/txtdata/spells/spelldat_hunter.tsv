@@ -1,0 +1,4 @@
+id	name	soundId	bookCost10	staffCost10	manaCost	flags	bookLevel	staffLevel	minIntelligence	missiles	manaMultiplier	minMana	staffMin	staffMax
+hunter:tame	Tame	CastSkill	0	0	0	Magic,Targeted	-1	-1	255		0	0	0	0
+hunter:sharepotion	Share Potion	CastSkill	0	0	0	Magic,Targeted	-1	-1	255		0	0	0	0
+hunter:forgetpotion	Forget Potion	CastSkill	0	0	0	Magic	-1	-1	255		0	0	0	0

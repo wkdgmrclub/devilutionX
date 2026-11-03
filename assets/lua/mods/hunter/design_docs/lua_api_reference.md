@@ -166,8 +166,8 @@ Events fire from `Source/lua/lua_event.cpp`, registered in `assets/lua/devilutio
 `LoadModsComplete`, `SpellDataLoaded`, `SpellsAssigned`, `PlayerDataLoaded`, `ItemDataLoaded`,
 `UniqueItemDataLoaded`, `MonsterDataLoaded`, `UniqueMonsterDataLoaded`.
 - **Ordering matters:** `SpellsAssigned` fires right after `SpellDataLoaded`, once the engine has
-  assigned runtime IDs to every spell queued via `spells.registerSpell` — read IDs here with
-  `spells.getSpellId(name)`. It fires **before** `ItemDataLoaded`/`PlayerDataLoaded`, so the IDs are
+  assigned SpellIDs to every spell added via `spells.addSpellDataFromTsv` — read IDs here with
+  `spells.getSpellId(id)`. It fires **before** `ItemDataLoaded`/`PlayerDataLoaded`, so the IDs are
   valid when item definitions and the class `starting_loadout.tsv` skill are resolved.
 
 ### Lifecycle gotchas
@@ -269,10 +269,10 @@ Properties accessible on `Item` references (e.g. from `player:findScrollBySeed`,
 
 ## Spells API
 
-- `spells.registerSpell(name, path, iconName?)` — call from `SpellDataLoaded`; **queues** a spell (does not return an ID). Optional `iconName` sets the speedbook icon (e.g. `"Golem"`, `"HealOther"`, `"Null"`).
-- `spells.getSpellId(name)` — returns the runtime SpellID integer assigned to a registered name, or `nil`. Valid from `SpellsAssigned` onward.
-- `spells.setSpellIcon(spellId, iconName)` — set a dynamic spell's speedbook icon by ID after assignment.
-- **Deterministic dynamic-spell registry (engine):** IDs are assigned after every mod has registered, **sorted by name** from a fixed base (`SpellID::LAST + 1`). This makes a name resolve to the **same ID in Diablo and Hellfire** and regardless of mod load order, so saved skill/scroll bits stay valid across `.sv`↔`.hsv`, and every client running the same mod set derives the same map (the basis for multiplayer agreement — no runtime sync needed). The engine pads `SpellsData` with inert (`bookLevel=staffLevel=-1`) placeholders up to the dynamic range so the save layout is byte-identical to vanilla. **Namespace your names** (`"hunter:tame"`) so spell-adding mods never collide. Ceiling: dynamic IDs occupy the 53–63 region (the 64-bit per-player spell sets), ~11 slots shared across all mods.
+- `spells.addSpellDataFromTsv(path)` — call from `SpellDataLoaded`; adds every spell in a spelldat-format TSV (upstream's `addXDataFromTsv` shape). Each row's `id` column is the spell's name. Does not return IDs. A duplicate id (of a base or mod spell) or exceeding the ID ceiling is a fatal load error.
+- `spells.getSpellId(id)` — returns the SpellID integer for a spell id, or `nil`. Mod-added ids resolve from `SpellsAssigned` onward.
+- `spells.setSpellIcon(spellId, iconName)` — set a mod spell's speedbook icon by ID after assignment (e.g. `"Golem"`); unset = no icon.
+- **Deterministic mod spell IDs (engine):** IDs are assigned after every mod has added its spells, **sorted by id** from a fixed base (`SpellID::LAST + 1`). This makes a name resolve to the **same ID in Diablo and Hellfire** and regardless of mod load order, so saved skill/scroll bits stay valid across `.sv`↔`.hsv`, and every client running the same mod set derives the same map (the basis for multiplayer agreement — no runtime sync needed). The engine pads `SpellsData` with inert (`bookLevel=staffLevel=-1`) placeholders up to the dynamic range so the save layout is byte-identical to vanilla. **Namespace your names** (`"hunter:tame"`) so spell-adding mods never collide. Ceiling: dynamic IDs occupy the 53–63 region (the 64-bit per-player spell sets), ~11 slots shared across all mods.
 - Skills pattern: `manaCost=0`, `bookLevel=-1`, `staffLevel=-1`, `minIntelligence=255`; leave `missiles` empty for Lua-only skills
 
 ---
@@ -436,7 +436,7 @@ TSV files, tab-delimited. Mods ship TSVs in `mods/<modname>/txtdata/`.
 
 - **Class**: `player.addClassDataFromTsv(path)` in `PlayerDataLoaded`; per-class folder: `attributes.tsv`, `starting_loadout.tsv`, `animations.tsv`, `sounds.tsv`, `sprites.tsv`
 - `starting_loadout.tsv` key fields: `skill` (dynamic name — namespaced, e.g. `hunter:tame`), `spell`, `spellLevel`, `item0..4`, `gold`. Resolved at `PlayerDataLoaded`, after spell IDs are assigned.
-- **Spell/skill**: `spells.registerSpell(name, path, iconName?)` in `SpellDataLoaded`; read the assigned ID via `spells.getSpellId(name)` in `SpellsAssigned`
+- **Spell/skill**: `spells.addSpellDataFromTsv(path)` in `SpellDataLoaded` (Hunter: `txtdata/spells/spelldat_hunter.tsv`, ids `hunter:*`); read the assigned ID via `spells.getSpellId(id)` in `SpellsAssigned`
 - See `assets/txtdata/classes/sorcerer/` for template
 
 ---
