@@ -7,7 +7,31 @@
 
 ---
 
-## Mod-registered stashes + Tame Tome (engine side BUILT 2026-11-02, awaiting compile; Tome Lua not started)
+## Mod-registered stashes + Tame Tome (engine BUILT + user-verified vanilla-stash-safe 2026-11-02; Tome Lua BUILT, awaiting playtest)
+
+**Tome Lua (built, init.lua only — copy init.lua):** `stash.register("hunters_tome", {pages=4, gold=false})`;
+"Hunters Tome" option on Gillian (hidden for non-Hunters; placed after her first option via a fix to
+upstream's dialog-option placement in `stores.cpp`, which put mod options directly under "Would you like to:"); Tame Scrolls only, never gamemode-locked ones;
+withdrawals re-keyed via the shared `rekeyAcquiredScroll` (factored out of `OnItemPickedUp`) when the Tome
+closes (snapshot at open + `stash.activeName()` transition in `GameTick`; also on `OnBeforeSaveHero`); no
+deploys while open; during the session a scroll's own blob wins over this hero's tables (kills / Bonded,
+gamemode lock, drop blob). Edge case "close with a rejected item and no room" deliberately left as vanilla's
+(user). Full mechanics: `comments.md` "Tame Tome".
+
+**Tome playtest watch items:**
+1. Hunter sees "Hunters Tome" at Gillian, below "Access Storage", with "Talk to Gillian" still the default
+   selection; a non-Hunter's menu is exactly vanilla; "Access Storage" still opens the normal stash.
+2. Tome: 4 pages, no gold shown, gold / non-scroll items refused, Tame Scrolls accepted (drag, shift-click,
+   ctrl-click), a gamemode-locked scroll refused even by ctrl-click.
+3. Deposit on hero A (incl. a Bonded and a unique/Diablo scroll) → save → hero B withdraws: names, gold tier,
+   info-box kills, Bonded state, Original Trainer, floating box all intact, and B's own scrolls unaffected
+   (seed collisions are expected and must not mix data). B deploys it after closing the Tome.
+4. Withdraw then close the Tome with the scroll on the cursor (it drops to the floor) → pick it up: intact. In
+   MP the other client sees the right identity.
+5. Deploy attempt while the Tome is open → "I can't do that".
+6. SP: deposit, quit without saving → the scroll is back in inventory and not in the Tome (no duplication).
+7. `hunters_tome.sv` / `.hsv` exist separately; `stash.sv` never contains a Tame Scroll.
+8. Known cosmetic: the panel art still shows the gold box + withdraw coin button (inert; amount hidden).
 
 **Split (user):** engine first — expose just enough that a mod fully owns its own stash, file name
 included — then the Tame Tome Lua logic separately.
@@ -97,10 +121,8 @@ checks `stash.activeName()`, so its signature doesn't change.
   hero's own counter (two heroes can mint the same seed). A scroll leaving the Tome must be **re-keyed
   into the withdrawing hero's seed space and rehydrated from its blob** — exactly what `OnItemPickedUp`
   does for a traded scroll. Deposit must make sure the blob is complete (`blobForSeed`) first.
-- **When to re-key — OPEN QUESTION.** Nothing tells Lua that an item moved stash → inventory. Options:
-  (a) re-key every un-tabled Tame Scroll in the inventory when the Tome closes — needs a close signal
-  (a polled `stash.activeName()` transition, or one small notification); (b) a generic
-  "item moved out of a stash" event (a new hook — avoid unless (a) proves messy). Decide before building.
+- **When to re-key — DECIDED (user, 2026-11-02):** option (a), snapshot at open + close detected from the
+  `stash.activeName()` transition; no new hook.
 - Gamemode: `.sv` and `.hsv` give separate Tome files per gamemode for free; a locked scroll can't be
   moved, so it can never be filed into the wrong Tome.
 

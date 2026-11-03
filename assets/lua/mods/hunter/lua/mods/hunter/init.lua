@@ -7,6 +7,8 @@ local audio    = require("devilutionx.audio")
 local message  = require("devilutionx.message")
 local system   = require("devilutionx.system")
 local render   = require("devilutionx.render")
+local stash    = require("devilutionx.stash")
+local towners  = require("devilutionx.towners")
 
 -- ============================================================================
 -- Hunter mod — init.lua. Extended design notes, rationale, mechanics detail and
@@ -636,7 +638,20 @@ end
 -- owner), else the scroll's announced identity blob — the item's own modData (a delta-restored floor
 -- copy), the live SD cache, then the level-delta blob. Same source family as the pickup restore, so
 -- a FOREIGN scroll (another Hunter's floor drop) presents its true kills before we ever own it.
+-- Tame Tome session: while it is open, the Tame Scrolls held when it opened (tomeKey -> true); nil when closed.
+tomeSnapshot = nil
+
+-- During a Tame Tome session a scroll's own blob is authoritative over this hero's seed-keyed tables.
+function tomeSessionBlob(item)
+  if tomeSnapshot == nil then return nil end
+  local blob = item.modData or ""
+  if blob == "" then return nil end
+  return blob
+end
+
 function scrollKillsFor(item)
+  local tb = tomeSessionBlob(item)
+  if tb ~= nil then return decodeBlob(tb) or 0 end
   local k = allyKillCounts[item.seed]
   if k ~= nil then return k end
   local blob = item.modData or ""
@@ -1239,8 +1254,11 @@ function scrollPassesTierGate(p, seed, buff)
 end
 
 -- True if this Tame scroll is gamemode-locked here (Hellfire-tamed in Diablo, or a Diablo-tamed Diablo in Hellfire).
-function scrollIsGamemodeLocked(seed)
-  local tamedInHellfire = (scrollGamemode[seed] or 0) == 1
+function scrollIsGamemodeLocked(seed, item)
+  local gamemode = scrollGamemode[seed] or 0
+  local tb = (item ~= nil) and tomeSessionBlob(item) or nil
+  if tb ~= nil then gamemode = select(4, decodeBlob(tb)) end
+  local tamedInHellfire = gamemode == 1
   if system.isHellfire() then
     return not tamedInHellfire and seedIsDiablo(seed)
   end
@@ -1428,7 +1446,7 @@ events.OnCanPlayerUseItem.add(function(p, item)
     return false
   end
   -- A gamemode-locked Tame scroll is red/unusable too.
-  if item:isScrollOf(TAME_ID) and scrollIsGamemodeLocked(item.seed) then
+  if item:isScrollOf(TAME_ID) and scrollIsGamemodeLocked(item.seed, item) then
     return false
   end
 end)
@@ -2028,9 +2046,9 @@ local function broadcastCaptureRemove(monsterId, level, x, y, typeId)
 end
 
 -- Announce a scroll's full identity blob keyed by seed (so a peer receiving it via trade restores from receivedBlobs). `level` = floor item's delta level, or nil/-1 for a held scroll. Blob is the LAST field (binary).
-function broadcastScrollData(seed, level, mask)
+function broadcastScrollData(seed, level, mask, blob)
   if not system.isMultiplayer() then return end
-  local payload = table.concat({ NET.SCROLLDATA, level or -1, seed, blobForSeed(seed) }, "|")
+  local payload = table.concat({ NET.SCROLLDATA, level or -1, seed, blob or blobForSeed(seed) }, "|")
   luanet.send("hunter", payload, mask) -- mask nil => all other clients (luanet.send handles default + SP no-op)
 end
 
@@ -2764,6 +2782,9 @@ end
 
 -- OnItemAllowedInStash: keep mod items out of the normal stash (the potion must never persist; Tame Scrolls must never land in a base-game-loadable stash).
 events.OnItemAllowedInStash.add(function(item)
+  if stash.activeName() == TOME_STASH then -- the Tome holds Tame Scrolls only, never a gamemode-locked one (ctrl-click bypasses the cut veto)
+    return TAME_ID ~= nil and item:isScrollOf(TAME_ID) and not scrollIsGamemodeLocked(item.seed, item)
+  end
   if isForgetPotion(item) then return false end
   if item:isScrollOf(TAME_ID) then return false end
   return nil
@@ -2854,7 +2875,7 @@ events.OnGetCustomSpeedbookScrollEntries.add(function(p)
     -- Skip scrolls outside the current tier criteria (they carry iSkipSpeedbook, so filter at injection).
     if not scrollPassesTierGate(p, item.seed, item.buff) then return end
     -- Skip gamemode-locked scrolls.
-    if scrollIsGamemodeLocked(item.seed) then return end
+    if scrollIsGamemodeLocked(item.seed, item) then return end
     local name = item.name
     if not seen[name] then
       seen[name] = { seed = item.seed, buff = item.buff, count = 0 }
@@ -2890,7 +2911,7 @@ events.OnResolveCustomScrollSlot.add(function(p, spellId, selectedSeed, defaultS
     if fallbackSeed ~= nil then return end
     if not item:isScrollOf(TAME_ID) then return end
     local s = item.seed
-    if scrollIsGamemodeLocked(s) then return end -- never fall back onto a locked scroll
+    if scrollIsGamemodeLocked(s, item) then return end -- never fall back onto a locked scroll
     if wantUidx >= 0 then
       if seedGetUniqueType(s) == wantUidx then fallbackSeed = s end
     elseif seedGetUniqueType(s) < 0 and seedToTypeId(s) == wantType then
@@ -2911,6 +2932,12 @@ events.OnCanCastScroll.add(function(p, spellId, selectedSeed, target)
   end
 
   if countDeployedAllies() + countPendingDeploys() >= MAX_ALLIES then
+    p:say(player.HeroSpeech.ICantDoThat)
+    return false
+  end
+
+  -- No deploys while the Tame Tome is open: a withdrawn scroll isn't re-keyed into this hero's tables until it closes.
+  if tomeSnapshot ~= nil then
     p:say(player.HeroSpeech.ICantDoThat)
     return false
   end
@@ -2983,7 +3010,7 @@ end)
 events.OnPlayerCanCutInvItem.add(function(p, item)
   if not isMyPlayer(p) then return nil end
   if TAME_ID == nil or not item:isScrollOf(TAME_ID) then return nil end
-  if scrollIsGamemodeLocked(item.seed) then
+  if scrollIsGamemodeLocked(item.seed, item) then
     p:say(player.HeroSpeech.ICantDoThat)
     return false
   end
@@ -4466,6 +4493,48 @@ events.OnVendorWillBuyItem.add(function(item)
   if TAME_ID ~= nil and item:isScrollOf(TAME_ID) then return false end
 end)
 
+-- Re-key an acquired Tame Scroll (traded, or withdrawn from the Tame Tome) into this hero's seed space, rebuilt from its blob.
+function rekeyAcquiredScroll(p, invItem, blob)
+  local oldSeed = invItem.seed
+  local kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName = decodeBlob(blob)
+  local immVal = IMMUNITY_BY_INDEX[immIdx]
+
+  -- Fresh seed in our own counter space, preserving the scroll's type / unique identity.
+  local uIdx = seedGetUniqueType(oldSeed)
+  local newSeed = (uIdx >= 0) and allocSeed(nil, uIdx) or allocSeed(seedToTypeId(oldSeed), nil)
+
+  -- The Original Trainer rides INSIDE the blob (the true tamer travels with the scroll); fall back to the seed-keyed cache only if the blob had no name.
+  local origin = (ohName ~= nil and ohName ~= "") and { name = ohName, id = ohId } or scrollOrigin[oldSeed]
+
+  invItem.seed = newSeed
+  if kills > 0 then allyKillCounts[newSeed] = kills end
+  if immVal ~= nil then bondedImmunity[newSeed] = immVal end
+  if trnVar > 0 then bondedTrn[newSeed] = trnVar end
+  if origin ~= nil then scrollOrigin[newSeed] = origin end
+  if gamemode == 1 then scrollGamemode[newSeed] = 1 end          -- carry the tamed-in gamemode (Diablo = default 0)
+  if areaLvl > 0 then scrollAreaLevel[newSeed] = areaLvl end     -- carry the tamed-in area level
+  tameScrollData[newSeed] = nil                                  -- rebuilt from seed+dwBuff on cast
+  invItem.modData = blobForSeed(newSeed)                         -- re-key the held blob to the fresh seed (a live-trade item arrived empty)
+
+  -- Drop the old seed's tables only if no OTHER held scroll still uses it (so a transient collision never deletes a different scroll's data).
+  if p:findScrollBySeed(oldSeed) == nil then
+    allyKillCounts[oldSeed]  = nil
+    bondedImmunity[oldSeed]  = nil
+    bondedTrn[oldSeed]       = nil
+    scrollOrigin[oldSeed]    = nil
+    scrollGamemode[oldSeed]  = nil
+    scrollAreaLevel[oldSeed] = nil
+    tameScrollData[oldSeed]  = nil
+    receivedBlobs[oldSeed]   = nil
+  end
+
+  -- Re-derive name + gold from the just-restored tables (a wire-recreated floor copy carries neither modData nor the encoded name).
+  restampScrollPresentation(invItem)
+
+  -- Announce this scroll's identity under its fresh seed so peers can show the true tamer / restore it on a later trade.
+  broadcastScrollData(newSeed)
+end
+
 -- Re-stamp every picked-up Tame Scroll into THIS character's own monotonic seed space, so two players' scrolls can never share a seed (collision-proof trading). Lossless via the self-describing modData blob; also (re)applies gold quality.
 events.OnItemPickedUp.add(function(p, floorItem)
   -- Local player only: AutoGetItem runs on every client, but re-stamping must mutate only OUR own inventory item.
@@ -4511,47 +4580,10 @@ events.OnItemPickedUp.add(function(p, floorItem)
   if blob == "" then blob = items.getItemDeltaModData(items.currentDeltaLevel(), oldSeed) end
   if blob == "" then blob = receivedBlobs[oldSeed] or "" end
   if blob == "" then blob = blobForSeed(oldSeed) end
-  local kills, immIdx, trnVar, gamemode, areaLvl, ohId, ohName = decodeBlob(blob)
-  local immVal = IMMUNITY_BY_INDEX[immIdx]
+  rekeyAcquiredScroll(p, invItem, blob)
 
-  -- Fresh seed in our own counter space, preserving the scroll's type / unique identity.
-  local uIdx = seedGetUniqueType(oldSeed)
-  local newSeed = (uIdx >= 0) and allocSeed(nil, uIdx) or allocSeed(seedToTypeId(oldSeed), nil)
-
-  -- The Original Trainer rides INSIDE the blob (the true tamer travels with the scroll); fall back to the seed-keyed cache only if the blob had no name.
-  local origin = (ohName ~= nil and ohName ~= "") and { name = ohName, id = ohId } or scrollOrigin[oldSeed]
-
-  invItem.seed = newSeed
-  if kills > 0 then allyKillCounts[newSeed] = kills end
-  if immVal ~= nil then bondedImmunity[newSeed] = immVal end
-  if trnVar > 0 then bondedTrn[newSeed] = trnVar end
-  if origin ~= nil then scrollOrigin[newSeed] = origin end
-  if gamemode == 1 then scrollGamemode[newSeed] = 1 end          -- carry the tamed-in gamemode (Diablo = default 0)
-  if areaLvl > 0 then scrollAreaLevel[newSeed] = areaLvl end     -- carry the tamed-in area level
-  tameScrollData[newSeed] = nil                                  -- rebuilt from seed+dwBuff on cast
-  invItem.modData = blobForSeed(newSeed)                         -- re-key the held blob to the fresh seed (a live-trade item arrived empty)
-
-  -- Drop the old seed's tables only if no OTHER held scroll still uses it (so a transient collision never deletes a different scroll's data).
-  if p:findScrollBySeed(oldSeed) == nil then
-    allyKillCounts[oldSeed]  = nil
-    bondedImmunity[oldSeed]  = nil
-    bondedTrn[oldSeed]       = nil
-    scrollOrigin[oldSeed]    = nil
-    scrollGamemode[oldSeed]  = nil
-    scrollAreaLevel[oldSeed] = nil
-    tameScrollData[oldSeed]  = nil
-    receivedBlobs[oldSeed]   = nil
-  end
   -- The floor item is gone; drop its blob from the level delta to keep the per-level store bounded.
   items.setItemDeltaModData(items.currentDeltaLevel(), oldSeed, "")
-
-  -- Re-derive name + gold from the just-restored tables (the floor copy was recreated from the vanilla
-  -- item wire, which carries neither modData nor the encoded name — before this restamp a traded Bonded
-  -- scroll kept reading "Tamed" until the next recreate round-trip).
-  restampScrollPresentation(invItem)
-
-  -- Announce this scroll's identity under its fresh seed so peers can show the true tamer / restore it on a later trade.
-  broadcastScrollData(newSeed)
 end)
 
 -- A manually dropped Tame Scroll (the trade mechanism): persist its identity with the floor item in the level delta + announce it live, so the picker (present or a late joiner) restores it. Catches a hand-drag the drop helpers don't.
@@ -4563,8 +4595,66 @@ events.OnItemDropped.add(function(p, item)
   if not item:isScrollOf(TAME_ID) then return end
   local seed = item.seed
   local lvl = items.currentDeltaLevel()
-  items.setItemDeltaModData(lvl, seed, blobForSeed(seed))
-  broadcastScrollData(seed, lvl)
+  local blob = tomeSessionBlob(item) or blobForSeed(seed) -- a not-yet-re-keyed Tome withdrawal is only known by its own blob
+  items.setItemDeltaModData(lvl, seed, blob)
+  broadcastScrollData(seed, lvl, nil, blob)
+end)
+
+-- Hunters Tome: a Hunter-only Tame Scroll stash opened from Gillian's menu (engine mod stash, file hunters_tome.sv/.hsv).
+TOME_STASH = "hunters_tome"
+TOME_LABEL = "Hunters Tome"
+stash.register(TOME_STASH, { pages = 4, gold = false })
+
+-- Identity key for a held Tame Scroll in the session snapshot (seed alone can collide across heroes).
+function tomeKey(item)
+  return tostring(item.seed) .. ":" .. (item.modData or "")
+end
+
+-- Open the Tome: refresh every held scroll's blob (so a deposit carries its full identity), snapshot them, open the stash.
+function openTameTome()
+  local me = player.self()
+  if me == nil or me.className ~= HUNTER_CLASS or TAME_ID == nil then return end
+  local snapshot = {}
+  me:iterateInventory(function(item)
+    if not item:isScrollOf(TAME_ID) then return end
+    item.modData = blobForSeed(item.seed)
+    snapshot[tomeKey(item)] = true
+  end)
+  tomeSnapshot = snapshot
+  stash.open(TOME_STASH)
+end
+
+-- Re-key every held Tame Scroll that was not held when the Tome opened (i.e. withdrawn from it).
+function rekeyTomeWithdrawals()
+  local me = player.self()
+  if me == nil or tomeSnapshot == nil then return end
+  local withdrawn = {}
+  me:iterateInventory(function(item)
+    if item:isScrollOf(TAME_ID) and not tomeSnapshot[tomeKey(item)] then withdrawn[#withdrawn + 1] = item end
+  end)
+  for _, item in ipairs(withdrawn) do
+    rekeyAcquiredScroll(me, item, tomeSessionBlob(item) or blobForSeed(item.seed))
+    tomeSnapshot[tomeKey(item)] = true
+  end
+end
+
+towners.addDialogOption("gillian",
+  function()
+    local me = player.self()
+    return (me ~= nil and me.className == HUNTER_CLASS) and TOME_LABEL or ""
+  end,
+  openTameTome)
+
+-- The Tome closed (stash window shut or switched): settle its withdrawals and end the session.
+events.GameTick.add(function()
+  if tomeSnapshot == nil or stash.activeName() == TOME_STASH then return end
+  rekeyTomeWithdrawals()
+  tomeSnapshot = nil
+end)
+
+-- A save while the Tome is open (MP autosave / quit) must not persist un-re-keyed withdrawals.
+events.OnBeforeSaveHero.add(function()
+  if tomeSnapshot ~= nil then rekeyTomeWithdrawals() end
 end)
 
 -- Hijack the unique item info popup for a gold-tier tame scroll: populate the custom slot with tamed monster stats and return true so it renders instead of UniqueItems[_iUid] (which would show The Butcher's Cleaver).
@@ -4581,7 +4671,7 @@ events.OnPrepareUniqueInfoBox.add(function(item)
   if savedHp == 0 then savedHp = maxHp end
   local diffNames = { [0] = "Normal", [1] = "Nightmare", [2] = "Hell" }
   local diff      = diffNames[difficulty] or "Normal"
-  local kills     = allyKillCounts[item.seed] or 0
+  local kills     = scrollKillsFor(item)
   local prefix    = bonded and "Bonded " or "Tamed "
 
   local monsterName, tier

@@ -353,9 +353,19 @@ True when a deployed ally needs exactly one more kill to cross the Bonded thresh
 time, so this is the single-kill window that drives the pre-Bonded flash). Minions never promote, so they
 never flash.
 
+### `tomeSnapshot` / `tomeSessionBlob`
+`tomeSnapshot` is non-nil only while the Tame Tome is open: the set of Tame Scrolls held when it opened, keyed
+by `tomeKey` (seed + blob — seeds alone collide across heroes, since every hero allocates from the same base).
+During that session every Tame Scroll on screen has an authoritative blob: held scrolls had theirs refreshed
+by `openTameTome`, and Tome scrolls carry the one saved in the Tome file. Their seed-keyed tables, by contrast,
+may be another hero's or missing. So `tomeSessionBlob(item)` returns the item's own blob during a session
+(nil otherwise), and kills (`scrollKillsFor`), the gamemode lock (`scrollIsGamemodeLocked(seed, item)`) and the
+drop blob (`OnItemDropped`) prefer it. Outside a session behaviour is unchanged.
+
 ### `scrollIsBonded`
 Bonded check for a scroll ITEM (in inventory / on the floor), where the live monster isn't available: mlvl
-comes from the dwBuff-encoded level, kills from `allyKillCounts[seed]`.
+comes from the dwBuff-encoded level, kills from `scrollKillsFor` (the blob during a Tome session, else
+`allyKillCounts[seed]`, falling back to the blob).
 
 ### `scrollIsGoldTier`
 Gold/"unique"-tier scroll = a seed-unique champion/boss scroll OR any Bonded scroll (Bonded scrolls render as
@@ -1468,6 +1478,13 @@ grabbing them off the floor; Hunters can still trade scrolls to one another via 
 to a vendor — they are only obtained by taming or bought back from Pepin's recovery list; veto the vendor's
 buy-from-player check (covers Adria/Griswold, both store UIs).
 
+### `rekeyAcquiredScroll`
+The shared re-key for any Tame Scroll this hero acquires from outside its own inventory: a traded scroll
+(`OnItemPickedUp`, after it picks the best available blob) and a scroll withdrawn from the Tame Tome
+(`rekeyTomeWithdrawals`). Allocates a fresh seed in this hero's space, rebuilds the seed-keyed tables from the
+blob, re-stamps name/quality and announces the scroll to peers. Pickup-only cleanup (clearing the floor item's
+level-delta blob) stays in `OnItemPickedUp`.
+
 ### `OnItemPickedUp` (re-stamp on pickup)
 Re-stamp every picked-up Tame Scroll into THIS character's own monotonic seed space, so two players' scrolls
 can never share a seed (collision-proof trading). The scroll is self-describing: its progression
@@ -1550,6 +1567,22 @@ item carries no blob over the wire, so persist the scroll's identity with the fl
 announce it live, so the picker (present now, or a late joiner after we leave) restores it. `dropTameScroll` /
 the refund path already do this inline; this catches a player dragging a scroll out by hand. Local Hunter only
 (the hook fires for the local dropper).
+
+### Hunters Tome (`TOME_STASH` / `openTameTome` / `rekeyTomeWithdrawals`)
+A Hunter-only Tame Scroll stash on the engine's mod-stash API (`devilutionx.stash`): registered at load as
+`hunters_tome` (4 pages, no gold, saved to `hunters_tome.sv` / `.hsv` — shared by every Hunter save of that
+gamemode, separate per gamemode), opened from a "Hunters Tome" option in Gillian's talk menu
+(`towners.addDialogOption`; the label is empty, i.e. hidden, for non-Hunters). `OnItemAllowedInStash` admits
+only Tame Scrolls while the Tome is active, and never a gamemode-locked one (ctrl-click transfer bypasses the
+`OnPlayerCanCutInvItem` veto).
+
+Seeds and tables belong to one hero, but the Tome is shared, so a scroll leaving the Tome is treated exactly
+like a traded scroll: `openTameTome` refreshes every held scroll's blob and snapshots them; when the Tome closes
+(detected in `GameTick` as `stash.activeName()` leaving `hunters_tome`) every held scroll not in the snapshot is
+re-keyed via `rekeyAcquiredScroll`. A save during the session (MP autosave / quit) runs the same pass first
+(`OnBeforeSaveHero`). Deploying is refused while the Tome is open (`OnCanCastScroll`), since a withdrawn scroll
+isn't re-keyed yet. A withdrawn scroll dropped on the floor before the Tome closes (closing the stash with a
+scroll on the cursor drops it) persists and announces its own blob — see `tomeSessionBlob`.
 
 ### `OnPrepareUniqueInfoBox`
 Hijack the unique item info popup when hovering a gold-tier tame scroll. Populates the custom slot with tamed
