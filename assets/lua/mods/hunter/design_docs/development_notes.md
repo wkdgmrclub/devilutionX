@@ -7,6 +7,30 @@
 
 ---
 
+## Upstream sync (merged master 2026-11-02, awaiting compile + playtest)
+
+`master` (synced with diasurgical upstream, 144 commits) merged into `MonsterTamer` (`c2e76fa62`).
+Recompile everything — reconfigure CMake first (new fetched dependency SheenBidi; `CMakePresets.json`
+replaces `CMakeSettings.json`). Copy `init.lua` **and** `txtdata/classes/hunter/attributes.tsv`.
+
+Adaptations made in the merge (verify these compile + behave):
+- HP/mana fields are `Fixed26_6`: monster `health`/`maxHealth`/`setHitPoints`/`setMaxHitPoints`,
+  player `health`/`maxHealth`/`maxMana`, `resetStats` ported to `.whole()` / `fromInt`.
+- `fmt::format` → `std::format` (`lua/modules/items.cpp`); `tl::expected` → `std::expected`.
+- `ApplyPlrDamage` new arg order — the pet melee kill-classification passes `(dam, 0, deathReason)`.
+- Potion hooks deleted; Hunter's 2× potions now come from the TSV. `OnGetManaCost` now fires on the
+  whole-point cost before the class multiplier.
+- The Hunter TSV gained 6 required rows — without them the class `app_fatal`s at load.
+
+**Playtest watch items:** Hunter loads at character select; potions heal/restore 2×; Sorc-lite mana
+cost still −25%; ally HP bars / infobox HP read correctly (not 64× off); speedbook / infobox spell names
+still show. Note: **release** builds refuse multiplayer while loose `.lua`/`.tsv` overrides exist
+(`menu.cpp` `InitMultiPlayerMenu`) — playtest on a debug build or pack the mods as `.mpq`.
+
+*On verify: dated entry → `HISTORY.md`; delete this section.*
+
+---
+
 ## Single-writer pet combat + heartbeat retirement (BUILT 2026-07-09, awaiting playtest — init.lua only, NO recompile)
 
 **Playtest observation (user, 2026-07-09, two clients on one machine):** a Tamed Advocate killed a
@@ -205,4 +229,4 @@ overhaul above already requires. Refresh assets: `events.lua`; copy `init.lua`.
 ---
 
 *Previous state: `bugs.md` review-backlog audits (A1–A8) ALL COMPLETE (2026-07-09); next roadmap
-feature: Town-following cosmetic ally (roadmap §4).*
+feature: Tame Tome (roadmap §1).*

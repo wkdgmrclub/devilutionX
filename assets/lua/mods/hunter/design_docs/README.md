@@ -43,7 +43,7 @@ mod isn't loaded). One doc per engine area.
 
 | Doc | Holds |
 |---|---|
-| **cpp_changes/README.md** | Scope rules, provenance basis (`git merge-base`), the per-entry template, the eventual top-down branch-diff pass. |
+| **cpp_changes/README.md** | Scope rules, provenance basis, the PR branches + split plan, the per-entry template. |
 | **cpp_changes/spells.md** | Dynamic spell registration (`spelldat.cpp`, the `msg.cpp` guard). |
 | **cpp_changes/net.md** | The generic Lua net pipe (`CMD_LUAMSG`), `netSpawnAt`, high-slot allocation, mod-extensible monster arrays. |
 | **cpp_changes/items.md** | The `item.modData` blob engine surface, the `luamoddata` save slot, `OnItemDropped`. |

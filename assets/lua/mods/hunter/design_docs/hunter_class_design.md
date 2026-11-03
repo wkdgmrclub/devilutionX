@@ -161,8 +161,10 @@ All stat-raising elixirs (ElixirStr/Mag/Dex/Vit + Spectral Elixir) show red and 
 
 ## Unconditional Mechanics (no archetype gate)
 
-- Potion partial heal: 2× (same as Warrior/Barbarian) via `OnGetPotionHealAmount`
-- Potion partial mana: 2× (same as Sorcerer in Hellfire) via `OnGetPotionManaAmount`
+- Potion partial heal and mana: 2× each (Warrior-level life + Sorcerer-level mana) via
+  `itmRestoreLife 2` / `itmRestoreMana 2` in `attributes.tsv`. The other class multipliers stay at
+  1× (`manaCost`, `splRestoreLife`, `splRestoreMana`, `healOtherRestoreLife`); the Sorc-lite
+  archetype's mana reduction is the `OnGetManaCost` hook, not the TSV.
 - Oily Shrine: +2 to highest non-maxed base stat (capped at 250 per stat) via `OnOilyShrine`
 
 ## Share Potion

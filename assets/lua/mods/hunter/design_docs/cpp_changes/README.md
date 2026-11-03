@@ -16,15 +16,30 @@ reads as "a feature any modder could use," matching the C++ Hook Philosophy in `
 logic stays in Lua and is out of scope.
 
 ## Provenance basis
-`git merge-base HEAD master` (was `4c7d80c0`). "Upstream" = exists in the merge-base (vanilla). "Ours" =
-added after the merge-base. **Always re-derive** provenance with `git cat-file -e <merge-base>:<path>` /
-`git show <merge-base>:<path>` rather than trusting memory — the branch moves.
+`MonsterTamer` merges `master` (synced with diasurgical upstream) rather than rebasing, so "ours" =
+`git diff master MonsterTamer -- . ':!assets/lua/mods'` and "upstream" = whatever `master` has.
+**Always re-derive** with `git diff` / `git show master:<path>` rather than trusting memory — both
+branches move.
 
-## Status: bottom-up for now
-Entries are added per-feature as built. A later session does the **top-down pass**: diff the whole
-branch against the merge-base, confirm every engine touch is accounted for across these docs, group
-them into coherent PRs, and write final PR descriptions. (This subsumes the old "engine surface
-inventory" milestone.)
+## Branches and PR plan
+- **`MonsterTamer`** — the full test branch (engine + mods). Never PR'd directly.
+- **PR branches** — cut from `master`, engine only: nothing under `assets/lua/mods/`. Each must build
+  on its own against `master`.
+  - **`luanet-hooks`** — the generic net pipe (`net.md` §"The generic Lua net pipe") +
+    `system.isMultiplayer`. First upstream PR; description drafted. Its doc links LuaNet at
+    `assets/lua/mods/luanet` on the `MonsterTamer` branch.
+  - **`lua-mod-hooks`** — every other engine change. To be split into smaller **stacked** PRs (each
+    based on the previous, since nearly all touch `lua_event.hpp/.cpp` + `events.lua`). Proposed order:
+    dynamic spells → item modData / persistence → monster extensibility → golem / player-minion hooks →
+    class mechanics (prefer proposing new class-TSV attributes over hooks where it fits, matching
+    upstream's direction) → UI / display → item / inventory behaviour.
+- Building a PR branch: take `MonsterTamer`'s versions of the engine files onto a branch from `master`,
+  then strip what belongs elsewhere. Formatting churn (e.g. `[] {}` → `[] { }` from a different
+  clang-format) never goes into a PR branch.
+
+## Status
+Entries are added per-feature as built. The top-down pass (diff the whole branch, confirm every engine
+touch is accounted for, group into PRs, write PR descriptions) is in progress via the branches above.
 
 ## Files
 | Doc | Area |

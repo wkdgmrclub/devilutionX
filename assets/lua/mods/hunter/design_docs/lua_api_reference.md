@@ -59,7 +59,7 @@ Hunter registers via `addClassDataFromTsv` — its `HeroClass` enum value is ass
 | `OnCanPlayerUseItem(player, item) -> bool\|nil` | Block elixirs etc. | `Source/player.cpp` `CanUseItem` |
 | `OnGetMaxAttributeValue(player, attribute) -> int\|nil` | Per-stat max override; `"Strength"/"Magic"/"Dexterity"/"Vitality"` | `Source/player.cpp` `GetMaximumAttributeValue` |
 | `OnGetPlayerDamageMod(player, strMod, strDexMod, totalVit, isBow, isShield, isStaff, isUnarmed) -> int\|nil` | Override `_pDamageMod` for dynamic classes | `Source/items.cpp` `CalcPlrDamageMod` |
-| `OnGetManaCost(player, baseCost) -> int\|nil` | Override spell mana cost for non-named classes | `Source/spells.cpp` `GetManaAmount` |
+| `OnGetManaCost(player, baseCost) -> int\|nil` | Override the whole-point spell mana cost; fires for every class, before the class `manaCost` multiplier | `Source/spells.cpp` `GetManaAmount` |
 | `OnPlayerHasCriticalStrike(player) -> bool\|nil` | Grant crit (50% chance per level to 2× dmg) | `Source/player.cpp` `DealDamage`, `P2PGetDamageDealt` |
 | `OnPlayerHasIronSkin(player) -> bool\|nil` | Grant `_pIAC += level/4` | `Source/items.cpp` `CalcPlrDamageMod` |
 | `OnPlayerHasNaturalResistance(player) -> bool\|nil` | Grant all resists `+= level` | `Source/items.cpp` `CalcPlrResistances` |
@@ -67,8 +67,6 @@ Hunter registers via `addClassDataFromTsv` — its `HeroClass` enum value is ass
 | `OnGetArrowVelocityBonus(player) -> int\|nil` | Add to arrow velocity after class checks | `Source/missiles.cpp` `AddSpectralArrow`, `AddArrow` |
 | `OnPlayerCanBlockWithoutShield(player, isHoldingStaff, isUnarmed) -> bool\|nil` | Grant staff/unarmed FastBlock | `Source/items.cpp` `CalcPlrBlockFlag` |
 | `OnGetArmorLevelBonus(player, armorType, isUnique) -> int\|nil` | Grant level-scaled `_pIAC` bonus; armorType: `"Light"/"Medium"/"Heavy"` | `Source/items.cpp` `GetPlrAnimArmorId` |
-| `OnGetPotionHealAmount(player, l) -> int\|nil` | Override partial potion heal for non-named classes | `Source/player.cpp` `RestorePartialLife` |
-| `OnGetPotionManaAmount(player, l) -> int\|nil` | Override partial potion mana for non-named classes | `Source/player.cpp` `RestorePartialMana` |
 | `OnPlayerHasArmorPierce(player) -> bool\|nil` | Grant melee armor pierce (−monsterAC/8) | `Source/player.cpp` `CalculateArmorPierce` |
 | `OnPlayerCanCleave(player, isAxe, isTwoHandedHeavy, isStaff) -> bool\|nil` | Grant cleave for given weapon state | `Source/player.cpp` `CanCleave` |
 | `OnGetHitRecoveryThreshold(player, baseThreshold) -> int\|nil` | Override damage threshold for hit-recovery stagger; Barbarian's `level+level/4` pre-applied | `Source/player.cpp` `StartPlrHit` |
@@ -419,6 +417,11 @@ TSV files, tab-delimited. Mods ship TSVs in `mods/<modname>/txtdata/`.
 
 ## TSV-Controlled Values (no C++ changes needed)
 
+- Class multipliers — set in `attributes.tsv`: `manaCost` (spell mana cost), `itmRestoreLife` /
+  `itmRestoreMana` (partial potions), `splRestoreLife` / `splRestoreMana` (Healing / Mana spells),
+  `healOtherRestoreLife` (Heal Other). Every `attributes.tsv` key is **required and read in fixed
+  order** (`LoadClassData`, `Source/tables/playerdat.cpp`); a missing or out-of-order row is an
+  `app_fatal` at class load. Mirror `assets/txtdata/classes/warrior/attributes.tsv` when upstream adds keys.
 - Base melee/ranged/magic to-hit — set in `attributes.tsv`
 - Base block chance — set in `attributes.tsv` (Hunter: 10); `OnGetBlockChanceBonus` overrides per archetype (Warrior/Barb → 30, Monk → 25, Rogue → 20)
 - Hunter ranged to-hit: 70 (same as Rogue); block: 20; melee: 50

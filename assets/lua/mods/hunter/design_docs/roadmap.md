@@ -19,8 +19,8 @@ documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
 - **Taming Diablo: COMPLETE & two-client playtested** (incl. the Apoc spread/targeting MP sync) —
   graduated to `HISTORY.md`.
 - **The `bugs.md` review-backlog audits (A1–A8): ALL COMPLETE (2026-07-09).**
-- **Everything in the priority list through item 3 is shipped and playtested. ▶ Next = item 4,
-  Town-following cosmetic ally.**
+- **Pepin Recovery, the pet Infobox, and Taming Diablo are shipped and playtested** (`HISTORY.md`).
+- **Priority re-ordered 2026-11-02: functional work first, cosmetic last. ▶ Next = §1, Tame Tome.**
 
 ---
 
@@ -43,31 +43,21 @@ through these dispatches — `AddDiabloApocalypse` targets players directly; a *
 never fires the carrier and uses the single-tile `DiabloApocalypseBoom` at his target instead, which
 resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.md` "Taming Diablo".)
 
-1. ✅ **DONE + verified** — Pepin Recovery unique-scroll quality (`HISTORY.md`).
-2. ✅ **DONE + playtested** — Infobox / Floating Infobox + OHID for tamed pets (`HISTORY.md`).
-3. ✅ **DONE + playtested** — Taming Diablo (`HISTORY.md`).
-4. ◀ **NEXT — Town-following cosmetic ally** — §4.
-5. **Tame Tome** (more complex) — §5.
-6. **Monster Nickname** (more complex) — §6.
+**Functional (first):**
+1. ◀ **NEXT — Tame Tome** (Hunter-only Tame Scroll stash) — §1.
+2. **Diablo/Hellfire scroll-compatibility enforcement** (data foundation already shipped; needs §1 as the
+   filing target for locked scrolls) — §2.
+3. **Mod packaging** (`.mpq` + `manifest.ini`) — §3.
 
-Lower-priority / not in the 1–6 line (kept for when picked up): the Diablo/Hellfire
-scroll-compatibility *enforcement* layer (data foundation already shipped — §Diablo/Hellfire). Residual MP
-spot-checks in §Multiplayer Verification.
+**Cosmetic (after):**
+4. **Town-following cosmetic ally** — §4.
+5. **Monster Nickname** — §5.
 
----
-
-## 4. Town-following cosmetic ally
-
-While in town, whatever Tame Scroll is selected in the speedbook produces that Tamed/Bonded monster behind the
-player in town, leashed to always follow exactly one tile behind.
-
-- Does **not** consume the scroll — purely a cosmetic effect while in town.
-- Stretch goal: allow hovering it to see the regular + floating infobox of the Tamed/Bonded monster stats
-  (the §2 infobox is now shipped, so this reuses it directly).
+Ongoing: residual MP spot-checks in §Multiplayer Verification.
 
 ---
 
-## 5. Tame Tome — Hunter-only Tame Scroll stash (mod-owned `tome.sv/.hsv`) — *more complex*
+## 1. Tame Tome — Hunter-only Tame Scroll stash (mod-owned `tome.sv/.hsv`) — *more complex*
 
 Tame Scrolls are **blocked from the normal stash** (`OnItemAllowedInStash` returns false for them, alongside the Potion of Forgetting). The normal stash (`stash.sv`) could be loaded by a non-modded / base-game session, so a Tame Scroll must never live there. **Goal:** a *separate, mod-owned* stash for Tame Scrolls, reached by **leveraging the existing stash code** rather than extending the vanilla stash.
 
@@ -82,17 +72,7 @@ Tame Scrolls are **blocked from the normal stash** (`OnItemAllowedInStash` retur
 
 ---
 
-## 6. Monster Nickname (rename Tamed/Bonded allies at Deckard Cain) — *more complex*
-
-A **Deckard Cain menu interaction** that lets a player set the **displayed name** of any of their Tamed/Bonded monsters. The nickname replaces the **species portion** of the generated display name while keeping the `Tamed/Bonded Lvl N` prefix — e.g. `Tamed Lvl 2 Scavenger` → `Tamed Lvl 2 Doggo`.
-
-- Applies to **any** of the player's own Tamed/Bonded monsters (held scroll or deployed ally).
-- **Nickname must persist when the scroll is traded** — so it rides **with the per-scroll/monster data**, not with the Hunter. Treat it like the existing custom-name/cosmetic data: store on the scroll's seed-keyed record and carry it through the trade path (item-encoding / Plane-2 cosmetic), so a Hunter who receives the traded scroll sees the chosen nickname.
-- Open scoping notes (capture when detailing): the Cain UI surface (reuse a towner dialog / text-entry path), how the nickname composes with the existing name generator (prefix + tier + nickname-vs-species), max length / charset / sanitisation, and how it travels over the wire alongside the other Plane-2 cosmetic fields (names/TRN) for the live cross-Hunter view.
-
----
-
-## Diablo/Hellfire scroll-compatibility / gamemode locking (DECIDED 2026-06-24 — enforcement layer not yet built)
+## 2. Diablo/Hellfire scroll-compatibility / gamemode locking (DECIDED 2026-06-24 — enforcement layer not yet built)
 
 Tame Scrolls record the **gamemode they were tamed in** and are hard-restricted by gamemode when carried
 across to the other gamemode. Restriction rules (user, 2026-06-24):
@@ -104,7 +84,7 @@ across to the other gamemode. Restriction rules (user, 2026-06-24):
   red/restricted/unusable in Hellfire.
 - **Lockdown is total — not even moveable.** A restricted scroll cannot be deployed, sold, OR even moved
   within the inventory. The player must return to the correct gamemode and file it into the **Tame Tome**
-  (§5) properly. No partial/soft state — fully inert until back in its home gamemode.
+  (§1) properly. No partial/soft state — fully inert until back in its home gamemode.
 
 **Data foundation — BUILT 2026-06-25 (shipped with the "Found:" floating-box field):** the tamed-in
 gamemode is captured at fresh tame and stored in **`item.modData` bit 22** (`0` = Diablo, `1` = Hellfire) —
@@ -123,6 +103,45 @@ the *enforcement* layer:
   (mirror the existing tier-gate red treatment in `OnGetItemColor`/the scroll-tier veto).
 - Default for any scroll predating the bit (none in clean current-state data, per the no-backwards-compat
   rule): modData bit 22 = 0 → reads as Diablo-gamemode, which is the lenient case.
+
+---
+
+## 3. Mod packaging (`.mpq` + `manifest.ini`)
+
+Upstream (merged 2026-11-02) refuses **multiplayer in release builds** while any loose `.lua` / `.tsv` /
+`.sol` override is present (`menu.cpp` `InitMultiPlayerMenu`; debug builds skip the check). So Hunter and
+LuaNet only work in real-player MP once shipped as packed `.mpq` mods.
+
+- Pack Hunter and LuaNet as `.mpq`s (smpq). Packed mods are SHA-256-hashed for upstream's MP
+  compatibility check (`Source/mods/mod_identity.h`), so every client must run the identical archive.
+- Give each a `manifest.ini` at the archive root (`name`, `description`, `version`, `author`;
+  template: `mods/hf/manifest.ini`). Hunter declares `requiredMods=luanet` so LuaNet always loads first —
+  this does **not** enforce LuaNet's presence (a missing required mod only logs), so Hunter keeps its
+  no-op fallback when LuaNet is absent.
+- Decide whether Hunter takes its own `saveExtension` (Hellfire uses `hsv`) — relevant to keeping
+  non-Hunter saves byte-stable.
+- Playtest a release build with both `.mpq`s, two clients.
+
+---
+
+## 4. Town-following cosmetic ally
+
+While in town, whatever Tame Scroll is selected in the speedbook produces that Tamed/Bonded monster behind the
+player in town, leashed to always follow exactly one tile behind.
+
+- Does **not** consume the scroll — purely a cosmetic effect while in town.
+- Stretch goal: allow hovering it to see the regular + floating infobox of the Tamed/Bonded monster stats
+  (the pet infobox is shipped, so this reuses it directly).
+
+---
+
+## 5. Monster Nickname (rename Tamed/Bonded allies at Deckard Cain) — *more complex*
+
+A **Deckard Cain menu interaction** that lets a player set the **displayed name** of any of their Tamed/Bonded monsters. The nickname replaces the **species portion** of the generated display name while keeping the `Tamed/Bonded Lvl N` prefix — e.g. `Tamed Lvl 2 Scavenger` → `Tamed Lvl 2 Doggo`.
+
+- Applies to **any** of the player's own Tamed/Bonded monsters (held scroll or deployed ally).
+- **Nickname must persist when the scroll is traded** — so it rides **with the per-scroll/monster data**, not with the Hunter. Treat it like the existing custom-name/cosmetic data: store on the scroll's seed-keyed record and carry it through the trade path (item-encoding / Plane-2 cosmetic), so a Hunter who receives the traded scroll sees the chosen nickname.
+- Open scoping notes (capture when detailing): the Cain UI surface (reuse a towner dialog / text-entry path), how the nickname composes with the existing name generator (prefix + tier + nickname-vs-species), max length / charset / sanitisation, and how it travels over the wire alongside the other Plane-2 cosmetic fields (names/TRN) for the live cross-Hunter view.
 
 ---
 
