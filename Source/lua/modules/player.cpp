@@ -161,9 +161,8 @@ void InitPlayerUserType(sol::state_view &lua)
 	    "Base vitality stat (readonly)",
 	    [](const Player &player) { return static_cast<int>(player._pBaseVit); });
 	LuaSetDocProperty(playerType, "statPoints", "integer",
-	    "Unspent stat points (_pStatPts). Writable: the hero file stores this as a single byte, so a mod granting more than 255 points must persist the true value itself (e.g. via OnSavePlayerData) and write it back on load.",
-	    [](const Player &player) { return player._pStatPts; },
-	    [](Player &player, int value) { player._pStatPts = std::max(value, 0); });
+	    "Unspent stat points. The hero file stores this as one byte, so values above 255 do not survive a save.",
+	    &Player::_pStatPts);
 	// Effective combat stats as shown on the character sheet (readonly). These read the player's
 	// already-accumulated combat accessors/fields (GetArmor/GetMeleeToHit/GetRangedToHit and the
 	// CalcPlrInv-cached _pI* damage fields) and combine them exactly as charpanel.cpp does for
@@ -180,14 +179,14 @@ void InitPlayerUserType(sol::state_view &lua)
 	    "Effective minimum attack damage as shown on the character sheet (readonly)",
 	    [](const Player &player) {
 		    int damageMod = player._pIBonusDamMod;
-		    damageMod += (player.UsesRangedWeapon() && player._pClass != HeroClass::Rogue) ? player._pDamageMod / 2 : player._pDamageMod;
+		    damageMod += (player.InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Bow && HasNoneOf(player.getClassFlags(), PlayerClassFlag::BowMastery)) ? player._pDamageMod / 2 : player._pDamageMod;
 		    return player._pIMinDam + (player._pIBonusDam * player._pIMinDam / 100) + damageMod;
 	    });
 	LuaSetDocReadonlyProperty(playerType, "maxDamage", "integer",
 	    "Effective maximum attack damage as shown on the character sheet (readonly)",
 	    [](const Player &player) {
 		    int damageMod = player._pIBonusDamMod;
-		    damageMod += (player.UsesRangedWeapon() && player._pClass != HeroClass::Rogue) ? player._pDamageMod / 2 : player._pDamageMod;
+		    damageMod += (player.InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Bow && HasNoneOf(player.getClassFlags(), PlayerClassFlag::BowMastery)) ? player._pDamageMod / 2 : player._pDamageMod;
 		    return player._pIMaxDam + (player._pIBonusDam * player._pIMaxDam / 100) + damageMod;
 	    });
 	LuaSetDocReadonlyProperty(playerType, "className", "string",
