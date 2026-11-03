@@ -411,6 +411,13 @@ local events = {
   OnPlayerCanPickUpItem = CreateQueryEvent(),
   __doc_OnPlayerCanPickUpItem = "Query: return false to forbid a player from picking up a floor item (silently cancels). Args: player, item. Return nil or true to allow (default: true).",
 
+  ---Query event fired before the player cuts an item out of a body, inventory or belt slot: lifting it
+  ---onto the cursor, shift-click auto-move, ctrl-click drop, or ctrl-click sell to the visual store.
+  ---Fires only for an occupied slot. Args: player, item, invLocation (INVITEM_* index).
+  ---Return false to leave the item where it is (the click does nothing). Return nil or true to allow.
+  OnPlayerCanCutInvItem = CreateQueryEvent(),
+  __doc_OnPlayerCanCutInvItem = "Query: return false to keep an item in its body/inventory/belt slot (blocks lift, auto-move, ctrl-drop, ctrl-sell). Args: player, item, invLocation. Return nil or true to allow (default: true).",
+
   ---Query event fired in UseInvItem before the Auto Refill Belt redirect, for the belt item being used.
   ---Args: player, item (the selected belt item). Return false to exempt this item from auto-refill so the exact selected belt slot is used (e.g. seeded custom scrolls that must not be swapped for an identical-looking copy). Return nil or true to allow the default redirect (default: true).
   OnCanAutoRefillBeltItem = CreateQueryEvent(),

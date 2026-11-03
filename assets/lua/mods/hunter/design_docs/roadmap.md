@@ -20,7 +20,8 @@ documented in `HISTORY.md`; active bugs and shipped fixes in `bugs.md`.
   graduated to `HISTORY.md`.
 - **The `bugs.md` review-backlog audits (A1–A8): ALL COMPLETE (2026-07-09).**
 - **Pepin Recovery, the pet Infobox, and Taming Diablo are shipped and playtested** (`HISTORY.md`).
-- **Priority re-ordered 2026-11-02: functional work first, cosmetic last. ▶ Next = §1, Tame Tome.**
+- **Priority re-ordered 2026-11-02: functional work first, cosmetic last.** The gamemode lock (item 2)
+  was picked up first and is in `development_notes.md`; ▶ next after it = §1, Tame Tome.
 
 ---
 
@@ -44,9 +45,9 @@ never fires the carrier and uses the single-tile `DiabloApocalypseBoom` at his t
 resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.md` "Taming Diablo".)
 
 **Functional (first):**
-1. ◀ **NEXT — Tame Tome** (Hunter-only Tame Scroll stash) — §1.
-2. **Diablo/Hellfire scroll-compatibility enforcement** (data foundation already shipped; needs §1 as the
-   filing target for locked scrolls) — §2.
+1. **Tame Tome** (Hunter-only Tame Scroll stash) — §1.
+2. ▶ **IN PROGRESS — Diablo/Hellfire scroll gamemode lock** — moved to `development_notes.md` (built
+   2026-11-02, awaiting playtest).
 3. **Mod packaging** (`.mpq` + `manifest.ini`) — §3.
 
 **Cosmetic (after):**
@@ -69,40 +70,6 @@ Tame Scrolls are **blocked from the normal stash** (`OnItemAllowedInStash` retur
 - Clicking it opens the window immediately + plays the **book** sound effect. Clicking the single-arrow page selectors plays the **scroll** sound effect.
 - Saved as **`tome.sv/.hsv`**, accessible across any Hunter save in the same config dir as the save (same behaviour as the regular stash).
 - Confirm the right reuse of `Source/qol/stash.*` (thin generic hooks, defaults to vanilla, base-game stash untouched). UI layout / exact wiring to be detailed when picked up.
-
----
-
-## 2. Diablo/Hellfire scroll-compatibility / gamemode locking (DECIDED 2026-06-24 — enforcement layer not yet built)
-
-Tame Scrolls record the **gamemode they were tamed in** and are hard-restricted by gamemode when carried
-across to the other gamemode. Restriction rules (user, 2026-06-24):
-
-- **Hellfire → Diablo: ALWAYS restricted.** Any Tame Scroll created in the **Hellfire** gamemode is fully
-  red/restricted/unusable in **Diablo**. (Hellfire content has no Diablo equivalent, so it never travels back.)
-- **Diablo → Hellfire: allowed, with ONE exception.** Most Diablo-gamemode scrolls work fine in Hellfire.
-  The exception is a scroll containing **Diablo himself** tamed in the Diablo gamemode — that one is
-  red/restricted/unusable in Hellfire.
-- **Lockdown is total — not even moveable.** A restricted scroll cannot be deployed, sold, OR even moved
-  within the inventory. The player must return to the correct gamemode and file it into the **Tame Tome**
-  (§1) properly. No partial/soft state — fully inert until back in its home gamemode.
-
-**Data foundation — BUILT 2026-06-25 (shipped with the "Found:" floating-box field):** the tamed-in
-gamemode is captured at fresh tame and stored in **`item.modData` bit 22** (`0` = Diablo, `1` = Hellfire) —
-NOT `dwBuff` bit 0, which is the engine's live `CF_HELLFIRE` flag (read by `RecreateItem`→`gbIsHellfire` and
-`IsDungeonItemValid`; flipping it corrupts item validation/recreation — confirmed in `Source/items.cpp`).
-`modData` is mod-owned + engine-ignored, so bit 22 is safe. It rides every existing path: seed-keyed
-`scrollGamemode[seed]` table (persisted in OnSave/OnLoadPlayerData as a trailing section; rebuilt onto held
-scrolls by `rebuildHeldScrollModData`), carried on trade + re-keyed on pickup (`OnItemPickedUp`), and synced to
-remote observers on the CO message. Capture reads the new **`system.isHellfire()`** engine binding
-(read-only getter, sibling of `system.isMultiplayer()`, reads `gbIsHellfire`). So the locking work only needs
-the *enforcement* layer:
-- Compare the scroll's stored gamemode + "is Diablo unique" against the current gamemode.
-- Gate at: deploy (`OnCanCastScroll` / the scroll cast handler), sell (`OnVendorWillBuyItem`), and
-  **inventory move** (needs an engine hook to veto picking a restricted item off the inventory grid — no
-  such hook exists yet; scope it when this is built). Render the scroll **red** when restricted
-  (mirror the existing tier-gate red treatment in `OnGetItemColor`/the scroll-tier veto).
-- Default for any scroll predating the bit (none in clean current-state data, per the no-backwards-compat
-  rule): modData bit 22 = 0 → reads as Diablo-gamemode, which is the lenient case.
 
 ---
 

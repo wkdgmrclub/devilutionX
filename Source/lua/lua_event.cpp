@@ -608,6 +608,23 @@ bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultV
 	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanPickUpItem", player, item);
 }
 
+bool OnPlayerCanCutInvItem(const Player *player, int invLocation, bool defaultValue)
+{
+	// invLocation is an INVITEM_* index; -1 means nothing is under the cursor.
+	if (player == nullptr || invLocation < 0 || invLocation > INVITEM_BELT_LAST)
+		return defaultValue;
+	const Item *item;
+	if (invLocation < INVITEM_INV_FIRST)
+		item = &player->InvBody[invLocation];
+	else if (invLocation <= INVITEM_INV_LAST)
+		item = &player->InvList[invLocation - INVITEM_INV_FIRST];
+	else
+		item = &player->SpdList[invLocation - INVITEM_BELT_FIRST];
+	if (item->isEmpty())
+		return defaultValue;
+	return CallLuaEventReturn<bool>(defaultValue, "OnPlayerCanCutInvItem", player, item, invLocation);
+}
+
 bool OnCanAutoRefillBeltItem(const Player *player, const Item *item, bool defaultValue)
 {
 	return CallLuaEventReturn<bool>(defaultValue, "OnCanAutoRefillBeltItem", player, item);

@@ -160,6 +160,10 @@ int OnMonsterMissileHit(const Monster *source, const Monster *target, int missil
 bool OnPlayerAttackMonster(const Player *player, const Monster *monster, bool defaultValue);
 bool OnPlayerAttackMonster(const Player *player, int monsterId, bool defaultValue);
 bool OnPlayerCanPickUpItem(const Player *player, const Item *item, bool defaultValue);
+// Fired before the player cuts (lifts / auto-moves / ctrl-drops) the item at INVITEM_* location
+// invLocation (body, inventory grid or belt). Resolves the item and calls Lua only for an occupied
+// slot. Returning false leaves the item in place; default true = vanilla.
+bool OnPlayerCanCutInvItem(const Player *player, int invLocation, bool defaultValue);
 bool OnCanSelectMonsterWithCursor(int cursorId, bool defaultValue);
 bool OnCursorMonsterTarget(const Monster *monster, bool defaultValue);
 // Speedbook hooks

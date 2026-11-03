@@ -558,6 +558,15 @@ every normal scroll classifies as `CAT_NORMAL`; revisit Diablo-scroll detection 
 True if a Tame scroll (by seed + dwBuff) is deployable at player p's current tier. Used to red/hide/refuse
 out-of-criteria scrolls, mirroring the capture-side mlvl gate.
 
+### `scrollIsGamemodeLocked`
+Players may rename a hero's save between `.sv` (Diablo) and `.hsv` (Hellfire), so a Tame Scroll can cross
+gamemodes, but Diablo and Hellfire monster data differ. Rules: a Hellfire-tamed scroll is locked in Diablo; a
+Diablo-tamed Diablo scroll is locked in Hellfire; every other Diablo-tamed scroll works in Hellfire. A locked
+scroll is totally inert: red (`OnCanPlayerUseItem`), absent from the speedbook, uncastable (`OnCanCastScroll`),
+and cannot be lifted, auto-moved, dropped or sold off its slot (`OnPlayerCanCutInvItem`). Stash and vendors
+already refuse every Tame Scroll. The tamed-in gamemode travels with the scroll (`scrollGamemode`, carried by
+the modData blob through trades), so the lock holds wherever the scroll goes.
+
 ### `isMyPlayer`
 True when p is the local player AND the local player is a Hunter. Used in all query/fire event hooks so they
 are inert when the local player is a different class (important in mixed-class multiplayer games where the mod

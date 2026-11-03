@@ -1653,7 +1653,7 @@ void CheckInvItem(bool isShiftHeld, bool isCtrlHeld)
 		CheckInvPaste(*MyPlayer, MousePosition);
 	} else if (IsStashOpen && isCtrlHeld) {
 		TransferItemToStash(*MyPlayer, pcursinvitem);
-	} else {
+	} else if (lua::OnPlayerCanCutInvItem(MyPlayer, pcursinvitem, true)) { // Lua mod support
 		CheckInvCut(*MyPlayer, MousePosition, isShiftHeld, isCtrlHeld);
 	}
 }

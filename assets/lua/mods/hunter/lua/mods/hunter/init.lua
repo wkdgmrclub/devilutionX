@@ -1238,6 +1238,15 @@ function scrollPassesTierGate(p, seed, buff)
   return mlvlGateAllows(tameTier(clvl), category, clvl, mlvl)
 end
 
+-- True if this Tame scroll is gamemode-locked here (Hellfire-tamed in Diablo, or a Diablo-tamed Diablo in Hellfire).
+function scrollIsGamemodeLocked(seed)
+  local tamedInHellfire = (scrollGamemode[seed] or 0) == 1
+  if system.isHellfire() then
+    return not tamedInHellfire and seedIsDiablo(seed)
+  end
+  return tamedInHellfire
+end
+
 LEASH_DISTANCE = 12                       -- emergency snap distance
 ENGAGE_RADIUS  = 9                        -- max chase/target radius from player
 MAX_ALLIES     =
@@ -1416,6 +1425,10 @@ events.OnCanPlayerUseItem.add(function(p, item)
   if item:isScrollOf(GOLEM_SPELL_ID) then return false end
   -- A Tame scroll outside the Hunter's current tier criteria is red/unusable (data preserved; only deployment gated).
   if item:isScrollOf(TAME_ID) and not scrollPassesTierGate(p, item.seed, item.buff) then
+    return false
+  end
+  -- A gamemode-locked Tame scroll is red/unusable too.
+  if item:isScrollOf(TAME_ID) and scrollIsGamemodeLocked(item.seed) then
     return false
   end
 end)
@@ -2840,6 +2853,8 @@ events.OnGetCustomSpeedbookScrollEntries.add(function(p)
     if not item:isScrollOf(TAME_ID) then return end
     -- Skip scrolls outside the current tier criteria (they carry iSkipSpeedbook, so filter at injection).
     if not scrollPassesTierGate(p, item.seed, item.buff) then return end
+    -- Skip gamemode-locked scrolls.
+    if scrollIsGamemodeLocked(item.seed) then return end
     local name = item.name
     if not seen[name] then
       seen[name] = { seed = item.seed, buff = item.buff, count = 0 }
@@ -2875,6 +2890,7 @@ events.OnResolveCustomScrollSlot.add(function(p, spellId, selectedSeed, defaultS
     if fallbackSeed ~= nil then return end
     if not item:isScrollOf(TAME_ID) then return end
     local s = item.seed
+    if scrollIsGamemodeLocked(s) then return end -- never fall back onto a locked scroll
     if wantUidx >= 0 then
       if seedGetUniqueType(s) == wantUidx then fallbackSeed = s end
     elseif seedGetUniqueType(s) < 0 and seedToTypeId(s) == wantType then
@@ -2921,6 +2937,11 @@ events.OnCanCastScroll.add(function(p, spellId, selectedSeed, target)
       p:say(player.HeroSpeech.ICantDoThat)
       return false
     end
+    -- Gamemode lock: a locked scroll never deploys (covers belt hotkeys / right-click, which bypass the speedbook).
+    if scrollIsGamemodeLocked(seed) then
+      p:say(player.HeroSpeech.ICantDoThat)
+      return false
+    end
   end
 
   return true
@@ -2956,6 +2977,17 @@ events.OnCanCastSkill.add(function(p, spellId, target)
     return false
   end
   return nil -- in-criteria: allow (HP threshold is enforced in-cast).
+end)
+
+-- Gamemode lock: a locked Tame scroll cannot leave its slot (no lift, auto-move, ctrl-drop or ctrl-sell).
+events.OnPlayerCanCutInvItem.add(function(p, item)
+  if not isMyPlayer(p) then return nil end
+  if TAME_ID == nil or not item:isScrollOf(TAME_ID) then return nil end
+  if scrollIsGamemodeLocked(item.seed) then
+    p:say(player.HeroSpeech.ICantDoThat)
+    return false
+  end
+  return nil
 end)
 
 -- Exempt Tame scrolls from Auto Refill Belt (all share TAME_ID, so refill would redirect a belt cast to the wrong scroll). false keeps the selected belt slot.

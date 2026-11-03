@@ -7,11 +7,50 @@
 
 ---
 
+## Diablo/Hellfire scroll gamemode lock (BUILT 2026-11-02, awaiting compile + playtest)
+
+**Why it's needed:** players may rename a hero's save between `.sv` (Diablo) and `.hsv` (Hellfire) —
+DevilutionX explicitly allows moving characters between modes — so a Tame Scroll can cross gamemodes,
+and Diablo/Hellfire monster data differ in many small ways.
+
+**Rules (user, 2026-06-24):** a Hellfire-tamed scroll is locked in Diablo; a Diablo-tamed **Diablo**
+scroll is locked in Hellfire; every other Diablo-tamed scroll works in Hellfire. **Total lockdown**
+(user, 2026-11-02): a locked scroll is fully inert — no deploy, no sell, no move — until back in its
+home gamemode.
+
+**Data foundation (built 2026-06-25):** tamed-in gamemode captured at fresh tame via
+`system.isHellfire()` into `scrollGamemode[seed]` (persisted in OnSave/OnLoadPlayerData) and `item.modData`
+bit 22 (`0` Diablo / `1` Hellfire — never `dwBuff` bit 0, the engine's live `CF_HELLFIRE`); carried on
+trade + re-keyed on pickup (`OnItemPickedUp`), synced on CO.
+
+**Built (enforcement):** `scrollIsGamemodeLocked(seed)` in init.lua, applied at:
+- red / unusable — `OnCanPlayerUseItem` (vanilla draws `_iStatFlag == false` red);
+- speedbook — skipped in `OnGetCustomSpeedbookScrollEntries`; never a fallback in `OnResolveCustomScrollSlot`;
+- deploy — refused in `OnCanCastScroll` (covers belt hotkeys / right-click);
+- move / drop / visual-store sell — **new thin hook `OnPlayerCanCutInvItem`** gating the `CheckInvCut`
+  call in `CheckInvItem` (`Source/inv.cpp`), default true = vanilla;
+- stash / vendor — already refused for every Tame Scroll (`OnItemAllowedInStash`, `OnVendorWillBuyItem`).
+
+**Recompile:** `inv.cpp`, `lua_event.cpp/.hpp`; refresh `events.lua`; copy `init.lua`. The new hook also
+belongs in the `lua-mod-hooks` PR branch (item/inventory behaviour group).
+
+**Playtest watch items** (tame in one mode, rename the save `.sv`↔`.hsv`, load in the other):
+1. Hellfire-tamed scroll in Diablo: red, not in speedbook, right-click / belt hotkey → "I can't do that",
+   click / shift-click / ctrl-click on it → "I can't do that" and it stays put.
+2. Diablo-tamed Diablo scroll in Hellfire: same lockdown. Any other Diablo-tamed scroll in Hellfire: normal.
+3. Unlocked scrolls and every non-scroll item still move, drop, belt and sell exactly as before.
+4. Back in the home gamemode: the scroll is fully normal again.
+
+*On verify: hook row already in `lua_api_reference.md`; dated entry → `HISTORY.md`; delete this section.*
+
+---
+
 ## Upstream sync (merged master 2026-11-02, awaiting compile + playtest)
 
 `master` (synced with diasurgical upstream, 144 commits) merged into `MonsterTamer` (`c2e76fa62`).
 Recompile everything — reconfigure CMake first (new fetched dependency SheenBidi; `CMakePresets.json`
-replaces `CMakeSettings.json`). Copy `init.lua` **and** `txtdata/classes/hunter/attributes.tsv`.
+replaces `CMakeSettings.json`). Copy `init.lua` **and** `txtdata/classes/hunter/attributes.tsv` +
+`sprites.tsv`.
 
 Adaptations made in the merge (verify these compile + behave):
 - HP/mana fields are `Fixed26_6`: monster `health`/`maxHealth`/`setHitPoints`/`setMaxHitPoints`,
@@ -20,7 +59,8 @@ Adaptations made in the merge (verify these compile + behave):
 - `ApplyPlrDamage` new arg order — the pet melee kill-classification passes `(dam, 0, deathReason)`.
 - Potion hooks deleted; Hunter's 2× potions now come from the TSV. `OnGetManaCost` now fires on the
   whole-point cost before the class multiplier.
-- The Hunter TSV gained 6 required rows — without them the class `app_fatal`s at load.
+- The Hunter class TSVs gained required rows — 6 in `attributes.tsv`, 6 `partyOffset*` in
+  `sprites.tsv` (Warrior's values) — without them the class `app_fatal`s at load.
 
 **Playtest watch items:** Hunter loads at character select; potions heal/restore 2×; Sorc-lite mana
 cost still −25%; ally HP bars / infobox HP read correctly (not 64× off); speedbook / infobox spell names
