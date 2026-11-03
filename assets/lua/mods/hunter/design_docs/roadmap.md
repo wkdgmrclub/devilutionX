@@ -45,7 +45,8 @@ never fires the carrier and uses the single-tile `DiabloApocalypseBoom` at his t
 resolves through the standard `CheckMissileCol` faction layer — see `HISTORY.md` "Taming Diablo".)
 
 **Functional (first):**
-1. **Tame Tome** (Hunter-only Tame Scroll stash) — §1.
+1. ▶ **IN DESIGN — Tame Tome** (Hunter-only Tame Scroll stash) — design in `development_notes.md`
+   ("Mod-registered stashes"); §1 below is the original spec.
 2. ▶ **IN PROGRESS — Diablo/Hellfire scroll gamemode lock** — moved to `development_notes.md` (built
    2026-11-02, awaiting playtest).
 3. **Mod packaging** (`.mpq` + `manifest.ini`) — §3.

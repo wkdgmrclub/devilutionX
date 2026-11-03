@@ -2998,7 +2998,7 @@ void CalcPlrInv(Player &player, bool loadgfx)
 		player.CalcScrolls();
 		if (IsStashOpen) {
 			// If stash is open, ensure the items are displayed correctly
-			Stash.RefreshItemStatFlags();
+			GetActiveStash().RefreshItemStatFlags();
 		}
 		if (!player.HoldItem.isEmpty())
 			player.HoldItem.updateRequiredStatsCacheForPlayer(player);
@@ -4443,7 +4443,7 @@ void UseItem(Player &player, item_misc_id mid, SpellID spellID, int spellFrom)
 				item.updateRequiredStatsCacheForPlayer(player);
 			}
 			if (IsStashOpen) {
-				Stash.RefreshItemStatFlags();
+				GetActiveStash().RefreshItemStatFlags();
 			}
 		}
 		RedrawComponent(PanelDrawComponent::Mana);

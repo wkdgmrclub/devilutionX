@@ -676,9 +676,10 @@ local events = {
   __doc_OnLoadPlayerData = "Called on load with the flat uint32 sequence from the last OnSavePlayerData return. Not called for saves lacking the mod-data file.",
 
   ---Query event fired when deciding whether an item may be placed in the stash (manual drop and auto-place).
+  ---Applies to whichever stash is open; stash.activeName() tells a handler which (nil = the player stash).
   ---Args: item. Return false to forbid the item from the stash; return nil or true to allow (default: engine value).
   OnItemAllowedInStash = CreateQueryEvent(),
-  __doc_OnItemAllowedInStash = "Query: return false to stop an item being placed in the stash (manual and auto-place). Args: item. Return nil or true to allow (default: engine value).",
+  __doc_OnItemAllowedInStash = "Query: return false to stop an item being placed in the open stash (manual and auto-place); stash.activeName() identifies a mod stash (nil = player stash). Args: item. Return nil or true to allow (default: engine value).",
 
   ---Called at the start of a hero-file write, before the player is serialized. Pairs with OnAfterSaveHero.
   ---A handler may transiently mutate the local player (e.g. remove a session-only item so it is never

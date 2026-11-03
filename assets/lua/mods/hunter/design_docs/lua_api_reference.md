@@ -271,6 +271,25 @@ Properties accessible on `Item` references (e.g. from `player:findScrollBySeed`,
 
 ---
 
+## Stash API (`devilutionx.stash`)
+
+A mod can own a stash shown in the vanilla stash window, saved to its own file. The player stash is
+untouched.
+
+- `stash.register(name, { pages?, gold? }) -> boolean` — call from mod init. `name` is the save file name
+  (`<name>.sv` / `.hsv`, `_spawn` suffix in shareware); `[A-Za-z0-9_-]`, ≤ 32 chars, and names the engine's
+  own saves use are refused. `pages` 1..100 (default 100); `gold` default true (false = no gold deposit,
+  display or withdraw). Re-registering a name updates options and keeps contents.
+- `stash.open(name) -> boolean` — open the stash window on that stash (e.g. from a
+  `towners.addDialogOption` `onSelect`). Contents load from its file on first open in a game.
+- `stash.activeName() -> string|nil` — the open mod stash, nil for the player stash / none.
+- **Item filter:** the existing `OnItemAllowedInStash(item)` hook decides what may go in; check
+  `stash.activeName()` inside it.
+- **Persistence:** same rules as the player stash — written with the save game (SP), plus quit and the
+  periodic autosave (MP); reloaded from disk at game start. Each item's `modData` is saved with it.
+
+---
+
 ## Player API
 
 ### Functions

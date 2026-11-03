@@ -7,6 +7,112 @@
 
 ---
 
+## Mod-registered stashes + Tame Tome (engine side BUILT 2026-11-02, awaiting compile; Tome Lua not started)
+
+**Split (user):** engine first — expose just enough that a mod fully owns its own stash, file name
+included — then the Tame Tome Lua logic separately.
+
+**As built (engine, no new hooks):** `StashStruct` gained `pageCount` (default 100) + `allowsGold`
+(default true); `GetActiveStash()` (player stash unless a mod stash is open) replaces `Stash` on every
+window path; Gillian's "Access Storage" and mod stashes share `OpenStash()`; `CloseStash()` resets to the
+player stash. Registry + `Lua*` functions in `qol/stash.cpp`; `LoadStash`/`SaveStash` refactored onto
+`LoadStashData`/`SaveStashData(StashStruct&, …)` (vanilla bytes unchanged) + `LuaLoadModStash` /
+`LuaSaveModStash` (`loadsave.cpp`, adds the `sp/mpstashmoddata` entry); `<name>.<ext>` path + reader/writer
+in `pfile.cpp`; `sfile_write_stash()` writes dirty mod stashes first; `LoadStash()` unloads them so they
+re-read from disk (same save rules as the player stash — SP only on save game, MP also on quit/autosave).
+Lua: `devilutionx.stash` → `register(name, {pages, gold})`, `open(name)`, `activeName()`.
+Name rules: `[A-Za-z0-9_-]`, ≤32 chars, refuses `stash*`, `single_`, `multi_`, `spawn_`, `share_`, `demo_`.
+**Recompile:** `qol/stash.*`, `loadsave.*`, `pfile.*`, `inv.cpp`, `stores.cpp`, `diablo.cpp`,
+`controls/game_controls.cpp`, `controls/plrctrls.cpp`, `control/control_infobox.cpp`, `items.cpp`,
+`objects.cpp`, `lua/lua_global.cpp`, new `lua/modules/stash.*` (+ CMakeLists); refresh `events.lua`.
+**Engine watch items (no Tome needed):** Gillian's stash works exactly as before (paste, ctrl-transfer,
+pages, 10-page jumps, gold deposit/withdraw, identify/repair on stash items, gamepad); a test mod stash
+opens, holds items across save/load, honours its page count, shows no gold when `gold = false`, and never
+touches `stash.sv`. Known edge (same class as vanilla's): closing a stash while holding an item with no
+floor/inventory/belt room auto-places it into the open stash; a stash that rejects the item hits vanilla's
+"No room for item" fatal.
+
+**Original design notes below** (still the reference for the Tome Lua phase).
+
+**Goal:** a generic engine feature letting a Lua mod register its own stash (own save file, page limit,
+gold on/off, item filter), opened through the vanilla stash window. The Tame Tome is the first user.
+**Constraint (user):** as few new hooks as possible — expose engine *primitives*, no bloat. Likely its own
+upstream PR ("Lua: mod-registered stashes").
+
+**Tame Tome decisions (user, 2026-11-02):** opened from **Gillian's talk menu** via upstream's existing
+`towners.addDialogOption(townerName, getLabel, onSelect)` (`getLabel` returns "" for non-Hunters → hidden;
+no new hook). ~4 pages, no gold, Tame Scrolls only, zero data loss. Vanilla 10×10 grid + panel art kept
+(an 8×8 grid would need new art/layout). Book / bookstand in town = possible later cosmetic shortcut onto
+the same stash, not now.
+
+### What the engine has today (surveyed)
+- One global `StashStruct Stash` (`qol/stash.h`) — `stashGrids` (page → 10×10), `stashList`, `gold`,
+  `dirty`, current `page`. Page cap = file-local `CountStashPages = 100` (`qol/stash.cpp`).
+- The whole window (`qol/stash.cpp` draw / cut / paste / ctrl-transfer / buttons / gold withdraw) plus
+  page nav (`diablo.cpp`, `controls/game_controls.cpp`), gamepad grid nav (`controls/plrctrls.cpp`),
+  stash-item identify/repair/recharge/oil (`diablo.cpp` ~2856), and the infobox (`control_infobox.cpp`)
+  read the global directly.
+- Vanilla-only consumers that must ALWAYS mean the vanilla stash: shop gold (`stores.cpp`
+  `TotalPlayerGold`, cost deduction; `qol/visual_store.cpp`), `LoadStash` / `SaveStash` (`loadsave.cpp`),
+  `sfile_write_stash` (`pfile.cpp`).
+- Opened only by Gillian (`stores.cpp` ~2032: `IsStashOpen = true; Stash.RefreshItemStatFlags()`);
+  closed only by `CloseStash()` (`inv.cpp`).
+- Saved by `sfile_write_stash()` when `dirty` — on quit (`init.cpp`, `diablo.cpp`), save game
+  (`loadsave.cpp`) and the **periodic autosave** (`pfile.cpp` ~846), which can fire while the window is open.
+- File: `stash.<ext>` archive, entry `spstashitems` / `mpstashitems`; format = version, gold, pages+grids,
+  items (`SaveItem` — **`modData` is not written**), current page.
+- `StashStruct::RemoveStashItem` and `RefreshItemStatFlags` reference the global `Stash` instead of `this`.
+
+### Proposed design — "active stash" accessor (no new hooks)
+**Rejected: swapping a mod stash into the global `Stash` while open.** The periodic autosave can fire
+mid-swap and write mod items into `stash.sv` (the exact failure the Tome exists to prevent); it also
+leaves vanilla consumers reading the wrong container across frames.
+
+**Engine:**
+1. `StashStruct` gains per-container settings with vanilla defaults: `maxPages` (100), `allowsGold`
+   (true). `SetPage` / `NextPage` / `PreviousPage` / `AutoPlaceItemInStash` use `maxPages` instead of
+   `CountStashPages`; `RemoveStashItem` / `RefreshItemStatFlags` use `this`.
+2. `StashStruct &GetActiveStash()` — returns the vanilla `Stash` unless a mod stash is open. Every
+   window-side reference above switches from `Stash` to `GetActiveStash()`; vanilla-only consumers keep
+   `Stash`. With no mod stash open the accessor returns `Stash`, so behaviour is byte-identical.
+3. `allowsGold == false` → the window skips the gold text and the withdraw button (container setting,
+   not mod logic).
+4. A small registry of mod stashes (name → `StashStruct` + loaded flag). `LoadStash` / `SaveStash`
+   become parameterised by (container, archive path, entry name); the vanilla call sites pass the vanilla
+   stash and today's names, so vanilla save bytes are unchanged. A mod stash saves to `<name>.<ext>`
+   (same extension rules as `stash`), entries `sp<name>` / `mp<name>`, loaded on first open.
+5. **`modData`:** a mod stash file gets a second entry with each item's blob (count + length-prefixed
+   strings, in `stashList` order). The vanilla stash format is untouched.
+6. `CloseStash()` saves the open mod stash if dirty, then resets the active stash to vanilla.
+   `sfile_write_stash()` also writes any dirty mod stash (so autosave / quit never lose it).
+
+**Lua API (bindings, not hooks):** `stash.register(name, { pages = N, gold = bool })`,
+`stash.open(name)` (sets the active stash, opens the window like Gillian's option), `stash.activeName()`
+(nil = vanilla). The existing `OnItemAllowedInStash(item, default)` hook is the item filter — the handler
+checks `stash.activeName()`, so its signature doesn't change.
+
+### Tame-Tome-specific problems (mod side)
+- **Seeds and per-hero tables.** The Tome is shared by every Hunter save, but a scroll's kills / Bonded
+  immunity / TRN / gamemode / Original Trainer live in tables owned by one hero, and seeds come from each
+  hero's own counter (two heroes can mint the same seed). A scroll leaving the Tome must be **re-keyed
+  into the withdrawing hero's seed space and rehydrated from its blob** — exactly what `OnItemPickedUp`
+  does for a traded scroll. Deposit must make sure the blob is complete (`blobForSeed`) first.
+- **When to re-key — OPEN QUESTION.** Nothing tells Lua that an item moved stash → inventory. Options:
+  (a) re-key every un-tabled Tame Scroll in the inventory when the Tome closes — needs a close signal
+  (a polled `stash.activeName()` transition, or one small notification); (b) a generic
+  "item moved out of a stash" event (a new hook — avoid unless (a) proves messy). Decide before building.
+- Gamemode: `.sv` and `.hsv` give separate Tome files per gamemode for free; a locked scroll can't be
+  moved, so it can never be filed into the wrong Tome.
+
+### Before building
+- Count + list every `Stash` reference by bucket (window → accessor; vanilla-only → unchanged) for the
+  PR description.
+- Confirm stores can't be open with the stash window (`IsPlayerInStore` vs `IsStashOpen`), so shop gold
+  never runs while a mod stash is active.
+- Decide the re-key trigger (above).
+
+---
+
 ## Diablo/Hellfire scroll gamemode lock (BUILT 2026-11-02, awaiting compile + playtest)
 
 **Why it's needed:** players may rename a hero's save between `.sv` (Diablo) and `.hsv` (Hellfire) —
