@@ -342,7 +342,7 @@ untouched.
 - `monsters.aiRandom(n) -> integer` — value in `[0, n)` from the engine global RNG (`GenerateRnd`). During monster AI processing the global RNG is reseeded to each monster's per-monster seed (synced across clients in MP), so a draw made **inside a monster-AI hook** is identical on every client — use instead of Lua `math.random` for any AI decision that must stay in lockstep. Outside AI processing it is just the running global RNG. Source: `Source/lua/modules/monsters.cpp`
 
 ### Lookup
-- `monsters.getNameByTypeId(typeId) -> string|nil`
+- `monsters.getNameByTypeId(typeId) -> string|nil` — translated display name (same as `monster.name`)
 - `monsters.getUniqueName(uniqueTypeIdx) -> string|nil` — returns `UniqueMonstersData[idx].mName`
 - `monsters.currentDifficulty() -> integer` — returns `sgGameInitInfo.nDifficulty` (0/1/2)
 - `monsters.getHovered() -> Monster|nil` — returns the monster currently under the player's cursor (`pcursmonst`), or nil if nothing is hovered; use inside `OnGetMonsterOutlineColor` to switch outline color on hover

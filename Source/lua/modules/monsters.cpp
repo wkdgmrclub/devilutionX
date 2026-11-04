@@ -685,7 +685,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	    [](int typeIdInt) -> sol::optional<std::string> {
 		    if (typeIdInt < 0 || typeIdInt >= static_cast<int>(MonstersData.size()))
 			    return sol::nullopt;
-		    return MonstersData[typeIdInt].name;
+		    return std::string(pgettext("monster", MonstersData[typeIdInt].name));
 	    });
 	LuaSetDocFn(table, "getTypeKillCount", "(typeId: integer) -> integer",
 	    "Returns the total number of monsters of this type the player has killed (MonsterKillCounts).",
@@ -724,8 +724,8 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	    });
 	LuaSetDocFn(table, "getTypeResistances", "(typeId: integer) -> table",
 	    "Returns a table of resistance/immunity booleans for the type at current difficulty: resistMagic, resistFire, resistLightning, immuneMagic, immuneFire, immuneLightning.",
-	    [&lua](int typeId) -> sol::table {
-		    sol::table t = lua.create_table();
+	    [](int typeId, sol::this_state state) -> sol::table {
+		    sol::table t = sol::state_view(state).create_table();
 		    if (typeId < 0 || typeId >= static_cast<int>(MonstersData.size()))
 			    return t;
 		    const int res = (sgGameInitInfo.nDifficulty != DIFF_HELL)
@@ -898,7 +898,7 @@ sol::table LuaMonstersModule(sol::state_view &lua)
 	LuaSetDocFn(table, "getHovered", "() -> Monster|nil",
 	    "Returns the monster currently under the player's cursor (pcursmonst), or nil if no monster is hovered.",
 	    []() -> Monster * {
-		    if (pcursmonst < 0 || pcursmonst >= static_cast<int>(GetMaxMonsters())) return nullptr; // Lua mod support
+		    if (pcursmonst == -1) return nullptr;
 		    return &Monsters[pcursmonst];
 	    });
 	LuaSetDocFn(table, "fromId", "(id: integer) -> Monster|nil",

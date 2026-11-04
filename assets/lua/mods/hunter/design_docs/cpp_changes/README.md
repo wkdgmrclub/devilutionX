@@ -50,7 +50,7 @@ branches move.
       `GetTranslatedItemName`, `OnCustomItemRecreated` (+ dwBuff kept), `OnItemUsed`, `items.spawnAt`,
       `items.addToHealerStock`. The `modData` arguments are left out; the item-modData PR appends them as
       the **last** argument (MonsterTamer already uses that order).
-    - `lua-player-bindings` (**cuttable now**: bindings and plain `CreateEvent` events only) — player
+    - `lua-player-bindings` (bindings and plain `CreateEvent` events only) — player
       properties `strength` / `magic` / `dexterity` / `vitality` / `magicCurrent` / `health` / `maxHealth` /
       `armorClass` / `toHit` / `minDamage` / `maxDamage` / `lightRadius` / `friendlyMode` / `isMoving` /
       `isHoldingShield` / `weaponGraphic` / `readySpellId` / `readySpellType` / `className` /
@@ -84,14 +84,16 @@ branches move.
     - `lua-monster-capacity` — `requestExtraMonsters` / `requestExtraTypes`: arrays sized to the 252
       ceiling, `GetMaxMonsters()` / `GetMaxLvlMTypes()` at every bound, the extended-slot delta-load
       gate. Engine-only otherwise.
-  - `lua-monster-bindings` (**cuttable now**; `master`'s Monster type only has `position` / `id`) —
+  - `lua-monster-bindings` (`master`'s Monster type only has `position` / `id`) —
     read/write monster API: `typeId`, `name`, `health` / `maxHealth` + `setHitPoints` / `setMaxHitPoints`,
     `isUnique`, `uniqueType`, `isQuestMonster`, `level`, `minDamage` / `maxDamage` / `armorClass` /
-    `toHit` / `resistance` + `setMinDamage` / `setMaxDamage` / `setArmorClass` / `setToHit` /
+    `toHit` / `resistance` + `setMinDamage` / `setMaxDamage` / `setArmorClass` /
     `setResistance`, `isLit`, `hasNoLife`, `isActive`, `monsterClass`, `isHidden`,
     `hasRangedAttack`, `distanceTo`, `hasLineOfSightTo` / `hasLineOfSightToPlayer`; module functions
-    `getNameByTypeId`, `getTypeKillCount`, `getTypeHpRange`, `getTypeResistances`,
-    `getMissileDamageType`, `getHovered`.
+    `getNameByTypeId`, `getTypeKillCount`, `getTypeHpRange`, `getTypeResistances`, `getHovered`; the
+    `monsters.Resistance` table; the `Point` usertype (`x` / `y` / `Point.new`, registered in the
+    monsters module). `getHovered` checks `pcursmonst == -1` like the engine, so it needs no capacity
+    bound.
   - **Held: stack on `lua-monster-capacity`:** `lua-monster-spawning` — spawn bindings
     (`spawnAt` / `spawnWithDifficulty` / `spawnUniqueAt` / `netSpawnAt`, `currentDifficulty`,
     `getUniqueName`, `recordDeltaKill`, `removeDeltaSpawnedMonster`), high-slot allocation, the
@@ -107,7 +109,8 @@ branches move.
     monster in town; `IsTownerIndex` separates towners from monsters wherever town code reads
     `dMonster`), then:
     - `lua-player-minions` — owner/golem primitives (`makeGolem`, `isGolem`, `ownerPlayerId`,
-      `originalAiId` + the `monsters.AIID` table, `tagForPlayer`, `snapToPlayer`, `checkQuestKill`), `OnGolemCanSelect`, `OnGolemCanRunAI`,
+      `originalAiId` + the `monsters.AIID` table, `tagForPlayer`, `snapToPlayer`, `checkQuestKill`,
+      `setToHit` — it writes `golemToHit`, which `Monster::toHit` reads only for player minions), `OnGolemCanSelect`, `OnGolemCanRunAI`,
       `OnMonsterCanCompleteQuest`, `OnMonsterCanPlaceCorpse`, `OnMonsterCanEndGame`, `OnDiabloDeathCanKillMonster`,
       `player.creditDiabloKill`, `OnCanSelectMonsterWithCursor` / `OnCursorMonsterTarget` +
       `player.CursorID`, `OnPlayerAttackMonster` (×2).
@@ -121,7 +124,8 @@ branches move.
       `startSpecialStand` / `startSpecialRangedAttack` / `startHeal` / `startEating` / `startFadeout` /
       `startFadein`, `walkToward`, `fireMissileAt`, `naturalRangedMissileId`, `castFlashSelf`,
       `castResurrectBeamSelf`, `setLightRadius`, `findNearbyCorpse`, `encodedEnemy` / `setEncodedEnemy`,
-      `resolveMissileHit`, `aiRandom`. Engine side (`monster.cpp/.h`): `LuaStartMonsterAttack`,
+      `resolveMissileHit`, `aiRandom`, `monsters.getMissileDamageType` + the `monsters.MissileID` /
+      `monsters.DamageType` tables (their only inputs/consumers are the bindings above). Engine side (`monster.cpp/.h`): `LuaStartMonsterAttack`,
       `LuaStartMonsterRangedAttack`, `LuaStartMonsterCharge`, `LuaStartMonsterSpecialAttack`,
       `LuaStartMonsterSpecialStand`, `LuaStartMonsterSpecialRangedAttack`, `LuaStartMonsterHeal`,
       `LuaStartMonsterEat`, `LuaStartMonsterFadeout`, `LuaStartMonsterFadein`, `LuaMonsterPlanPath`,
@@ -144,8 +148,10 @@ branches move.
       call `OnGetBlockChanceBonus`.
   - **Coverage (audited 2026-11-03):** every addition on `MonsterTamer` beyond `master` is assigned above —
     checked hook-by-hook (`lua_event.hpp`), binding-by-binding (player / monsters / items / system /
-    render modules) and hunk-by-hunk (every non-Lua engine file, by enclosing function). `lua-mod-hooks`
-    is retired. Re-run the same three passes after any new engine work.
+    render modules), constant-table- and usertype-by-name (`table["X"] =`, `new_usertype<X>`, matched
+    case-sensitively — this pass caught `Point`, `Resistance`, `MissileID`, `DamageType` on 2026-11-03)
+    and hunk-by-hunk (every non-Lua engine file, by enclosing function). `lua-mod-hooks`
+    is retired. Re-run the same four passes after any new engine work.
   - **Held: stack on `lua-stash-hooks`:** `lua-item-descriptions` — `OnGetMiscItemDescription` and the
     custom unique infobox (`OnPrepareUniqueInfoBox` + `items.setCustomUniqueBox` → `SetLuaUniqueInfoBox`), both query events.
   - **Not carried:** the yuripourre framework (Lua-table item definitions, custom cursor sprites) and
@@ -165,12 +171,12 @@ branches move.
 | 2 | `lua-stash-hooks` | **pushed** | — |
 | 3 | `lua-text-prompt` | **pushed** | — |
 | 4 | `lua-spell-registry` | **pushed** | — |
-| 5 | `lua-class-registration` | **pushed** | — |
+| 5 | `lua-class-registration` | **merged** upstream (`ea7b5be46`) | — |
 | 6 | `lua-custom-items` | **pushed** | — |
 | 7 | `lua-monster-capacity` | **pushed** | — |
-| 8 | `class-flags` | **pushed**; `30c993b53` (charpanel uses `BowMastery`) committed, not pushed | — |
-| 9 | `lua-player-bindings` | **cut, not pushed** (`6af6603eb`) | — |
-| 10 | `lua-monster-bindings` | not cut — **cuttable now** | — |
+| 8 | `class-flags` | **pushed** (tip `30c993b53`) | — |
+| 9 | `lua-player-bindings` | **pushed** (tip `236b3798c`, rebased onto `ea7b5be46`) | — |
+| 10 | `lua-monster-bindings` | **cut, not pushed** | — |
 | 11 | `lua-item-rules` | not cut | #2 merged |
 | 12 | `lua-item-moddata` | not cut | #2 merged |
 | 13 | `lua-item-descriptions` | not cut | #2 merged |
@@ -183,7 +189,7 @@ branches move.
 | 20 | `lua-player-minions` | not cut | #19 merged |
 | 21 | `lua-minion-combat` | not cut | #20 merged |
 
-Cut-but-unpushed: #9, plus the extra #8 commit. **Cross-PR follow-up:** #9's `minDamage` / `maxDamage`
+Cut-but-unpushed: #10. **Cross-PR follow-up:** #9's `minDamage` / `maxDamage`
 mirror `master`'s character panel (`_pClass != HeroClass::Rogue`); whichever of #8 / #9 merges second
 switches them to `HasNoneOf(getClassFlags(), PlayerClassFlag::BowMastery)` (MonsterTamer already does). `lua-mod-hooks` is the retired catch-all (local only, delete).
 
